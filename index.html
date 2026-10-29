@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#b5532b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Control de Tierra · CEVIL</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="app.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+  <script src="config.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="logo">▲</div>
+      <div>Control de Tierra<small>Cantera · Balanza · Molienda · Silo</small></div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="top-right">
+      <span class="cola" id="cola" title="Registros pendientes de sincronizar"></span>
+      <span class="dot" id="red" title="Conexión"></span>
+      <button class="btn ghost sm" id="btnTema" title="Cambiar tema claro/oscuro" aria-label="Tema"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 1.5v11a5.5 5.5 0 0 1 0-11z"/></svg></button>
+      <button class="btn sm" id="btnSesion">Ingresar</button>
+    </div>
+  </header>
+  <main id="app"></main>
+  <div id="loader"><div><div class="spin"></div><p id="loaderTxt">Cargando…</p></div></div>
+  <div id="toasts"></div>
+  <script src="app.js"></script>
+</body>
+</html>
