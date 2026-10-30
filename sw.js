@@ -1,8 +1,8 @@
-const CACHE = 'tierra-cevil-v2';
+const CACHE = 'tierra-cevil-v3';
 const SHELL = ['./', './index.html', './app.css', './core.js', './vistas.js', './carga.js', './app.js', './config.js', './manifest.json', './img/logo-cmp.png', './img/icon-192.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
@@ -15,8 +15,9 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   const externo = /cdnjs\.cloudflare\.com$|fonts\.(googleapis|gstatic)\.com$/.test(url.hostname);
   if (url.origin !== location.origin && !externo) return;
+  const propio = url.origin === location.origin;
   e.respondWith(
-    fetch(req).then(r => {
+    fetch(propio ? new Request(req, { cache: 'no-cache' }) : req).then(r => {
       if (r.ok) {
         const copia = r.clone();
         caches.open(CACHE).then(c => c.put(req, copia));
