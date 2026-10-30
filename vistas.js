@@ -26,6 +26,7 @@ async function vInicio() {
   ];
   app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">' + esc(fLarga(hoy())) + '</div><h1>Control de <span>tierra</span></h1>' +
     '<p class="sub">Recorrido de la tierra en los últimos ' + dias + ' días. Tocá cada etapa para ver el detalle.</p></div><div id="segDias"></div></div>' +
+    (R.errorInforme && R.errorInforme !== 'Sin configurar' ? '<div class="alert warn">' + ICON.alerta + '<div><b>No se pudo leer el Informe de Producción (molienda/silo).</b> ' + esc(R.errorInforme) + '</div></div>' : '') +
     (R.errorViajes ? '<div class="alert bad">' + ICON.alerta + '<div><b>No se pudo leer la planilla de viajes.</b> ' + esc(R.errorViajes) + '</div></div>' : '') +
     '<div class="card flujo-card"><div class="flujo" id="flujo"><svg class="lineas" id="lineas"></svg>' +
     nodo('cantera', 'cantera', 'Cantera', vn(b.unid + b.internos), 'camiones cargados<br>' + nf(b.internos) + ' internos', '#/tablero/cantera') +

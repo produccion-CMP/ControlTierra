@@ -1260,8 +1260,9 @@ async function edMolienda(f, volver) {
     '<label class="f">Paladas al cajón alimentador<input type="number" min="0" id="mP" inputmode="numeric"></label><label class="f">Toneladas balanza dinámica<input type="number" step="0.1" min="0" id="mTon" inputmode="decimal"></label>' +
     '<label class="f">Paladas extraídas de silo<input type="number" min="0" id="mS" inputmode="numeric"></label><label class="f">t por palada<input id="mFac" disabled></label>' +
     '<label class="f full">Observaciones<input id="mO"></label></div><div class="row mt"><button class="btn pri" id="mG">' + ICON.guardar + 'Guardar turno</button></div></div>' +
-    '<div class="card"><div class="card-h"><div class="t"><h3>Importar del Informe de Turno</h3><div class="sub">Requiere configurar INFORME_* en Parámetros</div></div></div><div class="form" style="grid-template-columns:1fr 1fr"><label class="f">Desde<input type="date" id="iD" value="' + addDias(hoy(), -7) + '"></label>' +
-    '<label class="f">Hasta<input type="date" id="iH" value="' + hoy() + '"></label></div><button class="btn mt" id="iGo">' + ICON.refrescar + 'Importar</button></div></div>' +
+    '<div class="card"><div class="card-h"><div class="t"><h3>Vinculado al Informe de Producción</h3><div class="sub">Se lee en vivo de la hoja «' + esc(par('INFORME_HOJA', 'Molienda')) + '»</div></div></div>' +
+    '<div class="col sub"><span><b>D</b> · paladas que ingresan a molienda</span><span><b>G</b> · paladas del silo a producción</span><span><b>J</b> · toneladas de balanza dinámica (molienda → silo)</span>' +
+    '<span class="mt">Cargá acá solo para corregir un turno: la carga manual reemplaza al Informe en ese turno. Los cambios en el Informe se ven en hasta 10 minutos.</span></div></div></div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Últimos 14 días</h3></div></div>' +
     tabla([[r => fMedia(r.fecha), 'Fecha'], ['turno', 'Turno'], [r => nf(val(r, 'pal')), 'Pal. cajón', 'n'], [r => nf(val(r, 't'), 1), 't bal. din.', 'n'],
       [r => { const p = val(r, 'pal'); const t = val(r, 't'); return p && t ? nf(t / p, 2) : '–'; }, 't/palada', 'n'], [r => nf(val(r, 'silo')), 'Pal. silo', 'n'],
@@ -1286,19 +1287,6 @@ async function edMolienda(f, volver) {
       edMolienda(d.fecha, volver);
     } catch (e) {
       toast(e.message, 'bad');
-    }
-  };
-  $('#iGo').onclick = async () => {
-    bloquear('Importando Informe de Turno…');
-    try {
-      const r = await api('importarInforme', { desde: $('#iD').value, hasta: $('#iH').value });
-      invalidar();
-      toast('Importados ' + r.turnos + ' turno(s)', 'ok');
-      edMolienda(f, volver);
-    } catch (e) {
-      toast(e.message, 'bad', 8000);
-    } finally {
-      desbloquear();
     }
   };
   app().onclick = async e => {
