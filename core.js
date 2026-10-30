@@ -160,8 +160,10 @@ function bloquear(txt) {
     o = document.createElement('div');
     o.id = 'bloqueo';
     o.className = 'modal-bg';
-    o.innerHTML = '<div class="col" style="align-items:center;gap:10px">' + ($('#tplCamion') ? $('#tplCamion').innerHTML : '<div class="spin lg"></div>') + '<b id="bloqueoTxt" style="color:#fff"></b></div>';
+    o.innerHTML = '<div class="col bloqueo-in"><div class="vj-wrap" id="vjBloqueo"></div><b id="bloqueoTxt"></b></div>';
     document.body.appendChild(o);
+    if (window.montarViaje) window.montarViaje($('#vjBloqueo'));
+    else $('#vjBloqueo').innerHTML = '<div class="spin lg"></div>';
   }
   $('#bloqueoTxt').textContent = txt || 'Procesando…';
   o.classList.remove('hide');

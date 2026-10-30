@@ -624,42 +624,66 @@ details.guia .cuerpo b { color: var(--text); }
 }
 
 .viaje-svg {
-  --vj-c1: #ffe9d6; --vj-c2: #fff7ef; --vj-sol: #ffc56b; --vj-nube: #ffffff; --vj-cerro: #c9a98a; --vj-nieve: #fffaf3;
-  --vj-loma: #b7c48f; --vj-banq: #d8c3a5; --vj-asf: #6d6a66; --vj-linea: #f4f1ea; --vj-arbol: #6f9a55; --vj-tronco: #7a5a3a; --vj-cartel: #2f7d4f;
-  width: 420px; max-width: 90vw; height: auto; display: block; filter: drop-shadow(0 10px 24px rgba(0, 0, 0, .08));
+  --vj-c1: #ffe2c6; --vj-c2: #fff6ec; --vj-sol: #ffc15e; --vj-nube: #ffffff; --vj-cerro: #c7a283; --vj-nieve: #fffaf3;
+  --vj-loma: #b4c38a; --vj-banq: #d9c3a3; --vj-asf: #5f5c58; --vj-linea: #f4f1ea; --vj-copa: #6c9a52; --vj-tronco: #7a5a3a; --vj-cartel: #2f7d4f;
+  --vj-tierra: #8b5a2b; --vj-terron: #6b4220; --vj-galpon: #e9ddd0; --vj-techo: #8f3b2a; --vj-ladrillo: #c2573d; --vj-plat: #8c8c90;
+  width: 600px; max-width: 94vw; height: auto; display: block; border-radius: 20px; box-shadow: 0 18px 40px -18px rgba(90, 50, 20, .45); transition: opacity .1s linear;
 }
-:root[data-theme="dark"] .viaje-svg { --vj-c1: #1b2233; --vj-c2: #2a2422; --vj-sol: #f3efe2; --vj-nube: #3a3f4a; --vj-cerro: #4a3d33; --vj-nieve: #8e8a84; --vj-loma: #3c4630; --vj-banq: #4a3f33; --vj-asf: #2b2a29; --vj-linea: #8a857c; --vj-arbol: #3f5e33; --vj-tronco: #5b4129; --vj-cartel: #24603d; }
+:root[data-theme="dark"] .viaje-svg { --vj-c1: #141b2b; --vj-c2: #2b2420; --vj-sol: #f1ecdc; --vj-nube: #39404c; --vj-cerro: #4b3d33; --vj-nieve: #8e8a84; --vj-loma: #3a4530; --vj-banq: #4a3f33; --vj-asf: #262524; --vj-linea: #8a857c; --vj-copa: #3e5d32; --vj-tronco: #5b4129; --vj-cartel: #24603d; --vj-galpon: #4d4540; --vj-techo: #6a2c20; --vj-ladrillo: #8e3f2c; --vj-plat: #5d5d61; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .viaje-svg { --vj-c1: #1b2233; --vj-c2: #2a2422; --vj-sol: #f3efe2; --vj-nube: #3a3f4a; --vj-cerro: #4a3d33; --vj-nieve: #8e8a84; --vj-loma: #3c4630; --vj-banq: #4a3f33; --vj-asf: #2b2a29; --vj-linea: #8a857c; --vj-arbol: #3f5e33; --vj-tronco: #5b4129; --vj-cartel: #24603d; }
+  :root:not([data-theme="light"]) .viaje-svg { --vj-c1: #141b2b; --vj-c2: #2b2420; --vj-sol: #f1ecdc; --vj-nube: #39404c; --vj-cerro: #4b3d33; --vj-nieve: #8e8a84; --vj-loma: #3a4530; --vj-banq: #4a3f33; --vj-asf: #262524; --vj-linea: #8a857c; --vj-copa: #3e5d32; --vj-tronco: #5b4129; --vj-cartel: #24603d; --vj-galpon: #4d4540; --vj-techo: #6a2c20; --vj-ladrillo: #8e3f2c; --vj-plat: #5d5d61; }
 }
 .viaje-svg .c1 { stop-color: var(--vj-c1); }
 .viaje-svg .c2 { stop-color: var(--vj-c2); }
-.viaje-svg .vj-sol { fill: var(--vj-sol); animation: solLatido 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-.viaje-svg .vj-nubes { fill: var(--vj-nube); opacity: .9; animation: paisaje 26s linear infinite; }
-.viaje-svg .vj-cerros { fill: var(--vj-cerro); animation: paisaje 16s linear infinite; }
-.viaje-svg .vj-cerros .nieve { fill: var(--vj-nieve); }
-.viaje-svg .vj-lomas { fill: var(--vj-loma); animation: paisaje 7s linear infinite; }
+.viaje-svg .vj-sol { fill: var(--vj-sol); }
+.viaje-svg .vj-nubes { fill: var(--vj-nube); opacity: .92; }
+.viaje-svg .vj-cerro { fill: var(--vj-cerro); }
+.viaje-svg .vj-nieve { fill: var(--vj-nieve); }
+.viaje-svg .vj-loma { fill: var(--vj-loma); }
+.viaje-svg .vj-copa { fill: var(--vj-copa); }
+.viaje-svg .vj-tronco { fill: var(--vj-tronco); }
+.viaje-svg .vj-cartel { fill: var(--vj-cartel); }
+.viaje-svg .vj-txt { fill: #fff; font: 800 7px Inter, system-ui, sans-serif; letter-spacing: .04em; }
+.viaje-svg .vj-rotulo { fill: var(--vj-linea); font: 800 5px Inter, system-ui, sans-serif; letter-spacing: .3em; }
 .viaje-svg .vj-banquina { fill: var(--vj-banq); }
 .viaje-svg .vj-asfalto { fill: var(--vj-asf); }
-.viaje-svg .vj-borde { fill: var(--vj-arbol); animation: paisaje 2.6s linear infinite; }
-.viaje-svg .vj-borde .tronco { fill: var(--vj-tronco); }
-.viaje-svg .vj-borde .cartel { fill: var(--vj-cartel); }
-.viaje-svg .vj-borde text { fill: #fff; font: 800 9px Inter, system-ui, sans-serif; letter-spacing: .06em; }
-.viaje-svg .vj-linea { stroke: var(--vj-linea); stroke-width: 2.5; stroke-dasharray: 20 16; animation: carril .32s linear infinite; }
-.viaje-svg .avance { animation: avance 3.2s ease-in-out infinite; }
-.viaje-svg .polvo circle { fill: var(--vj-banq); }
-.viaje-svg .humo circle { fill: #9a9aa0; opacity: 0; transform-box: fill-box; transform-origin: center; animation: humo 1.2s ease-out infinite; }
-.viaje-svg .humo circle:nth-child(2) { animation-delay: .4s; }
-.viaje-svg .humo circle:nth-child(3) { animation-delay: .8s; }
-@keyframes paisaje { to { transform: translateX(-360px); } }
-@keyframes carril { to { stroke-dashoffset: 36; } }
-@keyframes avance { 0%, 100% { transform: translateX(-6px); } 50% { transform: translateX(8px); } }
-@keyframes humo { 0% { opacity: .55; transform: translate(0, 0) scale(.5); } 100% { opacity: 0; transform: translate(-30px, -22px) scale(2); } }
-@keyframes solLatido { 0%, 100% { transform: scale(1); opacity: .95; } 50% { transform: scale(1.08); opacity: 1; } }
-.trayecto { display: flex; align-items: center; gap: 10px; width: 300px; max-width: 80vw; font-size: .72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.viaje-svg .vj-linea { stroke: var(--vj-linea); stroke-width: 2.5; stroke-dasharray: 20 16; }
+.viaje-svg .vj-tierra { fill: var(--vj-tierra); }
+.viaje-svg .vj-tierra2 { stroke: var(--vj-terron); opacity: .5; }
+.viaje-svg .vj-terron { fill: var(--vj-terron); }
+.viaje-svg .vj-amarillo { fill: #f2b51d; }
+.viaje-svg .vj-brazo { fill: #d99a0b; }
+.viaje-svg .vj-balde { fill: #4a4a4e; }
+.viaje-svg .vj-vidrio { fill: #cfe6f5; }
+.viaje-svg .vj-goma { fill: #1c1c1e; }
+.viaje-svg .vj-llanta { fill: #a0a0a6; }
+.viaje-svg .vj-rayo { stroke: #a0a0a6; }
+.viaje-svg .vj-tolva { fill: #d96b3a; }
+.viaje-svg .vj-tolva2 { stroke: #b9542a; }
+.viaje-svg .vj-chasis { fill: #3a3a3c; }
+.viaje-svg .vj-cabina { fill: #e8834f; }
+.viaje-svg .vj-faro { fill: #ffd27a; }
+.viaje-svg .vj-plataforma { fill: var(--vj-plat); }
+.viaje-svg .vj-display { fill: #1d2621; stroke: #3d4a42; }
+.viaje-svg .vj-kg { fill: #f5b041; font: 700 8.5px ui-monospace, Consolas, monospace; }
+.viaje-svg .vj-kg.ok { fill: #4ade80; }
+.viaje-svg .vj-galpon { fill: var(--vj-galpon); }
+.viaje-svg .vj-techo { fill: var(--vj-techo); }
+.viaje-svg .vj-ladrillo { fill: var(--vj-ladrillo); }
+.viaje-svg .vj-chimenea { fill: var(--vj-ladrillo); }
+.viaje-svg .vj-p-polvo { fill: var(--vj-banq); }
+.viaje-svg .vj-p-humo { fill: #a9a9ae; }
+.viaje-svg .vj-p-tierra { fill: var(--vj-tierra); }
+.vj-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+#splash .vj-wrap { margin-bottom: 4px; }
+#splash #vjEstado { font-weight: 600; min-height: 1.3em; }
+.bloqueo-in { align-items: center; gap: 12px; }
+.bloqueo-in .viaje-svg { width: 380px; }
+.bloqueo-in .trayecto { color: rgba(255, 255, 255, .8); }
+#bloqueoTxt { color: #fff; }
+.trayecto { display: flex; align-items: center; gap: 10px; width: 420px; max-width: 80vw; font-size: .72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .trayecto i { position: relative; flex: 1; height: 4px; border-radius: 4px; background: repeating-linear-gradient(90deg, var(--line-2) 0 6px, transparent 6px 10px); }
-.trayecto b { position: absolute; top: 50%; left: 0; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); animation: trayecto 2.2s var(--ease) infinite; }
-@keyframes trayecto { 0% { left: 0; } 85%, 100% { left: 100%; } }
+.trayecto b { position: absolute; top: 50%; left: 0; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); transition: left .08s linear; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
@@ -749,3 +773,7 @@ details.guia .cuerpo b { color: var(--text); }
   .vt-row [data-quitar] { grid-area: x; }
 }
 .cal .c.pintado .ev i { box-shadow: 0 0 0 1px color-mix(in srgb, var(--panel) 70%, transparent); background: color-mix(in srgb, var(--panel) 75%, transparent); }
+@media (max-width: 640px) {
+  .viaje-svg { width: 94vw; height: 230px; }
+  .bloqueo-in .viaje-svg { width: 90vw; height: 200px; }
+}

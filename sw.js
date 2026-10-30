@@ -1,5 +1,5 @@
-const CACHE = 'tierra-cevil-v6';
-const SHELL = ['./', './index.html', './app.css', './core.js', './vistas.js', './carga.js', './viajes.js', './app.js', './config.js', './manifest.json', './img/logo-cmp.png', './img/icon-192.png'];
+const CACHE = 'tierra-cevil-v7';
+const SHELL = ['./', './index.html', './app.css', './viaje.js', './core.js', './vistas.js', './carga.js', './viajes.js', './app.js', './config.js', './manifest.json', './img/logo-cmp.png', './img/icon-192.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));

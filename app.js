@@ -150,7 +150,7 @@ function ocultarSplash() {
   const s = $('#splash');
   if (!s || s.dataset.saliendo) return;
   s.dataset.saliendo = '1';
-  const espera = Math.max(0, 1200 - performance.now());
+  const espera = Math.max(0, 2300 - performance.now());
   setTimeout(() => { s.classList.add('fuera'); setTimeout(() => s.remove(), 700); }, espera);
 }
 
