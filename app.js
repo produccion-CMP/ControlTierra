@@ -148,7 +148,10 @@ async function render() {
 
 function ocultarSplash() {
   const s = $('#splash');
-  if (s && !s.classList.contains('fuera')) { s.classList.add('fuera'); setTimeout(() => s.remove(), 700); }
+  if (!s || s.dataset.saliendo) return;
+  s.dataset.saliendo = '1';
+  const espera = Math.max(0, 1200 - performance.now());
+  setTimeout(() => { s.classList.add('fuera'); setTimeout(() => s.remove(), 700); }, espera);
 }
 
 function periodoLiq(k) {

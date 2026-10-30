@@ -1,4 +1,4 @@
-const CACHE = 'tierra-cevil-v4';
+const CACHE = 'tierra-cevil-v6';
 const SHELL = ['./', './index.html', './app.css', './core.js', './vistas.js', './carga.js', './viajes.js', './app.js', './config.js', './manifest.json', './img/logo-cmp.png', './img/icon-192.png'];
 
 self.addEventListener('install', e => {

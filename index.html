@@ -21,11 +21,28 @@
 </head>
 <body>
   <div id="splash">
-    <svg class="camion-svg" viewBox="0 0 260 120" aria-hidden="true">
-      <line class="piso" x1="0" y1="109" x2="260" y2="109"/>
-      <line class="ruta" x1="0" y1="116" x2="260" y2="116"/>
-      <g class="polvo"><circle cx="6" cy="100" r="5"/><circle cx="10" cy="96" r="4"/><circle cx="4" cy="103" r="6"/></g>
-      <g class="cuerpo">
+    <svg class="viaje-svg" viewBox="0 0 360 172" aria-hidden="true">
+      <defs>
+        <linearGradient id="vjCielo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="c1"/><stop offset="1" class="c2"/></linearGradient>
+        <linearGradient id="vjFade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000"/><stop offset=".12" stop-color="#fff"/><stop offset=".88" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient>
+        <mask id="vjMask"><rect width="360" height="172" fill="url(#vjFade)"/></mask>
+        <clipPath id="vjClip"><rect width="360" height="172" rx="22"/></clipPath>
+      </defs>
+      <g clip-path="url(#vjClip)" mask="url(#vjMask)">
+        <rect width="360" height="172" fill="url(#vjCielo)"/>
+        <circle class="vj-sol" cx="292" cy="38" r="15"/>
+        <g class="vj-nubes"><g><g transform="translate(30 22)"><path d="M0 12 a9 9 0 0 1 16 -6 a12 12 0 0 1 22 2 a8 8 0 0 1 6 14 H2 a7 7 0 0 1 -2 -10 Z"/></g><g transform="translate(200 40) scale(.7)"><path d="M0 12 a9 9 0 0 1 16 -6 a12 12 0 0 1 22 2 a8 8 0 0 1 6 14 H2 a7 7 0 0 1 -2 -10 Z"/></g></g><g transform="translate(360 0)"><g transform="translate(30 22)"><path d="M0 12 a9 9 0 0 1 16 -6 a12 12 0 0 1 22 2 a8 8 0 0 1 6 14 H2 a7 7 0 0 1 -2 -10 Z"/></g><g transform="translate(200 40) scale(.7)"><path d="M0 12 a9 9 0 0 1 16 -6 a12 12 0 0 1 22 2 a8 8 0 0 1 6 14 H2 a7 7 0 0 1 -2 -10 Z"/></g></g></g>
+        <g class="vj-cerros"><g><path d="M0 112 L28 78 L52 92 L84 56 L112 82 L140 70 L170 98 L204 60 L236 84 L262 72 L298 100 L330 66 L360 112 Z"/><path class="nieve" d="M84 56 L76 66 L84 63 L92 66 Z M204 60 L196 70 L204 67 L212 70 Z M330 66 L323 75 L330 72 L337 75 Z"/></g><g transform="translate(360 0)"><path d="M0 112 L28 78 L52 92 L84 56 L112 82 L140 70 L170 98 L204 60 L236 84 L262 72 L298 100 L330 66 L360 112 Z"/><path class="nieve" d="M84 56 L76 66 L84 63 L92 66 Z M204 60 L196 70 L204 67 L212 70 Z M330 66 L323 75 L330 72 L337 75 Z"/></g></g>
+        <g class="vj-lomas"><g><path d="M0 124 C40 104 70 104 110 116 C150 128 180 100 230 106 C280 112 310 118 360 124 Z"/></g><g transform="translate(360 0)"><path d="M0 124 C40 104 70 104 110 116 C150 128 180 100 230 106 C280 112 310 118 360 124 Z"/></g></g>
+        <rect class="vj-banquina" y="128" width="360" height="44"/>
+        <rect class="vj-asfalto" y="134" width="360" height="38"/>
+        <g class="vj-borde"><g><g transform="translate(20 130)"><rect x="-1.5" y="-8" width="3" height="10" class="tronco"/><circle cx="0" cy="-14" r="8"/></g><g transform="translate(78 130)"><rect x="-1" y="-30" width="2" height="30" class="tronco"/><rect x="-7" y="-30" width="14" height="2" class="tronco"/></g><g transform="translate(130 130)"><rect x="-1.5" y="-8" width="3" height="10" class="tronco"/><circle cx="0" cy="-14" r="8"/></g><g transform="translate(150 130)"><rect x="-1.5" y="-8" width="3" height="10" class="tronco"/><circle cx="0" cy="-14" r="8"/></g><g transform="translate(214 130)"><rect x="-1" y="-22" width="2" height="22" class="tronco"/><rect x="-18" y="-36" width="36" height="16" rx="3" class="cartel"/><text x="0" y="-25" text-anchor="middle">CEVIL</text></g><g transform="translate(270 130)"><rect x="-1" y="-30" width="2" height="30" class="tronco"/><rect x="-7" y="-30" width="14" height="2" class="tronco"/></g><g transform="translate(320 130)"><rect x="-1.5" y="-8" width="3" height="10" class="tronco"/><circle cx="0" cy="-14" r="8"/></g></g><g transform="translate(360 0)"><g transform="translate(20 130)"><rect x="-1.5" y="-8" width="3" height="10" class="tronco"/><circle cx="0" cy="-14" r="8"/></g><g transform="translate(78 130)"><rect x="-1" y="-30" width="2" height="30" class="tronco"/><rect x="-7" y="-30" width="14" height="2" class="tronco"/></g><g transform="translate(130 130)"><rect x="-1.5" y="-8" width="3" height="10" class="tronco"/><circle cx="0" cy="-14" r="8"/></g><g transform="translate(150 130)"><rect x="-1.5" y="-8" width="3" height="10" class="tronco"/><circle cx="0" cy="-14" r="8"/></g><g transform="translate(214 130)"><rect x="-1" y="-22" width="2" height="22" class="tronco"/><rect x="-18" y="-36" width="36" height="16" rx="3" class="cartel"/><text x="0" y="-25" text-anchor="middle">CEVIL</text></g><g transform="translate(270 130)"><rect x="-1" y="-30" width="2" height="30" class="tronco"/><rect x="-7" y="-30" width="14" height="2" class="tronco"/></g><g transform="translate(320 130)"><rect x="-1.5" y="-8" width="3" height="10" class="tronco"/><circle cx="0" cy="-14" r="8"/></g></g></g>
+        <line class="vj-linea" x1="0" y1="156" x2="360" y2="156"/>
+        <g class="vj-camion" transform="translate(84 58) scale(.8)">
+          <g class="avance">
+            <g class="polvo"><circle cx="20" cy="104" r="6"/><circle cx="26" cy="100" r="5"/><circle cx="16" cy="106" r="7"/></g>
+            <g class="humo"><circle cx="154" cy="36" r="4"/><circle cx="154" cy="36" r="5"/><circle cx="154" cy="36" r="4.5"/></g>
+            <g class="cuerpo">
         <path class="tierra" d="M18 50 C24 30 40 24 54 30 C64 18 84 16 96 26 C108 18 126 22 134 34 C142 34 148 42 148 50 Z" fill="#8b5a2b"/>
         <circle cx="46" cy="36" r="2.4" fill="#6b4220"/><circle cx="78" cy="28" r="2" fill="#6b4220"/><circle cx="104" cy="34" r="2.6" fill="#a8703c"/><circle cx="126" cy="40" r="2" fill="#6b4220"/><circle cx="64" cy="42" r="1.8" fill="#a8703c"/>
         <path d="M12 48 H152 L146 88 H18 Z" fill="#d96b3a"/>
@@ -41,7 +58,11 @@
         <g class="rueda"><circle cx="70" cy="98" r="11" fill="#1c1c1e"/><circle cx="70" cy="98" r="4.5" fill="#9a9aa0"/><path d="M70 89 V93 M70 103 V107 M61 98 H65 M75 98 H79" stroke="#9a9aa0" stroke-width="2"/></g>
         <g class="rueda"><circle cx="190" cy="98" r="11" fill="#1c1c1e"/><circle cx="190" cy="98" r="4.5" fill="#9a9aa0"/><path d="M190 89 V93 M190 103 V107 M181 98 H185 M195 98 H199" stroke="#9a9aa0" stroke-width="2"/></g>
       </g>
+          </g>
+        </g>
+      </g>
     </svg>
+    <div class="trayecto"><span>Cantera</span><i><b></b></i><span>Planta CEVIL</span></div>
     <h2>Control de Tierra</h2>
     <p>Planta CEVIL · llevando los datos…</p>
   </div>

@@ -428,6 +428,37 @@ function tabCombustible(c) {
   grafico('chLh', 'bar', conL.map(x => x.n), [{ label: 'L/h', data: conL.map(x => x.lH), backgroundColor: color(4) }]);
 }
 
+const COLOR_DIA = { prod: '--ok', parada: '--bad', clima: '--info', falta: '--warn' };
+
+function segmentosDia(x) {
+  if (!x) return [];
+  if (x.seg && x.seg.length) return x.seg.filter(s => COLOR_DIA[s[0]] && s[1] > 0);
+  const out = [];
+  if (x.prod) out.push(['prod', 1]);
+  (x.paradas || []).forEach(p => {
+    const k = /clim|lluvia/i.test(p) ? 'clima' : /ausencia|sin operario|falta/i.test(p) ? 'falta' : 'parada';
+    if (!out.some(s => s[0] === k)) out.push([k, 1]);
+  });
+  return out;
+}
+
+function fondoDia(x) {
+  const seg = segmentosDia(x);
+  if (!seg.length) return '';
+  const tinte = k => 'color-mix(in srgb, var(' + COLOR_DIA[k] + ') 30%, var(--panel))';
+  if (seg.length === 1) return tinte(seg[0][0]);
+  const tot = seg.reduce((a, s) => a + s[1], 0);
+  const stops = [];
+  let a = 0;
+  seg.forEach((s, i) => {
+    const b = a + s[1] / tot * 100;
+    const w = Math.min(9, (b - a) / 2);
+    stops.push(tinte(s[0]) + ' ' + (i ? a + w : 0).toFixed(1) + '%', tinte(s[0]) + ' ' + (i < seg.length - 1 ? b - w : 100).toFixed(1) + '%');
+    a = b;
+  });
+  return 'linear-gradient(135deg, ' + stops.join(', ') + ')';
+}
+
 async function vCalendario(mes, dir) {
   const ok = vivo();
   await cargarResumen();
@@ -475,13 +506,14 @@ async function vCalendario(mes, dir) {
       if (x.unid + x.internos) lin += '<div class="ln"><span>Palas</span><span>' + (x.unid + x.internos) + '</span></div>';
       tip += ' · ' + x.viajes + ' viajes · ' + nf(x.ingresoT, 0) + ' t ingresadas · ' + (x.unid + x.internos) + ' camiones (palas) · ' + nf(x.molPal) + ' paladas molienda' + (x.paradas.length ? ' · Paradas: ' + x.paradas.join(', ') : '');
     }
-    const heat = val(x) / max * 0.28;
-    h += '<a class="c ' + (f === hoy() ? 'hoy ' : '') + (new Date(y, mo, d).getDay() === 0 ? 'domingo' : '') + '" href="#/dia/' + f + '" style="--heat:' + heat.toFixed(3) + ';--i:' + d + '" data-tip="' + esc(tip) + '"><b>' + d + '</b>' + lin + '<div class="ev">' + ev + '</div></a>';
+    const heat = val(x) / max;
+    const fondo = fondoDia(x);
+    h += '<a class="c ' + (f === hoy() ? 'hoy ' : '') + (new Date(y, mo, d).getDay() === 0 ? 'domingo ' : '') + (fondo ? 'pintado' : '') + '" href="#/dia/' + f + '" style="--heat:' + heat.toFixed(3) + ';--i:' + d + (fondo ? ';--fondo:' + fondo : '') + '" data-tip="' + esc(tip) + '"><b>' + d + '</b>' + lin + '<div class="ev">' + ev + '</div><span class="heat"></span></a>';
   }
-  app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Calendario</div><h1>Actividad diaria</h1><p class="sub">La intensidad del color indica la métrica elegida. Tocá un día para ver el detalle completo.</p></div><div id="segMet"></div></div>' +
+  app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Calendario</div><h1>Actividad diaria</h1><p class="sub">El color del día muestra qué pasó en la cantera (producción, parada, clima, falta), repartido según las horas de cada tramo. La barra inferior indica la métrica elegida.</p></div><div id="segMet"></div></div>' +
     '<div class="card"><div class="cal-h"><a class="btn icon" href="#/calendario/' + ant + '" data-dir="der" aria-label="Mes anterior">' + ICON.izq + '</a><h2>' + tit + '</h2><a class="btn icon" href="#/calendario/' + sig + '" data-dir="izq" aria-label="Mes siguiente">' + ICON.der + '</a></div>' +
     '<div class="cal ' + (dir ? 'anim-' + dir : '') + '">' + ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => '<div class="dn">' + d + '</div>').join('') + h + '</div>' +
-    '<div class="leg"><span class="esc">Menos <i style="opacity:.1"></i><i style="opacity:.3"></i><i style="opacity:.55"></i><i style="opacity:.8"></i> Más</span><span><i class="tag t-ok">PROD</i> producción</span><span><i class="tag t-bad">PARADA</i> avería/mant.</span><span><i class="tag t-info">CLIMA</i> clima</span><span><i class="tag t-warn">FALTA</i> ausencia</span></div></div>' +
+    '<div class="leg"><span class="sw" style="--c:var(--ok)"></span>Producción<span class="sw" style="--c:var(--bad)"></span>Parada avería/mant.<span class="sw" style="--c:var(--info)"></span>Clima<span class="sw" style="--c:var(--warn)"></span>Falta de operario<span class="sw mezcla"></span>Día combinado<span class="esc">Barra: menos <i style="opacity:.25"></i><i style="opacity:.5"></i><i style="opacity:.75"></i><i style="opacity:1"></i> más</span></div></div>' +
     '<div class="kpis mt stagger">' + kpi('Viajes a planta', vn(tV)) + kpi('Ingreso balanza', vn(tT) + '<small>t</small>') + kpi('Camiones (palas)', vn(tP)) + kpi('Molienda (bal. dinámica)', vn(tM) + '<small>t</small>') + '</div></div>';
   $$('.leg .esc i').forEach(i => { i.style.background = 'var(--accent)'; });
   segmento($('#segMet'), [['viajes', 'Viajes'], ['ingreso', 'Ingreso t'], ['palas', 'Palas'], ['molienda', 'Molienda']], metrica, k => { lsSet('tierra_cal_metrica', k); vCalendario(ym); }, true);

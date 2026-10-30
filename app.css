@@ -424,13 +424,17 @@ table.edit input, table.edit select { padding: 6px 8px; font-size: .85rem; }
   display: flex; flex-direction: column; gap: 3px; font-size: .72rem; color: var(--text);
   transition: transform .2s var(--spring), border-color .2s, box-shadow .2s; animation: cardIn .28s var(--ease) both; animation-delay: calc(var(--i, 0) * 6ms);
 }
-.cal .c::before { content: ''; position: absolute; inset: 0; border-radius: 11px; background: var(--accent); opacity: var(--heat, 0); pointer-events: none; }
+.cal .c::before { display: none; }
+.cal .c.pintado { background: var(--fondo); border-color: transparent; }
+.cal .c .heat { position: absolute; left: 6px; right: 6px; bottom: 3px; height: 3px; border-radius: 3px; background: var(--accent); opacity: .9; transform: scaleX(var(--heat, 0)); transform-origin: left; transition: transform .45s var(--ease); pointer-events: none; }
+.leg .sw { width: 14px; height: 14px; border-radius: 4px; background: color-mix(in srgb, var(--c) 30%, var(--panel)); border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); margin-left: 6px; }
+.leg .sw.mezcla { background: linear-gradient(135deg, color-mix(in srgb, var(--ok) 30%, var(--panel)) 30%, color-mix(in srgb, var(--bad) 30%, var(--panel)) 70%); border-color: var(--line-2); }
 .cal .c > * { position: relative; }
 .cal .c:hover { border-color: var(--accent); transform: translateY(-2px) scale(1.02); box-shadow: var(--shadow-hi); z-index: 2; }
 .cal .c.vacio { background: transparent; border: 0; cursor: default; animation: none; }
 .cal .c.vacio::before { display: none; }
 .cal .c.hoy { outline: 2px solid var(--accent); outline-offset: 1px; }
-.cal .c.domingo { background: var(--panel-2); }
+.cal .c.domingo:not(.pintado) { background: var(--panel-2); }
 .cal .c b { font-size: .95rem; font-weight: 800; }
 .cal .c .ln { display: flex; justify-content: space-between; color: var(--muted); }
 .cal .c .ln span:last-child { color: var(--text); font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -619,6 +623,44 @@ details.guia .cuerpo b { color: var(--text); }
   .card { padding: 14px; }
 }
 
+.viaje-svg {
+  --vj-c1: #ffe9d6; --vj-c2: #fff7ef; --vj-sol: #ffc56b; --vj-nube: #ffffff; --vj-cerro: #c9a98a; --vj-nieve: #fffaf3;
+  --vj-loma: #b7c48f; --vj-banq: #d8c3a5; --vj-asf: #6d6a66; --vj-linea: #f4f1ea; --vj-arbol: #6f9a55; --vj-tronco: #7a5a3a; --vj-cartel: #2f7d4f;
+  width: 420px; max-width: 90vw; height: auto; display: block; filter: drop-shadow(0 10px 24px rgba(0, 0, 0, .08));
+}
+:root[data-theme="dark"] .viaje-svg { --vj-c1: #1b2233; --vj-c2: #2a2422; --vj-sol: #f3efe2; --vj-nube: #3a3f4a; --vj-cerro: #4a3d33; --vj-nieve: #8e8a84; --vj-loma: #3c4630; --vj-banq: #4a3f33; --vj-asf: #2b2a29; --vj-linea: #8a857c; --vj-arbol: #3f5e33; --vj-tronco: #5b4129; --vj-cartel: #24603d; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .viaje-svg { --vj-c1: #1b2233; --vj-c2: #2a2422; --vj-sol: #f3efe2; --vj-nube: #3a3f4a; --vj-cerro: #4a3d33; --vj-nieve: #8e8a84; --vj-loma: #3c4630; --vj-banq: #4a3f33; --vj-asf: #2b2a29; --vj-linea: #8a857c; --vj-arbol: #3f5e33; --vj-tronco: #5b4129; --vj-cartel: #24603d; }
+}
+.viaje-svg .c1 { stop-color: var(--vj-c1); }
+.viaje-svg .c2 { stop-color: var(--vj-c2); }
+.viaje-svg .vj-sol { fill: var(--vj-sol); animation: solLatido 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.viaje-svg .vj-nubes { fill: var(--vj-nube); opacity: .9; animation: paisaje 26s linear infinite; }
+.viaje-svg .vj-cerros { fill: var(--vj-cerro); animation: paisaje 16s linear infinite; }
+.viaje-svg .vj-cerros .nieve { fill: var(--vj-nieve); }
+.viaje-svg .vj-lomas { fill: var(--vj-loma); animation: paisaje 7s linear infinite; }
+.viaje-svg .vj-banquina { fill: var(--vj-banq); }
+.viaje-svg .vj-asfalto { fill: var(--vj-asf); }
+.viaje-svg .vj-borde { fill: var(--vj-arbol); animation: paisaje 2.6s linear infinite; }
+.viaje-svg .vj-borde .tronco { fill: var(--vj-tronco); }
+.viaje-svg .vj-borde .cartel { fill: var(--vj-cartel); }
+.viaje-svg .vj-borde text { fill: #fff; font: 800 9px Inter, system-ui, sans-serif; letter-spacing: .06em; }
+.viaje-svg .vj-linea { stroke: var(--vj-linea); stroke-width: 2.5; stroke-dasharray: 20 16; animation: carril .32s linear infinite; }
+.viaje-svg .avance { animation: avance 3.2s ease-in-out infinite; }
+.viaje-svg .polvo circle { fill: var(--vj-banq); }
+.viaje-svg .humo circle { fill: #9a9aa0; opacity: 0; transform-box: fill-box; transform-origin: center; animation: humo 1.2s ease-out infinite; }
+.viaje-svg .humo circle:nth-child(2) { animation-delay: .4s; }
+.viaje-svg .humo circle:nth-child(3) { animation-delay: .8s; }
+@keyframes paisaje { to { transform: translateX(-360px); } }
+@keyframes carril { to { stroke-dashoffset: 36; } }
+@keyframes avance { 0%, 100% { transform: translateX(-6px); } 50% { transform: translateX(8px); } }
+@keyframes humo { 0% { opacity: .55; transform: translate(0, 0) scale(.5); } 100% { opacity: 0; transform: translate(-30px, -22px) scale(2); } }
+@keyframes solLatido { 0%, 100% { transform: scale(1); opacity: .95; } 50% { transform: scale(1.08); opacity: 1; } }
+.trayecto { display: flex; align-items: center; gap: 10px; width: 300px; max-width: 80vw; font-size: .72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.trayecto i { position: relative; flex: 1; height: 4px; border-radius: 4px; background: repeating-linear-gradient(90deg, var(--line-2) 0 6px, transparent 6px 10px); }
+.trayecto b { position: absolute; top: 50%; left: 0; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); animation: trayecto 2.2s var(--ease) infinite; }
+@keyframes trayecto { 0% { left: 0; } 85%, 100% { left: 100%; } }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }
@@ -631,27 +673,26 @@ details.guia .cuerpo b { color: var(--text); }
 }
 
 .camion-svg { width: 260px; max-width: 70vw; height: auto; overflow: visible; }
-.camion-svg .ruta { stroke: var(--line-2); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 18 14; animation: ruta .45s linear infinite; }
-.camion-svg .piso { stroke: var(--line-2); stroke-width: 2; }
-.camion-svg .cuerpo { animation: bache .32s ease-in-out infinite alternate; }
-.camion-svg .rueda { transform-box: fill-box; transform-origin: center; animation: rueda .42s linear infinite; }
-.camion-svg .polvo circle { fill: var(--line-2); opacity: 0; animation: polvo 1s ease-out infinite; }
-.camion-svg .polvo circle:nth-child(2) { animation-delay: .33s; }
-.camion-svg .polvo circle:nth-child(3) { animation-delay: .66s; }
-.camion-svg .grano { fill: #7a4a26; animation: grano 1.1s ease-in infinite; opacity: 0; }
-.camion-svg .grano:nth-of-type(2) { animation-delay: .45s; }
-.camion-svg .grano:nth-of-type(3) { animation-delay: .8s; }
-.camion-svg .tierra { animation: tierra 1.6s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: bottom center; }
+:is(.camion-svg, .viaje-svg) .ruta { stroke: var(--line-2); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 18 14; animation: ruta .45s linear infinite; }
+:is(.camion-svg, .viaje-svg) .piso { stroke: var(--line-2); stroke-width: 2; }
+:is(.camion-svg, .viaje-svg) .cuerpo { animation: bache .32s ease-in-out infinite alternate; }
+:is(.camion-svg, .viaje-svg) .rueda { transform-box: fill-box; transform-origin: center; animation: rueda .42s linear infinite; }
+:is(.camion-svg, .viaje-svg) .polvo circle { fill: var(--line-2); opacity: 0; animation: polvo 1s ease-out infinite; }
+:is(.camion-svg, .viaje-svg) .polvo circle:nth-child(2) { animation-delay: .33s; }
+:is(.camion-svg, .viaje-svg) .polvo circle:nth-child(3) { animation-delay: .66s; }
+:is(.camion-svg, .viaje-svg) .grano { fill: #7a4a26; animation: grano 1.1s ease-in infinite; opacity: 0; }
+:is(.camion-svg, .viaje-svg) .grano:nth-of-type(2) { animation-delay: .45s; }
+:is(.camion-svg, .viaje-svg) .grano:nth-of-type(3) { animation-delay: .8s; }
+:is(.camion-svg, .viaje-svg) .tierra { animation: tierra 1.6s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: bottom center; }
 @keyframes ruta { to { stroke-dashoffset: 32; } }
 @keyframes bache { from { transform: translateY(0); } to { transform: translateY(-1.6px); } }
-@keyframes rueda { to { transform: rotate(-360deg); } }
+@keyframes rueda { to { transform: rotate(360deg); } }
 @keyframes polvo { 0% { opacity: .7; transform: translate(0, 0) scale(.6); } 100% { opacity: 0; transform: translate(-34px, -10px) scale(1.6); } }
 @keyframes grano { 0% { opacity: 0; transform: translate(0, 0); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(-22px, 38px); } }
 @keyframes tierra { from { transform: scaleY(1); } to { transform: scaleY(1.04); } }
-#splash .camion-svg { margin-bottom: -6px; }
 #splash .logo-tile { width: 64px; height: 64px; animation: none; }
 #bloqueo .camion-svg { width: 180px; }
-#bloqueo .camion-svg .ruta, #bloqueo .camion-svg .piso { stroke: rgba(255, 255, 255, .5); }
+#bloqueo .camion-svg .ruta, #bloqueo :is(.camion-svg, .viaje-svg) .piso { stroke: rgba(255, 255, 255, .5); }
 .quieto *, .quieto *::before, .quieto *::after { animation: none !important; transition: none !important; }
 
 .tal-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; }
@@ -707,3 +748,4 @@ details.guia .cuerpo b { color: var(--text); }
   .vt-row .chk { grid-area: p; }
   .vt-row [data-quitar] { grid-area: x; }
 }
+.cal .c.pintado .ev i { box-shadow: 0 0 0 1px color-mix(in srgb, var(--panel) 70%, transparent); background: color-mix(in srgb, var(--panel) 75%, transparent); }
