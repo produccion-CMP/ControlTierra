@@ -1,5 +1,5 @@
-const CACHE = 'tierra-cevil-v1';
-const SHELL = ['./', './index.html', './app.css', './app.js', './config.js', './manifest.json', './icon.svg'];
+const CACHE = 'tierra-cevil-v2';
+const SHELL = ['./', './index.html', './app.css', './core.js', './vistas.js', './carga.js', './app.js', './config.js', './manifest.json', './img/logo-cmp.png', './img/icon-192.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -13,8 +13,8 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  const cdn = /cdnjs\.cloudflare\.com$/.test(url.hostname);
-  if (url.origin !== location.origin && !cdn) return;
+  const externo = /cdnjs\.cloudflare\.com$|fonts\.(googleapis|gstatic)\.com$/.test(url.hostname);
+  if (url.origin !== location.origin && !externo) return;
   e.respondWith(
     fetch(req).then(r => {
       if (r.ok) {
