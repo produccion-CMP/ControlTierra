@@ -517,9 +517,10 @@ async function cargarResumen(forzar) {
     lsSet('tierra_resumen', S.resumen);
   } catch (e) {
     const c = lsGet('tierra_resumen', null);
-    if (!c) throw e;
+    if (!c || /API_URL/.test(e.message)) throw e;
     S.resumen = c;
-    toast('Sin conexión con el servidor: se muestran los últimos datos guardados (' + new Date(c.generado).toLocaleString('es-AR') + ').', 'warn', 7000);
+    const motivo = e.servidor ? 'El servidor respondió: ' + e.message : 'Sin conexión con el servidor (' + e.message + ')';
+    toast(motivo + '. Se muestran los últimos datos guardados (' + new Date(c.generado).toLocaleString('es-AR') + ').', 'warn', 9000);
   }
   return S.resumen;
 }
