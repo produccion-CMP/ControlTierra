@@ -21,12 +21,52 @@
 </head>
 <body>
   <div id="splash">
-    <div class="logo-tile"><img src="img/logo-cmp.png" alt="Cerámica Marcos Paz"></div>
+    <svg class="camion-svg" viewBox="0 0 260 120" aria-hidden="true">
+      <line class="piso" x1="0" y1="109" x2="260" y2="109"/>
+      <line class="ruta" x1="0" y1="116" x2="260" y2="116"/>
+      <g class="polvo"><circle cx="6" cy="100" r="5"/><circle cx="10" cy="96" r="4"/><circle cx="4" cy="103" r="6"/></g>
+      <g class="cuerpo">
+        <path class="tierra" d="M18 50 C24 30 40 24 54 30 C64 18 84 16 96 26 C108 18 126 22 134 34 C142 34 148 42 148 50 Z" fill="#8b5a2b"/>
+        <circle cx="46" cy="36" r="2.4" fill="#6b4220"/><circle cx="78" cy="28" r="2" fill="#6b4220"/><circle cx="104" cy="34" r="2.6" fill="#a8703c"/><circle cx="126" cy="40" r="2" fill="#6b4220"/><circle cx="64" cy="42" r="1.8" fill="#a8703c"/>
+        <path d="M12 48 H152 L146 88 H18 Z" fill="#d96b3a"/>
+        <path d="M12 48 H152" stroke="#c45a2c" stroke-width="4"/>
+        <path d="M44 52 V84 M78 52 V84 M112 52 V84" stroke="#c45a2c" stroke-width="2"/>
+        <rect x="8" y="86" width="214" height="7" rx="2" fill="#3a3a3c"/>
+        <path d="M158 54 H194 L214 76 V92 H158 Z" fill="#e8834f"/>
+        <path d="M178 59 H192 L206 75 H178 Z" fill="#cfe6f5"/>
+        <rect x="216" y="80" width="8" height="6" rx="2" fill="#ffd27a"/>
+        <rect x="152" y="40" width="4" height="16" rx="1" fill="#3a3a3c"/>
+        <circle class="grano" cx="16" cy="70" r="2.4"/><circle class="grano" cx="14" cy="64" r="1.8"/><circle class="grano" cx="18" cy="76" r="2"/>
+        <g class="rueda"><circle cx="40" cy="98" r="11" fill="#1c1c1e"/><circle cx="40" cy="98" r="4.5" fill="#9a9aa0"/><path d="M40 89 V93 M40 103 V107 M31 98 H35 M45 98 H49" stroke="#9a9aa0" stroke-width="2"/></g>
+        <g class="rueda"><circle cx="70" cy="98" r="11" fill="#1c1c1e"/><circle cx="70" cy="98" r="4.5" fill="#9a9aa0"/><path d="M70 89 V93 M70 103 V107 M61 98 H65 M75 98 H79" stroke="#9a9aa0" stroke-width="2"/></g>
+        <g class="rueda"><circle cx="190" cy="98" r="11" fill="#1c1c1e"/><circle cx="190" cy="98" r="4.5" fill="#9a9aa0"/><path d="M190 89 V93 M190 103 V107 M181 98 H185 M195 98 H199" stroke="#9a9aa0" stroke-width="2"/></g>
+      </g>
+    </svg>
     <h2>Control de Tierra</h2>
-    <p>Planta CEVIL · cargando datos…</p>
-    <div class="barra"><span></span></div>
+    <p>Planta CEVIL · llevando los datos…</p>
   </div>
   <div id="toploader"><span></span></div>
+  <template id="tplCamion"><svg class="camion-svg" viewBox="0 0 260 120" aria-hidden="true">
+      <line class="piso" x1="0" y1="109" x2="260" y2="109"/>
+      <line class="ruta" x1="0" y1="116" x2="260" y2="116"/>
+      <g class="polvo"><circle cx="6" cy="100" r="5"/><circle cx="10" cy="96" r="4"/><circle cx="4" cy="103" r="6"/></g>
+      <g class="cuerpo">
+        <path class="tierra" d="M18 50 C24 30 40 24 54 30 C64 18 84 16 96 26 C108 18 126 22 134 34 C142 34 148 42 148 50 Z" fill="#8b5a2b"/>
+        <circle cx="46" cy="36" r="2.4" fill="#6b4220"/><circle cx="78" cy="28" r="2" fill="#6b4220"/><circle cx="104" cy="34" r="2.6" fill="#a8703c"/><circle cx="126" cy="40" r="2" fill="#6b4220"/><circle cx="64" cy="42" r="1.8" fill="#a8703c"/>
+        <path d="M12 48 H152 L146 88 H18 Z" fill="#d96b3a"/>
+        <path d="M12 48 H152" stroke="#c45a2c" stroke-width="4"/>
+        <path d="M44 52 V84 M78 52 V84 M112 52 V84" stroke="#c45a2c" stroke-width="2"/>
+        <rect x="8" y="86" width="214" height="7" rx="2" fill="#3a3a3c"/>
+        <path d="M158 54 H194 L214 76 V92 H158 Z" fill="#e8834f"/>
+        <path d="M178 59 H192 L206 75 H178 Z" fill="#cfe6f5"/>
+        <rect x="216" y="80" width="8" height="6" rx="2" fill="#ffd27a"/>
+        <rect x="152" y="40" width="4" height="16" rx="1" fill="#3a3a3c"/>
+        <circle class="grano" cx="16" cy="70" r="2.4"/><circle class="grano" cx="14" cy="64" r="1.8"/><circle class="grano" cx="18" cy="76" r="2"/>
+        <g class="rueda"><circle cx="40" cy="98" r="11" fill="#1c1c1e"/><circle cx="40" cy="98" r="4.5" fill="#9a9aa0"/><path d="M40 89 V93 M40 103 V107 M31 98 H35 M45 98 H49" stroke="#9a9aa0" stroke-width="2"/></g>
+        <g class="rueda"><circle cx="70" cy="98" r="11" fill="#1c1c1e"/><circle cx="70" cy="98" r="4.5" fill="#9a9aa0"/><path d="M70 89 V93 M70 103 V107 M61 98 H65 M75 98 H79" stroke="#9a9aa0" stroke-width="2"/></g>
+        <g class="rueda"><circle cx="190" cy="98" r="11" fill="#1c1c1e"/><circle cx="190" cy="98" r="4.5" fill="#9a9aa0"/><path d="M190 89 V93 M190 103 V107 M181 98 H185 M195 98 H199" stroke="#9a9aa0" stroke-width="2"/></g>
+      </g>
+    </svg></template>
   <header class="top">
     <a class="brand" href="#/inicio">
       <span class="logo-tile"><img src="img/logo-cmp.png" alt=""></span>
@@ -46,6 +86,7 @@
   <script src="core.js"></script>
   <script src="vistas.js"></script>
   <script src="carga.js"></script>
+  <script src="viajes.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

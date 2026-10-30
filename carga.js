@@ -115,7 +115,7 @@ function autocompletar(input, fuente, alElegir, opciones) {
     else if (e.key === 'Escape') cerrar();
     else if ((e.key === 'Enter' || e.key === 'Tab') && idx >= 0 && items[idx] && input.value.trim()) {
       const it = items[idx];
-      if (it.nuevo) { if (e.key === 'Enter') { e.preventDefault(); cerrar(); op.agregar(it.nuevo, input); } return; }
+      if (it.nuevo) { cerrar(); input.classList.add('adv'); return; }
       if (normTxt(it) !== normTxt(input.value) || e.key === 'Tab') { input.value = it; }
       cerrar();
       input.classList.remove('adv');
@@ -136,548 +136,6 @@ async function agregarAlCatalogo(hoja, valor) {
     toast(e.message, 'bad');
     return null;
   }
-}
-
-const QV = { fecha: '', origen: '', destino: '', tipo: '', jornada: true, comp: null, sesion: [], dia: [], editando: false };
-
-function nuevoComp(numero) {
-  return { numero: numero ? String(numero) : '', chofer: '', dominio: '', responsable: QV.respDefecto || '', viajes: [{ c: '', d: '', autoD: true, resp: '', pagar: true }], ia: {} };
-}
-
-function siguienteNumero(desde) {
-  let n = Number(desde) || 0;
-  if (!n) return '';
-  const usados = (S.info && S.info.usados) || {};
-  const ses = new Set(QV.sesion.map(s => s.numero));
-  while (usados[String(n)] || ses.has(String(n))) n++;
-  return String(n);
-}
-
-async function edViajes(arg, volver) {
-  const mem = lsGet('tierra_qv', {});
-  QV.fecha = /^\d{4}-\d{2}-\d{2}$/.test(arg || '') ? arg : (mem.fecha || hoy());
-  app().innerHTML = '<div class="vista"><div class="card"><div class="skel" style="height:60px"></div></div><div class="card"><div class="skel" style="height:260px"></div></div></div>';
-  const ok = vivo();
-  try {
-    S.info = await api('infoViajes');
-  } catch (e) {
-    S.info = { origenes: {}, choferes: {}, usados: {}, ultimaFecha: '' };
-    toast('No se pudo leer el talonario: ' + e.message, 'warn');
-  }
-  if (!ok()) return;
-  const origenes = Object.keys(S.info.origenes).sort((a, b) => S.info.origenes[b].viajes - S.info.origenes[a].viajes);
-  QV.origen = mem.origen && (origenes.indexOf(mem.origen) >= 0 || nombres('Lugares').indexOf(mem.origen) >= 0) ? mem.origen : (origenes[0] || '');
-  const o = S.info.origenes[QV.origen] || {};
-  QV.destino = mem.destino || o.destino || destinosPlanta()[0] || '';
-  QV.tipo = mem.tipo || o.tipo || nombres('TiposViaje')[0] || '';
-  QV.respDefecto = mem.responsable || o.responsable || '';
-  QV.jornada = mem.jornada !== false;
-  QV.editando = false;
-  QV.comp = nuevoComp(siguienteNumero(o.siguiente));
-  pintarQV(volver);
-  await cargarDiaQV();
-}
-
-async function cargarDiaQV() {
-  const f = QV.fecha;
-  try {
-    const j = await api('jornada', { fecha: f });
-    if (f !== QV.fecha) return;
-    QV.dia = j.viajes;
-  } catch (e) {
-    QV.dia = [];
-  }
-  pintarDiaQV();
-}
-
-function guardarMemQV() {
-  lsSet('tierra_qv', { fecha: QV.fecha, origen: QV.origen, destino: QV.destino, tipo: QV.tipo, responsable: QV.respDefecto, jornada: QV.jornada });
-}
-
-function pintarQV(volver) {
-  const max = Number(par('MAX_VIAJES_COMPROBANTE', 8)) || 8;
-  const origenes = Object.keys(S.info.origenes).sort((a, b) => S.info.origenes[b].viajes - S.info.origenes[a].viajes);
-  const o = S.info.origenes[QV.origen] || {};
-  const atraso = S.info.ultimaFecha ? difDias(S.info.ultimaFecha, hoy()) : null;
-  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga rápida</div><h1>Viajes de camiones</h1></div></div>' +
-    '<div class="row"><input type="file" id="qvFoto" accept="image/*" capture="environment" class="hide"><button class="btn brillo" id="qvIA" style="border-color:var(--s7);color:var(--s7)">' + ICON.chispa + 'Leer foto del comprobante</button></div></div>' +
-    (atraso !== null && atraso > 2 ? '<div class="alert warn">' + ICON.reloj + '<div>El último viaje cargado es del <b>' + fMedia(S.info.ultimaFecha) + '</b> (' + atraso + ' días). Cargá los comprobantes en orden de fecha.</div></div>' : '') +
-    '<div class="card"><div class="qr-cab"><label class="f">Fecha del viaje<div class="row" style="flex-wrap:nowrap;gap:4px"><button class="btn icon" id="qvAnt">' + ICON.izq + '</button><input type="date" id="qvFecha" value="' + QV.fecha + '" style="width:170px"><button class="btn icon" id="qvSig">' + ICON.der + '</button></div></label>' +
-    '<label class="f" style="flex:1;min-width:240px">Origen / talonario<div class="chips" id="qvOrig">' + origenes.map(x => '<span class="chip ' + (x === QV.origen ? 'on' : '') + '" data-o="' + esc(x) + '">' + esc(x) + '<span class="cnt">' + (S.info.origenes[x].siguiente || '') + '</span></span>').join('') +
-    '<span class="chip" data-o="__otro">Otro…</span></div></label>' +
-    '<label class="f" style="width:200px">Destino<input id="qvDest" value="' + esc(QV.destino) + '"></label><label class="f" style="width:150px">Tipo<input id="qvTipo" value="' + esc(QV.tipo) + '"></label>' +
-    '<label class="chk" style="padding-bottom:10px"><span class="switch"><input type="checkbox" id="qvJor"' + (QV.jornada ? ' checked' : '') + '><span></span></span>Jornada completa</label></div>' +
-    (o.faltantes && o.faltantes.length ? '<div class="mt"><div class="eyebrow" style="margin-bottom:6px">Números salteados del talonario (últimos 60 días) ' + ayuda('Comprobantes entre el primero y el último cargado que no aparecen en la planilla. Pueden ser papeles sin cargar o anulados. Tocá uno para cargarlo.') + '</div><div class="faltantes" id="qvFalt">' + o.faltantes.map(n => '<button data-n="' + n + '">' + n + '</button>').join('') + '</div></div>' : '') + '</div>' +
-    '<div class="qr-wrap mt"><div><div class="comp-card" id="qvCard"><div class="row" style="margin-bottom:12px"><span class="eyebrow">' + (QV.editando ? 'Editando comprobante' : 'Comprobante') + '</span><span class="num-comp tnum" id="qvNumTit">N° ' + esc(QV.comp.numero || '—') + '</span><span id="qvEstadoN"></span>' +
-    '<span class="right sub" id="qvResumen"></span><button class="btn ghost sm" id="qvLimpiar" tabindex="-1">' + ICON.x + 'Limpiar</button></div>' +
-    '<div class="comp-grid"><label class="f">N° comprobante<input id="qvNum" inputmode="numeric" value="' + esc(QV.comp.numero) + '"' + (QV.editando ? ' disabled' : '') + '></label>' +
-    '<label class="f">Chofer<input id="qvChofer" value="' + esc(QV.comp.chofer) + '" placeholder="Escribí parte del nombre"></label>' +
-    '<label class="f">Dominio<input id="qvDom" value="' + esc(QV.comp.dominio) + '" placeholder="AAA 000"></label>' +
-    '<label class="f">Responsable de carga<input id="qvResp" value="' + esc(QV.comp.responsable) + '"></label></div>' +
-    '<div class="viajes-grid" id="qvViajes"></div><div id="qvErr" class="mt"></div>' +
-    '<div class="row mt"><button class="btn pri" id="qvGuardar">' + ICON.guardar + (QV.editando ? 'Guardar cambios' : 'Guardar y seguir') + '</button>' + (QV.editando ? '<button class="btn" id="qvCancelar">Cancelar edición</button>' : '') +
-    '<div class="atajos right"><span><kbd>Enter</kbd> siguiente campo</span><span><kbd>Enter</kbd> en carga vacía = guardar</span><span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> guardar</span><span>Horas: <kbd>435</kbd> = 04:35</span></div></div></div></div>' +
-    '<div class="col" style="gap:16px"><div class="card"><div class="card-h"><div class="t"><h3>Cargados ahora</h3><div class="sub">Se guardan en segundo plano en la planilla original</div></div></div><div class="sesion-lista" id="qvSes"></div></div>' +
-    '<div class="card"><div class="card-h"><div class="t"><h3>Comprobantes del ' + fCorta(QV.fecha) + '</h3><div class="sub" id="qvDiaSub">Cargando…</div></div></div><div id="qvDia" class="sesion-lista"></div></div></div></div>' +
-    '<div class="sub mt" style="text-align:right">Máximo ' + max + ' viajes por comprobante · Se graba en «' + esc(par('VIAJES_HOJA_ESCRITURA', 'Respuestas de formulario 1')) + '»</div></div>';
-  pintarViajesQV();
-  pintarSesionQV();
-  pintarDiaQV();
-  enlazarQV(volver);
-  validarNumeroQV();
-  resumenQV();
-  setTimeout(() => {
-    if (Object.keys(QV.comp.ia || {}).length) return;
-    const el = QV.editando || QV.comp.chofer ? $('#qvViajes [data-k="c"]') : $('#qvNum');
-    if (el) { el.focus(); if (el.select) el.select(); }
-  }, 80);
-}
-
-function htmlVjQV(x, i) {
-  const ci = cicloQV(x);
-  const resp = nombres('Responsables');
-  return '<div class="vj" data-i="' + i + '"><div class="n"><span>Viaje ' + (i + 1) + '</span><button class="btn ghost sm" data-quitar="' + i + '" style="padding:0 4px" aria-label="Quitar viaje" tabindex="-1">' + ICON.x.replace('<svg', '<svg width="13" height="13"') + '</button></div>' +
-    '<div class="hs"><input class="' + (QV.comp.ia['c' + i] ? 'ia' : '') + '" data-i="' + i + '" data-k="c" value="' + esc(x.c) + '" placeholder="Carga" inputmode="numeric" maxlength="5">' +
-    '<input class="' + (QV.comp.ia['d' + i] ? 'ia' : '') + '" data-i="' + i + '" data-k="d" value="' + esc(x.d) + '" placeholder="Descarga" inputmode="numeric" maxlength="5" style="' + (x.autoD && x.d ? 'color:var(--muted)' : '') + '"></div>' +
-    '<div class="meta"><span class="ciclo ' + ci.cls + '">' + ci.txt + '</span><label class="chk" style="font-size:.7rem"><input type="checkbox" data-i="' + i + '" data-k="pagar" tabindex="-1"' + (x.pagar ? ' checked' : '') + '>Pagar</label></div>' +
-    '<div class="resp"><select data-i="' + i + '" data-k="resp" tabindex="-1" title="Responsable de este viaje">' + opts(resp, x.resp || '', 'Resp. del comprobante') + '</select></div></div>';
-}
-
-function pintarViajesQV() {
-  const max = Number(par('MAX_VIAJES_COMPROBANTE', 8)) || 8;
-  const v = QV.comp.viajes;
-  if (v.length < max && v[v.length - 1].c) v.push({ c: '', d: '', autoD: true, resp: '', pagar: true });
-  $('#qvViajes').innerHTML = v.map((x, i) => htmlVjQV(x, i)).join('');
-}
-
-function asegurarVacioQV() {
-  const max = Number(par('MAX_VIAJES_COMPROBANTE', 8)) || 8;
-  const v = QV.comp.viajes;
-  if (v.length < max && v[v.length - 1].c) {
-    v.push({ c: '', d: '', autoD: true, resp: '', pagar: true });
-    $('#qvViajes').insertAdjacentHTML('beforeend', htmlVjQV(v[v.length - 1], v.length - 1));
-  }
-}
-
-function actualizarVjQV(i) {
-  const x = QV.comp.viajes[i];
-  const card = $('#qvViajes .vj[data-i="' + i + '"]');
-  if (!x || !card) return;
-  const d = $('[data-k="d"]', card);
-  if (document.activeElement !== d) { d.value = x.d; d.style.color = x.autoD && x.d ? 'var(--muted)' : ''; }
-  const ci = cicloQV(x);
-  const sp = $('.ciclo', card);
-  sp.className = 'ciclo ' + ci.cls;
-  sp.textContent = ci.txt;
-}
-
-function cicloQV(x) {
-  if (!x.c || !x.d) return { txt: x.c ? 'sin descarga' : '', cls: '' };
-  const a = minDe(x.c);
-  const b = minDe(x.d);
-  if (a === null || b === null) return { txt: '', cls: '' };
-  let m = b - a;
-  if (m < 0) m += 1440;
-  const cruza = b < a;
-  if (cruza && !(a >= 1020 && b <= 360)) return { txt: 'descarga antes de carga', cls: 'mal' };
-  return { txt: (m >= 60 ? Math.floor(m / 60) + ' h ' : '') + (m % 60) + ' min' + (cruza ? ' (+1 día)' : ''), cls: m > 240 ? 'adv' : '' };
-}
-
-function resumenQV() {
-  const v = QV.comp.viajes.filter(x => x.c);
-  $('#qvResumen').textContent = v.length ? v.length + ' viaje' + (v.length > 1 ? 's' : '') + ' · ' + v[0].c + (v.length > 1 ? ' a ' + v[v.length - 1].c : '') : 'sin viajes';
-  $('#qvNumTit').textContent = 'N° ' + (QV.comp.numero || '—');
-}
-
-function validarNumeroQV() {
-  const n = QV.comp.numero;
-  const el = $('#qvEstadoN');
-  if (!el) return true;
-  if (!n) { el.innerHTML = ''; return false; }
-  if (QV.editando) { el.innerHTML = '<span class="tag t-info">edición</span>'; return true; }
-  const usado = (S.info.usados || {})[n] || (QV.sesion.find(s => s.numero === n && s.estado !== 'bad') ? 'cargado ahora' : '');
-  el.innerHTML = usado ? '<span class="tag t-bad">ya existe · ' + esc(usado) + '</span>' : '<span class="tag t-ok">' + ICON.ok.replace('<svg', '<svg width="12" height="12"') + 'libre</span>';
-  $('#qvNum').classList.toggle('inv', !!usado);
-  return !usado;
-}
-
-function enlazarQV(volver) {
-  const card = $('#qvCard');
-  const cambiarFecha = f => { QV.fecha = f; guardarMemQV(); $('#qvFecha').value = f; $$('.card .sub').forEach(() => {}); cargarDiaQV(); $('#qvDia').parentElement.querySelector('h3').textContent = 'Comprobantes del ' + fCorta(f); };
-  $('#qvFecha').onchange = e => { if (e.target.value) cambiarFecha(e.target.value); };
-  $('#qvAnt').onclick = () => cambiarFecha(addDias(QV.fecha, -1));
-  $('#qvSig').onclick = () => cambiarFecha(addDias(QV.fecha, 1));
-  $('#qvOrig').onclick = async e => {
-    const ch = e.target.closest('[data-o]');
-    if (!ch) return;
-    let o = ch.dataset.o;
-    if (o === '__otro') {
-      o = await elegirOrigenQV();
-      if (!o) return;
-    }
-    QV.origen = o;
-    const inf = S.info.origenes[o] || {};
-    if (inf.destino) QV.destino = inf.destino;
-    if (inf.responsable) QV.respDefecto = inf.responsable;
-    guardarMemQV();
-    if (!QV.editando) QV.comp = nuevoComp(siguienteNumero(inf.siguiente));
-    pintarQV(volver);
-  };
-  const lug = () => nombres('Lugares');
-  autocompletar($('#qvDest'), lug, v => { QV.destino = v; guardarMemQV(); });
-  $('#qvDest').addEventListener('change', e => { QV.destino = e.target.value.trim(); guardarMemQV(); });
-  autocompletar($('#qvTipo'), () => nombres('TiposViaje'), v => { QV.tipo = v; guardarMemQV(); });
-  $('#qvTipo').addEventListener('change', e => { QV.tipo = e.target.value.trim(); guardarMemQV(); });
-  $('#qvJor').onchange = e => { QV.jornada = e.target.checked; guardarMemQV(); };
-  if ($('#qvFalt')) $('#qvFalt').onclick = e => { const b = e.target.closest('[data-n]'); if (!b || QV.editando) return; QV.comp.numero = b.dataset.n; $('#qvNum').value = b.dataset.n; validarNumeroQV(); resumenQV(); $('#qvChofer').focus(); };
-  $('#qvNum').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, ''); QV.comp.numero = e.target.value; validarNumeroQV(); resumenQV(); });
-  autocompletar($('#qvChofer'), () => nombres('Choferes'), v => {
-    QV.comp.chofer = v;
-    const inf = (S.info.choferes || {})[v];
-    if (inf && inf.dominio && !QV.comp.dominio) { QV.comp.dominio = inf.dominio; $('#qvDom').value = inf.dominio; $('#qvDom').classList.add('lleno'); }
-  }, { agregar: async (val, inp) => { const r = await agregarAlCatalogo('Choferes', val); if (r) { inp.value = r; QV.comp.chofer = r; inp.classList.remove('adv'); } }, detalle: x => ((S.info.choferes || {})[x] || {}).dominio });
-  $('#qvChofer').addEventListener('change', e => { QV.comp.chofer = e.target.value.trim(); });
-  autocompletar($('#qvDom'), () => nombres('Dominios'), v => { QV.comp.dominio = v; }, { agregar: async (val, inp) => { const r = await agregarAlCatalogo('Dominios', val); if (r) { inp.value = r; QV.comp.dominio = r; inp.classList.remove('adv'); } } });
-  $('#qvDom').addEventListener('change', e => { QV.comp.dominio = e.target.value.trim(); });
-  autocompletar($('#qvResp'), () => nombres('Responsables'), v => { QV.comp.responsable = v; QV.respDefecto = v; guardarMemQV(); }, { agregar: async (val, inp) => { const r = await agregarAlCatalogo('Responsables', val); if (r) { inp.value = r; QV.comp.responsable = r; inp.classList.remove('adv'); } } });
-  $('#qvResp').addEventListener('change', e => { QV.comp.responsable = e.target.value.trim(); });
-  $('#qvLimpiar').onclick = () => { QV.comp = nuevoComp(QV.editando ? '' : QV.comp.numero); QV.editando = false; pintarQV(volver); };
-  if ($('#qvCancelar')) $('#qvCancelar').onclick = () => { QV.editando = false; QV.comp = nuevoComp(siguienteNumero((S.info.origenes[QV.origen] || {}).siguiente)); pintarQV(volver); };
-  $('#qvGuardar').onclick = () => guardarQV(volver);
-  const vj = $('#qvViajes');
-  vj.addEventListener('input', e => {
-    const el = e.target;
-    if (!el.dataset.k || el.type === 'checkbox' || el.tagName === 'SELECT') return;
-    el.value = el.value.replace(/[^\d:.,]/g, '');
-    el.classList.remove('inv', 'ia');
-    const x = QV.comp.viajes[Number(el.dataset.i)];
-    if (el.dataset.k === 'd') { x.autoD = false; x.d = el.value; el.style.color = ''; }
-  });
-  vj.addEventListener('change', e => {
-    const el = e.target;
-    const i = Number(el.dataset.i);
-    const x = QV.comp.viajes[i];
-    if (!x) return;
-    if (el.dataset.k === 'pagar') { x.pagar = el.checked; return; }
-    if (el.dataset.k === 'resp') { x.resp = el.value; return; }
-  });
-  vj.addEventListener('focusout', e => {
-    const el = e.target;
-    if (!el.dataset || (el.dataset.k !== 'c' && el.dataset.k !== 'd')) return;
-    normalizarHoraQV(el);
-  });
-  vj.addEventListener('click', e => {
-    const b = e.target.closest('[data-quitar]');
-    if (!b) return;
-    QV.comp.viajes.splice(Number(b.dataset.quitar), 1);
-    if (!QV.comp.viajes.length) QV.comp.viajes.push({ c: '', d: '', autoD: true, resp: '', pagar: true });
-    pintarViajesQV();
-    resumenQV();
-  });
-  card.addEventListener('keydown', e => {
-    if (e.key !== 'Enter' || $('.ac-lista')) return;
-    if (e.ctrlKey || e.metaKey) { e.preventDefault(); guardarQV(volver); return; }
-    const el = e.target;
-    if (el.tagName === 'BUTTON') return;
-    e.preventDefault();
-    if (el.dataset && el.dataset.k === 'c' && !el.value.trim()) { guardarQV(volver); return; }
-    if (el.dataset && (el.dataset.k === 'c' || el.dataset.k === 'd')) normalizarHoraQV(el);
-    siguienteCampoQV(el);
-  });
-}
-
-function normalizarHoraQV(el) {
-  const i = Number(el.dataset.i);
-  const x = QV.comp.viajes[i];
-  if (!x) return;
-  const raw = el.value.trim();
-  if (!raw) {
-    x[el.dataset.k] = '';
-    if (el.dataset.k === 'd') x.autoD = true;
-    actualizarVjQV(i);
-    resumenQV();
-    return;
-  }
-  const h = parseHora(raw);
-  if (h === null) { el.classList.add('inv'); return; }
-  el.value = h;
-  x[el.dataset.k] = h;
-  if (el.dataset.k === 'c' && (x.autoD || !x.d)) {
-    x.d = hDe(minDe(h) + cicloMedioChofer(QV.comp.chofer));
-    x.autoD = true;
-  }
-  actualizarVjQV(i);
-  asegurarVacioQV();
-  resumenQV();
-}
-
-function cicloMedioChofer(ch) {
-  const vs = (QV.dia || []).filter(v => v.chofer === ch && v.horaCarga && v.horaDescarga).map(v => dur(v.horaCarga, v.horaDescarga) * 60).filter(m => m > 10 && m < 240).sort((a, b) => a - b);
-  const m = quant(vs, 0.5);
-  return m ? Math.round(m / 5) * 5 : 60;
-}
-
-function siguienteCampoQV(el) {
-  const orden = ['qvNum', 'qvChofer', 'qvDom', 'qvResp'];
-  if (orden.indexOf(el.id) >= 0) {
-    const k = orden.indexOf(el.id);
-    const sig = k < orden.length - 1 ? $('#' + orden[k + 1]) : $('#qvViajes [data-i="0"][data-k="c"]');
-    if (el.id === 'qvChofer' && QV.comp.dominio && QV.comp.responsable) { $('#qvViajes [data-i="0"][data-k="c"]').focus(); return; }
-    if (sig) { sig.focus(); sig.select && sig.select(); }
-    return;
-  }
-  const i = Number(el.dataset.i);
-  const sel = el.dataset.k === 'c' ? '[data-i="' + i + '"][data-k="d"]' : '[data-i="' + (i + 1) + '"][data-k="c"]';
-  const sig = $('#qvViajes ' + sel);
-  if (sig) { sig.focus(); sig.select(); } else $('#qvGuardar').focus();
-}
-
-async function elegirOrigenQV() {
-  return new Promise(res => {
-    const m = modal('Elegir origen', '<label class="f">Origen<input id="oriNuevo" placeholder="Escribí para buscar"></label><p class="sub mt">Se usa también para sugerir el número del talonario.</p>', [
-      { txt: 'Cancelar', fn: () => { res(null); } },
-      { txt: 'Usar', cls: 'pri', fn: async mm => { let v = $('#oriNuevo', mm).value.trim(); if (!v) return false; const c = canonico(v, nombres('Lugares')); if (!c) { v = await agregarAlCatalogo('Lugares', v); if (!v) return false; } else v = c; res(v); return true; } }
-    ]);
-    autocompletar($('#oriNuevo', m), () => nombres('Lugares'));
-  });
-}
-
-function validarQV() {
-  const c = QV.comp;
-  const err = [];
-  const adv = [];
-  const marca = (sel, msg) => { const el = $(sel); if (el) el.classList.add('inv'); err.push(msg); };
-  if (!c.numero) marca('#qvNum', 'número de comprobante');
-  else if (!QV.editando && !validarNumeroQV()) err.push('el comprobante N° ' + c.numero + ' ya existe');
-  if (!c.chofer) marca('#qvChofer', 'chofer');
-  if (!c.dominio) marca('#qvDom', 'dominio');
-  if (!c.responsable) marca('#qvResp', 'responsable de carga');
-  if (!QV.origen) err.push('origen');
-  if (!QV.destino) marca('#qvDest', 'destino');
-  if (!QV.tipo) marca('#qvTipo', 'tipo de viaje');
-  if (QV.origen && normTxt(QV.origen) === normTxt(QV.destino)) err.push('origen y destino iguales');
-  const vs = c.viajes.filter(x => x.c);
-  if (!vs.length) marca('#qvViajes [data-i="0"][data-k="c"]', 'al menos un viaje');
-  let prev = null;
-  let off = 0;
-  c.viajes.forEach((x, i) => {
-    if (!x.c) return;
-    if (!x.d) marca('#qvViajes [data-i="' + i + '"][data-k="d"]', 'hora de descarga del viaje ' + (i + 1));
-    const ci = cicloQV(x);
-    if (ci.cls === 'mal') marca('#qvViajes [data-i="' + i + '"][data-k="d"]', 'viaje ' + (i + 1) + ': descarga antes de la carga');
-    if (ci.cls === 'adv') adv.push('Viaje ' + (i + 1) + ': ciclo de ' + ci.txt);
-    let a = minDe(x.c) + off;
-    if (prev !== null && a < prev.c && prev.c - a > 600) { off += 1440; a += 1440; }
-    if (prev !== null && a < prev.d - 10) marca('#qvViajes [data-i="' + i + '"][data-k="c"]', 'viaje ' + (i + 1) + ': carga antes de la descarga del viaje anterior');
-    let d = minDe(x.d || x.c) + off;
-    if (d < a) d += 1440;
-    prev = { c: a, d: d };
-  });
-  const nuevos = [];
-  if (c.chofer && !canonico(c.chofer, nombres('Choferes'))) nuevos.push(['Choferes', c.chofer]);
-  if (c.dominio && !canonico(c.dominio, nombres('Dominios'))) nuevos.push(['Dominios', c.dominio]);
-  if (c.responsable && !canonico(c.responsable, nombres('Responsables'))) nuevos.push(['Responsables', c.responsable]);
-  if (QV.destino && !canonico(QV.destino, nombres('Lugares'))) nuevos.push(['Lugares', QV.destino]);
-  if (QV.tipo && !canonico(QV.tipo, nombres('TiposViaje'))) nuevos.push(['TiposViaje', QV.tipo]);
-  return { err: err, adv: adv, nuevos: nuevos };
-}
-
-async function guardarQV(volver) {
-  $$('#qvCard .inv').forEach(x => x.classList.remove('inv'));
-  QV.comp.chofer = $('#qvChofer').value.trim();
-  QV.comp.dominio = $('#qvDom').value.trim();
-  QV.comp.responsable = $('#qvResp').value.trim();
-  QV.destino = $('#qvDest').value.trim();
-  QV.tipo = $('#qvTipo').value.trim();
-  $$('#qvViajes input[data-k="c"], #qvViajes input[data-k="d"]').forEach(el => { const x = QV.comp.viajes[Number(el.dataset.i)]; const h = el.value.trim() ? parseHora(el.value) : ''; if (h === null) el.classList.add('inv'); else if (x) x[el.dataset.k] = h; });
-  const v = validarQV();
-  if (v.err.length) {
-    $('#qvErr').innerHTML = '<div class="alert bad">' + ICON.alerta + '<div><b>Falta completar o corregir:</b> ' + v.err.map(esc).join(' · ') + '</div></div>';
-    const p = $('#qvCard .inv');
-    if (p) p.focus();
-    return;
-  }
-  $('#qvErr').innerHTML = '';
-  if (v.nuevos.length || v.adv.length) {
-    const txt = (v.nuevos.length ? 'Se agregarán al catálogo de la planilla original: <b>' + v.nuevos.map(n => esc(n[1])).join(', ') + '</b>.<br>' : '') + (v.adv.length ? v.adv.map(esc).join('<br>') : '');
-    if (!(await confirmar('Revisar antes de guardar', txt, 'Guardar igual'))) return;
-    for (const n of v.nuevos) {
-      const r = await agregarAlCatalogo(n[0], n[1]);
-      if (!r) return;
-      if (n[0] === 'Choferes') QV.comp.chofer = r;
-      if (n[0] === 'Dominios') QV.comp.dominio = r;
-      if (n[0] === 'Responsables') QV.comp.responsable = r;
-      if (n[0] === 'Lugares') QV.destino = r;
-      if (n[0] === 'TiposViaje') QV.tipo = r;
-    }
-  }
-  const c = QV.comp;
-  const datos = {
-    fecha: QV.fecha, comprobante: c.numero, chofer: c.chofer, dominio: c.dominio, origen: QV.origen, destino: QV.destino, tipo: QV.tipo,
-    responsable: c.responsable, jornadaCompleta: QV.jornada, reemplazar: QV.editando,
-    viajes: c.viajes.filter(x => x.c).map(x => ({ horaCarga: x.c, horaDescarga: x.d, responsable: x.resp || c.responsable, pagar: x.pagar }))
-  };
-  const item = { id: uid(), numero: c.numero, chofer: c.chofer, dominio: c.dominio, n: datos.viajes.length, fecha: QV.fecha, estado: 'enviando', datos: datos, comp: JSON.parse(JSON.stringify(c)) };
-  QV.sesion.unshift(item);
-  QV.respDefecto = c.responsable;
-  guardarMemQV();
-  const eraEdicion = QV.editando;
-  QV.editando = false;
-  QV.comp = nuevoComp(siguienteNumero(Number(c.numero) + 1));
-  pintarQV(volver);
-  try {
-    const r = await escribir('guardarViajes', datos, 'Comprobante ' + datos.comprobante);
-    item.estado = r.encolado ? 'cola' : 'ok';
-    if (!r.encolado) {
-      S.info.usados[datos.comprobante] = datos.fecha + ' · ' + datos.chofer;
-      const oi = S.info.origenes[datos.origen];
-      if (oi && Number(datos.comprobante) >= oi.ultimo) {
-        oi.ultimo = Number(datos.comprobante);
-        oi.siguiente = Number(siguienteNumero(oi.ultimo + 1));
-        const ch = $$('#qvOrig [data-o]').find(x => x.dataset.o === datos.origen);
-        if (ch && $('.cnt', ch)) $('.cnt', ch).textContent = oi.siguiente;
-      }
-      (S.info.choferes[datos.chofer] = S.info.choferes[datos.chofer] || {}).dominio = datos.dominio;
-      if (datos.fecha === QV.fecha) cargarDiaQV();
-      if (eraEdicion) toast('Comprobante ' + datos.comprobante + ' actualizado', 'ok');
-    }
-  } catch (e) {
-    item.estado = 'bad';
-    item.error = e.message;
-    toast('Comprobante ' + datos.comprobante + ': ' + e.message, 'bad', 8000);
-  }
-  pintarSesionQV();
-  validarNumeroQV();
-}
-
-function pintarSesionQV() {
-  const el = $('#qvSes');
-  if (!el) return;
-  if (!QV.sesion.length) { el.innerHTML = '<div class="empty" style="padding:14px">' + ICON.camion + '<span>Los comprobantes que guardes aparecen acá.</span></div>'; return; }
-  const st = { enviando: '<span class="st"><span class="spin"></span></span>', ok: '<span class="st ok"><svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg></span>', bad: '<span class="st bad">' + ICON.x + '</span>', cola: '<span class="st cola">' + ICON.reloj + '</span>' };
-  el.innerHTML = QV.sesion.map(s => '<div class="ses-item"><span>' + st[s.estado] + '</span><div class="txt"><b>N° ' + esc(s.numero) + ' · ' + s.n + ' viaje' + (s.n > 1 ? 's' : '') + '</b><small>' + esc(s.chofer) + ' · ' + esc(s.dominio) + ' · ' + fCorta(s.fecha) + (s.error ? '<br><span style="color:var(--bad)">' + esc(s.error) + '</span>' : s.estado === 'cola' ? ' · pendiente (sin conexión)' : '') + '</small></div>' +
-    (s.estado === 'bad' ? '<button class="btn sm" data-rec="' + s.id + '">Corregir</button>' : '') + '</div>').join('');
-  el.onclick = e => {
-    const b = e.target.closest('[data-rec]');
-    if (!b) return;
-    const s = QV.sesion.find(x => x.id === b.dataset.rec);
-    if (!s) return;
-    QV.sesion = QV.sesion.filter(x => x !== s);
-    QV.fecha = s.fecha;
-    QV.comp = s.comp;
-    QV.comp.ia = {};
-    pintarQV('<a class="btn icon" href="#/cargar">' + ICON.izq + '</a>');
-  };
-}
-
-function pintarDiaQV() {
-  const el = $('#qvDia');
-  if (!el) return;
-  const g = agrupar(QV.dia || [], v => v.comprobante);
-  const ks = Object.keys(g).sort((a, b) => (g[a][0].horaCarga || '') < (g[b][0].horaCarga || '') ? -1 : 1);
-  $('#qvDiaSub').textContent = ks.length ? ks.length + ' comprobantes · ' + (QV.dia || []).length + ' viajes' : 'Sin viajes cargados para esta fecha';
-  el.innerHTML = ks.map(k => '<div class="ses-item" style="animation:none"><span class="st" style="background:var(--panel);border:1px solid var(--line)">' + ICON.camion.replace('<svg', '<svg width="14" height="14"') + '</span><div class="txt"><b>N° ' + esc(k) + ' · ' + g[k].length + ' viajes</b><small>' + esc(g[k][0].chofer) + ' · ' + esc(g[k][0].dominio) + ' · ' + g[k].map(v => v.horaCarga).join(' ') + '</small></div>' +
-    '<button class="btn icon sm" data-ed="' + esc(k) + '" aria-label="Editar">' + ICON.editar + '</button><button class="btn icon sm dan" data-el="' + esc(k) + '" aria-label="Eliminar">' + ICON.borrar + '</button></div>').join('');
-  el.onclick = async e => {
-    const b = e.target.closest('button');
-    if (!b) return;
-    if (b.dataset.ed) {
-      const vs = g[b.dataset.ed].slice().sort((a, c) => (a.nroViaje || 0) - (c.nroViaje || 0));
-      QV.editando = true;
-      QV.origen = vs[0].origen;
-      QV.destino = vs[0].destino;
-      QV.tipo = vs[0].tipo;
-      QV.jornada = vs[0].jornadaCompleta;
-      QV.comp = { numero: b.dataset.ed, chofer: vs[0].chofer, dominio: vs[0].dominio, responsable: vs[0].responsable, ia: {}, viajes: vs.map(v => ({ c: v.horaCarga, d: v.horaDescarga, autoD: false, resp: v.responsable === vs[0].responsable ? '' : v.responsable, pagar: v.pagar })) };
-      pintarQV('<a class="btn icon" href="#/cargar">' + ICON.izq + '</a>');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-    if (b.dataset.el) {
-      if (!(await confirmar('Eliminar comprobante', 'Se eliminarán de la planilla original los ' + g[b.dataset.el].length + ' viajes del comprobante N° ' + esc(b.dataset.el) + '.', 'Eliminar', true))) return;
-      try {
-        await escribir('eliminarViajes', { comprobante: b.dataset.el }, 'Eliminar comprobante ' + b.dataset.el);
-        delete S.info.usados[b.dataset.el];
-        toast('Comprobante eliminado', 'ok');
-        cargarDiaQV();
-      } catch (er) {
-        toast(er.message, 'bad', 8000);
-      }
-    }
-  };
-}
-
-function comprimirImagen(file) {
-  return new Promise((res, rej) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const max = 1600;
-      const k = Math.min(1, max / Math.max(img.width, img.height));
-      const cv = document.createElement('canvas');
-      cv.width = Math.round(img.width * k);
-      cv.height = Math.round(img.height * k);
-      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-      const data = cv.toDataURL('image/jpeg', 0.82);
-      URL.revokeObjectURL(url);
-      res({ data: data.split(',')[1], url: data });
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('No se pudo leer la imagen')); };
-    img.src = url;
-  });
-}
-
-document.addEventListener('click', e => {
-  if (e.target.closest('#qvIA')) $('#qvFoto').click();
-});
-
-document.addEventListener('change', async e => {
-  if (e.target.id !== 'qvFoto' || !e.target.files[0]) return;
-  const file = e.target.files[0];
-  e.target.value = '';
-  let img;
-  try {
-    img = await comprimirImagen(file);
-  } catch (er) {
-    return toast(er.message, 'bad');
-  }
-  const m = modal('Leyendo comprobante', '<div class="escaneo"><img src="' + img.url + '" alt="Comprobante"></div><p class="sub mt" style="text-align:center">La IA está transcribiendo el comprobante…</p>', [{ txt: 'Cancelar' }]);
-  try {
-    const r = await api('leerComprobante', { imagen: img.data, mime: 'image/jpeg' });
-    if (!document.body.contains(m)) return;
-    m.cerrar();
-    aplicarIA(r);
-  } catch (er) {
-    if (document.body.contains(m)) m.cerrar();
-    toast('No se pudo leer la foto: ' + er.message, 'bad', 8000);
-  }
-});
-
-function aplicarIA(r) {
-  const c = QV.comp;
-  c.ia = {};
-  const set = (k, v, lista) => {
-    if (!v) return;
-    const val = lista ? (canonico(v, lista) || mejorCoincidencia(v, lista) || v) : v;
-    c[k] = val;
-    c.ia[k] = true;
-  };
-  if (r.comprobante && !QV.editando) { c.numero = r.comprobante; c.ia.numero = true; }
-  set('chofer', r.chofer, nombres('Choferes'));
-  set('dominio', r.dominio, nombres('Dominios'));
-  set('responsable', r.responsable, nombres('Responsables'));
-  if (r.origen) { const o = canonico(r.origen, nombres('Lugares')) || mejorCoincidencia(r.origen, nombres('Lugares')); if (o) QV.origen = o; }
-  if (r.destino) { const d = canonico(r.destino, nombres('Lugares')) || mejorCoincidencia(r.destino, nombres('Lugares')); if (d) QV.destino = d; }
-  const fAnt = QV.fecha;
-  if (r.fecha && /^\d{4}-\d{2}-\d{2}$/.test(r.fecha) && Math.abs(difDias(r.fecha, hoy())) < 120) QV.fecha = r.fecha;
-  if (r.viajes && r.viajes.length) {
-    c.viajes = r.viajes.map((v, i) => { c.ia['c' + i] = true; if (v.horaDescarga) c.ia['d' + i] = true; return { c: v.horaCarga, d: v.horaDescarga || '', autoD: !v.horaDescarga, resp: '', pagar: true }; });
-    c.viajes.push({ c: '', d: '', autoD: true, resp: '', pagar: true });
-  }
-  pintarQV('<a class="btn icon" href="#/cargar">' + ICON.izq + '</a>');
-  if (QV.fecha !== fAnt) { guardarMemQV(); cargarDiaQV(); }
-  ['numero:qvNum', 'chofer:qvChofer', 'dominio:qvDom', 'responsable:qvResp'].forEach(p => { const x = p.split(':'); if (c.ia[x[0]]) $('#' + x[1]).classList.add('ia'); });
-  toast('Datos leídos' + (r.confianza ? ' (confianza ' + Math.round(r.confianza * 100) + '%)' : '') + '. Revisá los campos marcados en violeta antes de guardar.', 'info', 8000);
-  if (r.notas) toast('Nota de la IA: ' + r.notas, 'info', 8000);
 }
 
 function linMin(h, esFin) {
@@ -1430,16 +888,119 @@ async function guardarCalidad(volver, defs) {
   }
 }
 
+const FORMAS_PILA = {
+  cono: { t: 'Cono', campos: [['per', 'Perímetro del pie (m)'], ['h', 'Altura (m)'], ['tal', 'o largo del talud (m)']] },
+  prisma: { t: 'Pila alargada', campos: [['L', 'Largo al pie (m)'], ['W', 'Ancho al pie (m)'], ['l', 'Largo de la cresta (m)'], ['w', 'Ancho de la cresta (m)'], ['h', 'Altura (m)']] },
+  medido: { t: 'Volumen medido', campos: [['v', 'Volumen (m³)']] }
+};
+
+function volumenPila(p) {
+  const g = k => num(p[k]);
+  if (p.forma === 'cono') {
+    const per = g('per');
+    if (!per) return null;
+    const r = per / (2 * Math.PI);
+    let h = g('h');
+    const tal = g('tal');
+    if (!h && tal && tal > r) h = Math.sqrt(tal * tal - r * r);
+    return h ? Math.PI * r * r * h / 3 : null;
+  }
+  if (p.forma === 'prisma') {
+    const L = g('L');
+    const W = g('W');
+    const h = g('h');
+    if (!L || !W || !h) return null;
+    const l = g('l') || 0;
+    const w = g('w') || 0;
+    return h / 6 * (L * W + 4 * ((L + l) / 2) * ((W + w) / 2) + l * w);
+  }
+  return g('v');
+}
+
+function figuraPila(forma) {
+  if (forma === 'cono') return '<svg class="figura" viewBox="0 0 220 110"><path class="rel" d="M20 90 L110 18 L200 90 Z"/><ellipse cx="110" cy="90" rx="90" ry="10"/><line class="cota" x1="110" y1="18" x2="110" y2="90"/><text x="116" y="58">h</text><text x="60" y="48">talud</text><text x="92" y="108">perímetro</text></svg>';
+  if (forma === 'prisma') return '<svg class="figura" viewBox="0 0 220 110"><path class="rel" d="M14 92 L206 92 L164 30 L58 30 Z"/><line class="cota" x1="58" y1="22" x2="164" y2="22"/><line class="cota" x1="14" y1="100" x2="206" y2="100"/><line class="cota" x1="186" y1="30" x2="186" y2="92"/><text x="96" y="18">largo cresta</text><text x="88" y="110">largo al pie</text><text x="192" y="64">h</text></svg>';
+  return '<svg class="figura" viewBox="0 0 220 110"><path class="rel" d="M10 90 C40 40 70 30 100 50 C130 20 170 30 210 90 Z"/><circle cx="110" cy="18" r="8" style="fill:none;stroke:var(--accent);stroke-width:2"/><path d="M96 18 H124 M110 4 V32" style="stroke:var(--accent);stroke-width:2"/><text x="64" y="106">drone / topografía</text></svg>';
+}
+
 function edAjustes(volver) {
   const lista = (S.resumen.ajustes || []).slice().sort((a, b) => a.fecha < b.fecha ? 1 : -1);
-  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos</div><h1>Ajustes de stock</h1></div></div></div>' +
-    '<div class="alert info">' + ICON.infoI + '<div><b>Stock inicial</b> y <b>Cubicación</b> fijan el stock en ese valor al inicio del día. <b>Corrección</b> suma o resta toneladas (negativo para restar). Una cubicación periódica (topografía o drone) corrige la deriva del factor t/palada.</div></div>' +
-    '<div class="grid g-21"><div class="card"><div class="form"><label class="f">Fecha<input type="date" id="aF" value="' + hoy() + '"></label><label class="f">Nodo<div id="aNseg"></div></label>' +
+  const pilas = lsGet('tierra_pilas', [{ nombre: 'Pila 1', forma: 'cono' }]);
+  const dens = { Playa: num(par('DENSIDAD_APARENTE', 1.6)) || 1.6, Silo: 1.3 };
+  const pasos = [
+    ['Cuándo cubicar', 'Una vez por mes y cada vez que el balance de la playa o del silo se aleje de lo que se ve. Hacelo al cierre de un turno, sin palas trabajando en la pila, y anotá la fecha: el ajuste fija el stock al inicio de ese día.'],
+    ['Qué llevar', 'Cinta métrica de 50 m (o rueda medidora), jalón o regla de 3 m, celular con inclinómetro, planilla o esta pantalla, y un balde de volumen conocido para la densidad.'],
+    ['Pila cónica', 'Medí el perímetro del pie caminando con la cinta a ras del suelo. Para la altura, si no se puede subir, medí el largo del talud (del pie a la punta, sobre la superficie) y la app calcula la altura.<span class="formula">r = P / 2π · h = √(talud² − r²) · V = π·r²·h / 3</span>'],
+    ['Pila alargada', 'Medí largo y ancho al pie, largo y ancho de la cresta (arriba) y la altura media. Si la cresta es un filo, dejá su ancho en 0.<span class="formula">V = h/6 · (A_pie + 4·A_media + A_cresta)</span>'],
+    ['Pilas irregulares', 'Dividilas en tramos que se parezcan a un cono o a una pila alargada y cargá cada tramo como una pila. Las diferencias se compensan en la suma.'],
+    ['Densidad aparente', 'Llená el balde con tierra de la pila sin apretar, enrasá y pesá. Densidad = (peso − tara) / volumen. Repetí en 3 pilas y promediá. Con lluvia la densidad sube: medila el mismo día. Alternativa: un camión pesado en balanza dividido por el volumen de su caja enrasada.'],
+    ['Drone o topografía', 'Es el método más preciso (±2–3 %). Un vuelo con fotogrametría o un relevamiento con GPS/estación total da el volumen sobre el piso de la playa: cargalo como «Volumen medido».'],
+    ['Precisión esperable', 'Con cinta y fórmulas el error suele ser de ±10 %. Por eso conviene cubicar siempre con el mismo método y comparar la tendencia mes a mes.']
+  ];
+  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos</div><h1>Ajustes de stock</h1><p class="sub">El balance acumula diferencias del factor t/palada; una cubicación periódica las corrige.</p></div></div></div>' +
+    '<details class="guia" id="guiaCub"><summary>' + ICON.infoI.replace('<svg', '<svg width="18" height="18"') + 'Guía rápida para cubicar la playa y el silo</summary><div class="cuerpo" style="display:block"><div class="guia-cub">' +
+    pasos.map((p, i) => '<div class="paso"><b><i>' + (i + 1) + '</i>' + p[0] + '</b><div>' + p[1] + '</div></div>').join('') + '</div></div></details>' +
+    '<div class="card"><div class="card-h"><div class="t"><h3>Calculadora de cubicación</h3><div class="sub">Cargá cada pila; la app suma volúmenes y los pasa a toneladas</div></div><div class="row"><button class="btn sm" id="cAdd">+ Agregar pila</button></div></div>' +
+    '<div id="cPilas"></div><div class="form mt" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))"><label class="f">Densidad aparente (t/m³)<input id="cDen" type="number" step="0.01" value="' + dens.Playa + '"></label></div>' +
+    '<div class="calc-res" id="cRes"></div></div>' +
+    '<div class="grid g-21"><div class="card"><div class="card-h"><div class="t"><h3>Registrar ajuste</h3></div></div><div class="form"><label class="f">Fecha<input type="date" id="aF" value="' + hoy() + '"></label><label class="f">Nodo<div id="aNseg"></div></label>' +
     '<label class="f">Tipo<select id="aT">' + opts(['Stock inicial', 'Cubicación', 'Corrección'], 'Cubicación', null) + '</select></label><label class="f">Toneladas<input type="number" step="0.1" id="aV"></label>' +
-    '<label class="f full">Observaciones / método<input id="aO" placeholder="Ej: cubicación con drone, densidad 1,55 t/m³"></label></div><div class="row mt"><button class="btn pri" id="aG">' + ICON.guardar + 'Guardar ajuste</button></div></div>' +
-    '<div class="card"><div class="card-h"><div class="t"><h3>Registrados</h3></div></div>' + tabla([[r => fCorta(r.fecha), 'Fecha'], ['nodo', 'Nodo'], ['tipo', 'Tipo'], [r => nf(r.toneladas, 1), 't', 'n'], [r => '<button class="btn icon sm dan" data-ax="' + r.id + '">' + ICON.borrar + '</button>', '']], lista) + '</div></div></div>';
+    '<label class="f full">Observaciones / método<input id="aO" placeholder="Ej: cubicación con cinta, 3 pilas, densidad 1,55 t/m³"></label></div>' +
+    '<div class="sub mt"><b>Stock inicial</b> y <b>Cubicación</b> fijan el stock en ese valor al inicio del día. <b>Corrección</b> suma o resta toneladas (negativo para restar).</div>' +
+    '<div class="row mt"><button class="btn pri" id="aG">' + ICON.guardar + 'Guardar ajuste</button></div></div>' +
+    '<div class="card"><div class="card-h"><div class="t"><h3>Registrados</h3></div></div>' + tabla([[r => fCorta(r.fecha), 'Fecha'], ['nodo', 'Nodo'], ['tipo', 'Tipo'], [r => nf(r.toneladas, 1), 't', 'n'], [r => esc(r.observaciones), 'Método', 'wrap'], [r => '<button class="btn icon sm dan" data-ax="' + r.id + '">' + ICON.borrar + '</button>', '']], lista) + '</div></div></div>';
+  if (!lista.length) $('#guiaCub').open = true;
   let nodo = 'Playa';
-  segmento($('#aNseg'), [['Playa', 'Playa'], ['Silo', 'Silo']], 'Playa', k => { nodo = k; }, true);
+  segmento($('#aNseg'), [['Playa', 'Playa'], ['Silo', 'Silo']], 'Playa', k => {
+    nodo = k;
+    $('#cDen').value = dens[k];
+    calcular();
+  }, true);
+  const pintarPilas = () => {
+    $('#cPilas').innerHTML = pilas.map((p, i) => '<div class="maq" style="margin-bottom:10px"><div class="maq-h"><div class="t"><input data-p="' + i + '" data-k="nombre" value="' + esc(p.nombre) + '" style="width:150px;font-weight:800"><div class="seg sm" style="display:inline-flex">' +
+      Object.keys(FORMAS_PILA).map(f => '<button type="button" data-p="' + i + '" data-forma="' + f + '" class="' + (p.forma === f ? 'on' : '') + '" style="' + (p.forma === f ? 'background:var(--panel);box-shadow:var(--shadow);color:var(--text)' : '') + '">' + FORMAS_PILA[f].t + '</button>').join('') + '</div></div>' +
+      '<div class="row"><b class="tnum" data-vol="' + i + '"></b><button class="btn icon sm dan" data-quitarp="' + i + '" aria-label="Quitar">' + ICON.borrar + '</button></div></div>' +
+      '<div class="tramo" style="display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:14px;align-items:center"><div class="form" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">' +
+      FORMAS_PILA[p.forma].campos.map(c => '<label class="f">' + c[1] + '<input type="number" step="0.01" min="0" inputmode="decimal" data-p="' + i + '" data-k="' + c[0] + '" value="' + esc(p[c[0]] === undefined ? '' : p[c[0]]) + '"></label>').join('') + '</div>' + figuraPila(p.forma) + '</div></div>').join('');
+    calcular();
+  };
+  const calcular = () => {
+    let tot = 0;
+    let ok = 0;
+    pilas.forEach((p, i) => {
+      const v = volumenPila(p);
+      const el = $('[data-vol="' + i + '"]');
+      if (el) el.textContent = v ? nf(v, 1) + ' m³' : '—';
+      if (v) { tot += v; ok++; }
+    });
+    const d = num($('#cDen').value) || 0;
+    const t = tot * d;
+    $('#cRes').innerHTML = '<div><div class="eyebrow">Volumen total</div><b>' + nf(tot, 1) + ' m³</b></div><div><div class="eyebrow">Toneladas (' + nf(d, 2) + ' t/m³)</div><b>' + nf(t, 1) + ' t</b></div>' +
+      '<div class="sub">' + ok + ' de ' + pilas.length + ' pilas completas</div><button class="btn pri right" id="cUsar"' + (t > 0 ? '' : ' disabled') + '>' + ICON.der + 'Usar como cubicación</button>';
+    $('#cUsar').onclick = () => {
+      $('#aT').value = 'Cubicación';
+      $('#aV').value = Math.round(t * 10) / 10;
+      $('#aO').value = 'Cubicación ' + pilas.filter(p => volumenPila(p)).map(p => p.nombre + ' ' + FORMAS_PILA[p.forma].t.toLowerCase() + ' ' + nf(volumenPila(p), 0) + ' m³').join(', ') + ' · ' + nf(tot, 0) + ' m³ × ' + nf(d, 2) + ' t/m³';
+      $('#aV').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      $('#aV').classList.add('lleno');
+    };
+    lsSet('tierra_pilas', pilas);
+  };
+  $('#cDen').oninput = calcular;
+  $('#cAdd').onclick = () => { pilas.push({ nombre: 'Pila ' + (pilas.length + 1), forma: 'cono' }); pintarPilas(); };
+  $('#cPilas').addEventListener('input', e => {
+    const el = e.target;
+    if (el.dataset.p === undefined || !el.dataset.k) return;
+    pilas[Number(el.dataset.p)][el.dataset.k] = el.value;
+    if (el.dataset.k !== 'nombre') calcular(); else lsSet('tierra_pilas', pilas);
+  });
+  $('#cPilas').addEventListener('click', e => {
+    const f = e.target.closest('[data-forma]');
+    if (f) { pilas[Number(f.dataset.p)].forma = f.dataset.forma; pintarPilas(); return; }
+    const q = e.target.closest('[data-quitarp]');
+    if (q) { pilas.splice(Number(q.dataset.quitarp), 1); if (!pilas.length) pilas.push({ nombre: 'Pila 1', forma: 'cono' }); pintarPilas(); }
+  });
+  pintarPilas();
   $('#aG').onclick = async () => {
     const d = { fecha: $('#aF').value, nodo: nodo, tipo: $('#aT').value, toneladas: $('#aV').value, observaciones: $('#aO').value };
     if (!d.fecha || d.toneladas === '') return toast('Fecha y toneladas requeridas', 'bad');

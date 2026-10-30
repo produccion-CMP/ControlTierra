@@ -160,7 +160,7 @@ function bloquear(txt) {
     o = document.createElement('div');
     o.id = 'bloqueo';
     o.className = 'modal-bg';
-    o.innerHTML = '<div class="col" style="align-items:center;gap:14px"><div class="spin lg"></div><b id="bloqueoTxt" style="color:#fff"></b></div>';
+    o.innerHTML = '<div class="col" style="align-items:center;gap:10px">' + ($('#tplCamion') ? $('#tplCamion').innerHTML : '<div class="spin lg"></div>') + '<b id="bloqueoTxt" style="color:#fff"></b></div>';
     document.body.appendChild(o);
   }
   $('#bloqueoTxt').textContent = txt || 'Procesando…';
@@ -259,7 +259,7 @@ function contar(raiz) {
     const dec = Number(el.dataset.dec || 0);
     if (!isFinite(fin) || reducido()) { el.textContent = nf(fin, dec); return; }
     const t0 = performance.now();
-    const durac = 900;
+    const durac = 520;
     const paso = t => {
       const k = Math.min(1, (t - t0) / durac);
       const e = 1 - Math.pow(1 - k, 3);
@@ -384,7 +384,7 @@ function grafico(id, tipo, labels, datasets, extra, alClick) {
   const base = {
     responsive: true,
     maintainAspectRatio: false,
-    animation: reducido() ? false : { duration: 900, easing: 'easeOutQuart' },
+    animation: reducido() ? false : { duration: 450, easing: 'easeOutQuart' },
     interaction: { mode: 'index', intersect: false },
     onHover: (e, els) => { e.native.target.style.cursor = (alClick && els.length) ? 'pointer' : 'default'; },
     onClick: (e, els) => { if (alClick && els.length) alClick(els[0].index); },
@@ -509,20 +509,41 @@ function verCola() {
   });
 }
 
-async function cargarResumen(forzar) {
-  if (S.resumen && !forzar && !S.resumenVencido) return S.resumen;
+async function traerResumen() {
   try {
-    S.resumen = await api('resumen');
+    const r = await api('resumen');
+    S.resumen = r;
     S.resumenVencido = false;
-    lsSet('tierra_resumen', S.resumen);
+    lsSet('tierra_resumen', r);
+    return r;
   } catch (e) {
-    const c = lsGet('tierra_resumen', null);
+    const c = S.resumen || lsGet('tierra_resumen', null);
     if (!c || /API_URL/.test(e.message)) throw e;
     S.resumen = c;
     const motivo = e.servidor ? 'El servidor respondió: ' + e.message : 'Sin conexión con el servidor (' + e.message + ')';
     toast(motivo + '. Se muestran los últimos datos guardados (' + new Date(c.generado).toLocaleString('es-AR') + ').', 'warn', 9000);
+    return c;
   }
-  return S.resumen;
+}
+
+async function cargarResumen(forzar) {
+  if (S.resumen && !forzar && !S.resumenVencido) return S.resumen;
+  if (!S.resumen && !forzar) {
+    const c = lsGet('tierra_resumen', null);
+    if (c && c.generado) {
+      S.resumen = c;
+      S.resumenVencido = false;
+      const ruta = location.hash;
+      traerResumen().then(r => {
+        if (r !== c && r.generado !== c.generado && location.hash === ruta && /^#\/(inicio|calendario|tablero)|^#?$/.test(ruta) && !document.querySelector('.modal-bg')) {
+          document.body.classList.add('quieto');
+          render().then(() => setTimeout(() => document.body.classList.remove('quieto'), 80));
+        }
+      }).catch(e => console.warn(e));
+      return c;
+    }
+  }
+  return traerResumen();
 }
 
 async function cargarRango(desde, hasta) {

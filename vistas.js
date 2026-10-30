@@ -7,6 +7,8 @@ async function vInicio() {
     '<div class="card flujo-card"><div class="skel" style="height:150px"></div></div><div class="grid g-21"><div class="card"><div class="skel" style="height:220px"></div></div><div class="card"><div class="skel" style="height:220px"></div></div></div></div>';
   segmento($('#segDias'), [['7', '7 días'], ['15', '15 días'], ['30', '30 días']], String(dias), k => { lsSet('tierra_inicio_dias', Number(k)); vInicio(); }, true);
   const ok = vivo();
+  const p14 = api('rango', { desde: addDias(hoy(), -13), hasta: hoy() });
+  p14.catch(() => null);
   await cargarResumen();
   if (!ok()) return;
   const hasta = hoy();
@@ -64,7 +66,7 @@ async function vInicio() {
   grafico('spVia', 'bar', dv.map(d => fCorta(d.fecha)), [{ label: 'Viajes', data: dv.map(d => d.viajes), backgroundColor: color(2) }], spark, i => { location.hash = '#/dia/' + dv[i].fecha; });
   grafico('spSto', 'line', L, [{ label: 'Stock playa t', data: serie.map(s => s.stockPlaya), borderColor: color(3), backgroundColor: color(3), fill: false }], mezclar(spark, { scales: { y: { beginAtZero: false } } }));
   try {
-    const r14 = await api('rango', { desde: addDias(hoy(), -13), hasta: hoy() });
+    const r14 = await p14;
     if (ok() && $('#alertas')) pintarAlertas(r14, b, cis);
   } catch (e) {
     if (ok() && $('#alertas')) $('#alertas').innerHTML = '<div class="alert warn">' + ICON.alerta + '<div>No se pudieron calcular los controles: ' + esc(e.message) + '</div></div>';
@@ -174,8 +176,7 @@ async function vTablero(tab) {
   segmento($('#tabsT'), TABS, tab, k => { history.replaceState(null, '', '#/tablero/' + k); destruirGraficos(); pintarTab(k); });
   enlazarFiltros(() => vTablero(tab));
   const ok = vivo();
-  await cargarResumen();
-  await cargarRango();
+  await Promise.all([cargarResumen(), cargarRango()]);
   if (!ok()) return;
   pintarTab(($('#tabsT .seg button.on') || {}).dataset ? $('#tabsT .seg button.on').dataset.k : tab);
 }
