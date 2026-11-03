@@ -1,12 +1,13 @@
 'use strict';
 
 const MODULOS = [
-  ['viajes', 'Viajes de camiones', 'Carga rápida de comprobantes, uno detrás de otro, o leyendo la foto del papel.', 'camion', 1, 'viajes'],
-  ['jornada', 'Jornada de cantera', 'Tramos de producción y paradas por máquina: horómetros, camiones a planta e internos.', 'pala', 3, 'jornada'],
-  ['pesaje', 'Balanza de ingreso', 'Importar el archivo PESAJE.XLS para cruzarlo con los viajes.', 'balanza', 2, 'pesajes'],
-  ['molienda', 'Molienda y silo', 'Paladas al cajón, balanza dinámica y extracción de silo por turno.', 'molienda', 7, 'molienda'],
-  ['calidad', 'Calidad de tierra', 'Inspección visual, ensayo arcilla/limo/arena y decisión por viaje.', 'calidad', 5, 'calidad'],
-  ['ajustes', 'Ajustes de stock', 'Stock inicial y cubicaciones de playa y silo.', 'ajuste', 4, '']
+  ['jornada', 'Jornada de cantera', 'Tramos de producción y paradas por máquina: horómetros, camiones a planta e internos.', 'pala', 3, 'jornada', 'abastecimiento'],
+  ['gasoil', 'Gasoil de cantera', 'Cargas a máquinas, llenado y medición de la cisterna.', 'combustible', 6, 'gasoil', 'abastecimiento'],
+  ['viajes', 'Viajes de camiones', 'Talonarios: viajes con horario, viajes internos y control con la balanza.', 'camion', 1, 'viajes', 'abastecimiento'],
+  ['pesaje', 'Balanza de ingreso', 'Importar el PESAJE.XLS para cruzarlo con los viajes.', 'balanza', 2, 'pesajes', 'abastecimiento'],
+  ['calidad', 'Calidad de tierra', 'Inspección visual, ensayo arcilla/limo/arena y decisión por viaje.', 'calidad', 5, 'calidad', 'abastecimiento'],
+  ['molienda', 'Molienda y silo', 'Se lee del Informe de Producción; acá se corrige un turno.', 'molienda', 7, 'molienda', 'molienda'],
+  ['ajustes', 'Cubicación y ajustes', 'Cubicar playa y silo y comparar con el stock calculado.', 'ajuste', 4, 'cubicacion', 'molienda']
 ];
 
 async function vCargar(mod, arg) {
@@ -14,14 +15,16 @@ async function vCargar(mod, arg) {
   await cargarResumen();
   if (!ok()) return;
   if (!mod) {
-    const vis = MODULOS.filter(m => puede(m[0]));
-    app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Carga de datos</div><h1>¿Qué vas a cargar?</h1><p class="sub">Módulos habilitados para tu rol (' + esc(S.ses.rol) + ').</p></div></div><div class="modulos stagger">' +
-      vis.map(m => {
-        const f = m[5] ? (S.resumen.ultimo || {})[m[5]] : '';
-        const sm = m[5] ? semaforoDias(f) : null;
-        return '<a class="card hover modulo" href="#/cargar/' + m[0] + '"><span class="ic" style="background:' + COL(m[4]) + '">' + ICON[m[3]] + '</span><h3>' + m[1] + '</h3><p class="sub">' + m[2] + '</p>' +
-          (sm ? '<div class="pie"><span class="semaforo ' + sm.cls + '"></span>' + (f ? 'Último dato: ' + fMedia(f) + ' · ' + sm.txt : 'Sin datos') + '</div>' : '<div class="pie">' + ICON.ajuste.replace('<svg', '<svg width="14" height="14"') + 'Solo administradores</div>') + '</a>';
-      }).join('') + '</div></div>';
+    const tarjeta = m => {
+      const f = (S.resumen.ultimo || {})[m[5]];
+      const sm = semaforoDias(f);
+      return '<a class="card hover modulo" href="#/cargar/' + m[0] + '"><span class="ic" style="background:' + COL(m[4]) + '">' + ICON[m[3]] + '</span><h3>' + m[1] + '</h3><p class="sub">' + m[2] + '</p>' +
+        '<div class="pie"><span class="semaforo ' + sm.cls + '"></span>' + (f ? 'Último dato: ' + fMedia(f) + ' · ' + sm.txt : 'Sin datos') + '</div></a>';
+    };
+    const secs = Object.keys(SECTORES).filter(k => MODULOS.some(m => m[6] === k && puede(m[0])));
+    app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Carga de datos · ' + esc(rolTxt(S.ses.rol)) + '</div><h1>¿Qué vas a cargar?</h1></div></div>' +
+      secs.map(k => '<div class="sector-h ' + k + '">' + ICON[SECTORES[k].ic] + '<div><b>' + SECTORES[k].t + '</b><span>' + SECTORES[k].d + ' · ' + SECTORES[k].rol + '</span></div></div><div class="modulos stagger">' +
+        MODULOS.filter(m => m[6] === k && puede(m[0])).map(tarjeta).join('') + '</div>').join('') + '</div>';
     stagger(app());
     return;
   }
@@ -31,6 +34,7 @@ async function vCargar(mod, arg) {
   }
   const volver = '<a class="btn icon" href="#/cargar" aria-label="Volver">' + ICON.izq + '</a>';
   if (mod === 'viajes') return edViajes(arg, volver);
+  if (mod === 'gasoil') return edGasoil(arg || hoy(), volver);
   if (mod === 'jornada') return edJornada(arg || hoy(), volver);
   if (mod === 'pesaje') return edPesaje(volver);
   if (mod === 'molienda') return edMolienda(arg || hoy(), volver);
@@ -194,7 +198,7 @@ async function edJornada(f, volver) {
   app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos</div><h1>Jornada de cantera</h1></div></div>' +
     '<div class="row"><label class="f">Fecha<div class="row" style="flex-wrap:nowrap;gap:4px"><a class="btn icon" href="#/cargar/jornada/' + addDias(f, -1) + '">' + ICON.izq + '</a><input type="date" id="edF" value="' + f + '" style="width:170px"><a class="btn icon" href="#/cargar/jornada/' + addDias(f, 1) + '">' + ICON.der + '</a></div></label>' +
     '<button class="btn" id="bCopia" style="align-self:flex-end">' + ICON.copiar + 'Copiar día anterior</button><button class="btn pri" id="bGuardar" style="align-self:flex-end">' + ICON.guardar + 'Guardar jornada</button></div></div>' +
-    aviso + '<div class="alert info">' + ICON.infoI + '<div>Las <b>paladas a camión</b> se calculan solas como (camiones a planta + internos) × ' + ppc() + '. Si el operador informó otro número, escribilo y queda como manual.</div></div><div id="edErr"></div><div id="edMaqs"></div>' +
+    aviso + '<div id="edErr"></div><div id="edMaqs"></div>' +
     '<div class="row mt"><button class="btn pri" id="bGuardar2">' + ICON.guardar + 'Guardar jornada</button></div></div>';
   $('#edF').onchange = e => { location.hash = '#/cargar/jornada/' + e.target.value; };
   $('#bGuardar').onclick = guardarJornada;
@@ -713,14 +717,13 @@ async function edMolienda(f, volver) {
   R.silo.forEach(s => { fila(s)[s.fuente === 'Manual' ? 'man' : 'inf'].silo = s.paladas; });
   const lista = Object.keys(filas).sort().reverse().map(k => filas[k]);
   const val = (r, k) => r.man[k] !== undefined && r.man[k] !== null ? r.man[k] : r.inf[k];
-  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos</div><h1>Molienda y silo</h1><p class="sub">Un registro por turno. La carga manual tiene prioridad sobre lo importado del Informe de Turno.</p></div></div></div>' +
+  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos · Molienda</div><h1>Molienda y silo</h1><p class="sub">Se lee del Informe de Producción. Cargá solo para corregir un turno.</p></div></div></div>' +
     '<div class="grid g-21"><div class="card"><div class="card-h"><div class="t"><h3>Cargar turno</h3></div></div><div class="form"><label class="f">Fecha<input type="date" id="mF" value="' + f + '"></label><label class="f">Turno<div id="mTseg"></div></label>' +
     '<label class="f">Paladas al cajón alimentador<input type="number" min="0" id="mP" inputmode="numeric"></label><label class="f">Toneladas balanza dinámica<input type="number" step="0.1" min="0" id="mTon" inputmode="decimal"></label>' +
     '<label class="f">Paladas extraídas de silo<input type="number" min="0" id="mS" inputmode="numeric"></label><label class="f">t por palada<input id="mFac" disabled></label>' +
     '<label class="f full">Observaciones<input id="mO"></label></div><div class="row mt"><button class="btn pri" id="mG">' + ICON.guardar + 'Guardar turno</button></div></div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Vinculado al Informe de Producción</h3><div class="sub">Se lee en vivo de la hoja «' + esc(par('INFORME_HOJA', 'Molienda')) + '»</div></div></div>' +
-    '<div class="col sub"><span><b>D</b> · paladas que ingresan a molienda</span><span><b>G</b> · paladas del silo a producción</span><span><b>J</b> · toneladas de balanza dinámica (molienda → silo)</span>' +
-    '<span class="mt">Cargá acá solo para corregir un turno: la carga manual reemplaza al Informe en ese turno. Los cambios en el Informe se ven en hasta 10 minutos.</span></div></div></div>' +
+    '<div class="col sub"><span><b>D</b> · paladas que ingresan a molienda</span><span><b>G</b> · paladas del silo a producción</span><span><b>J</b> · toneladas de balanza dinámica (molienda → silo)</span></div></div></div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Últimos 14 días</h3></div></div>' +
     tabla([[r => fMedia(r.fecha), 'Fecha'], ['turno', 'Turno'], [r => nf(val(r, 'pal')), 'Pal. cajón', 'n'], [r => nf(val(r, 't'), 1), 't bal. din.', 'n'],
       [r => { const p = val(r, 'pal'); const t = val(r, 't'); return p && t ? nf(t / p, 2) : '–'; }, 't/palada', 'n'], [r => nf(val(r, 'silo')), 'Pal. silo', 'n'],
@@ -927,35 +930,43 @@ function edAjustes(volver) {
   const lista = (S.resumen.ajustes || []).slice().sort((a, b) => a.fecha < b.fecha ? 1 : -1);
   const pilas = lsGet('tierra_pilas', [{ nombre: 'Pila 1', forma: 'cono' }]);
   const dens = { Playa: num(par('DENSIDAD_APARENTE', 1.6)) || 1.6, Silo: 1.3 };
-  const pasos = [
-    ['Cuándo cubicar', 'Una vez por mes y cada vez que el balance de la playa o del silo se aleje de lo que se ve. Hacelo al cierre de un turno, sin palas trabajando en la pila, y anotá la fecha: el ajuste fija el stock al inicio de ese día.'],
-    ['Qué llevar', 'Cinta métrica de 50 m (o rueda medidora), jalón o regla de 3 m, celular con inclinómetro, planilla o esta pantalla, y un balde de volumen conocido para la densidad.'],
-    ['Pila cónica', 'Medí el perímetro del pie caminando con la cinta a ras del suelo. Para la altura, si no se puede subir, medí el largo del talud (del pie a la punta, sobre la superficie) y la app calcula la altura.<span class="formula">r = P / 2π · h = √(talud² − r²) · V = π·r²·h / 3</span>'],
-    ['Pila alargada', 'Medí largo y ancho al pie, largo y ancho de la cresta (arriba) y la altura media. Si la cresta es un filo, dejá su ancho en 0.<span class="formula">V = h/6 · (A_pie + 4·A_media + A_cresta)</span>'],
-    ['Pilas irregulares', 'Dividilas en tramos que se parezcan a un cono o a una pila alargada y cargá cada tramo como una pila. Las diferencias se compensan en la suma.'],
-    ['Densidad aparente', 'Llená el balde con tierra de la pila sin apretar, enrasá y pesá. Densidad = (peso − tara) / volumen. Repetí en 3 pilas y promediá. Con lluvia la densidad sube: medila el mismo día. Alternativa: un camión pesado en balanza dividido por el volumen de su caja enrasada.'],
-    ['Drone o topografía', 'Es el método más preciso (±2–3 %). Un vuelo con fotogrametría o un relevamiento con GPS/estación total da el volumen sobre el piso de la playa: cargalo como «Volumen medido».'],
-    ['Precisión esperable', 'Con cinta y fórmulas el error suele ser de ±10 %. Por eso conviene cubicar siempre con el mismo método y comparar la tendencia mes a mes.']
-  ];
-  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos</div><h1>Ajustes de stock</h1><p class="sub">El balance acumula diferencias del factor t/palada; una cubicación periódica las corrige.</p></div></div></div>' +
-    '<details class="guia" id="guiaCub"><summary>' + ICON.infoI.replace('<svg', '<svg width="18" height="18"') + 'Guía rápida para cubicar la playa y el silo</summary><div class="cuerpo" style="display:block"><div class="guia-cub">' +
-    pasos.map((p, i) => '<div class="paso"><b><i>' + (i + 1) + '</i>' + p[0] + '</b><div>' + p[1] + '</div></div>').join('') + '</div></div></details>' +
+  const bal = calcBalance(addDias(hoy(), -30), hoy());
+  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos · Molienda</div><h1>Cubicación y ajustes</h1><p class="sub">Stock calculado hoy: playa <b>' + nf(bal.stockPlaya, 0) + ' t</b> · silo <b>' + nf(bal.stockSilo, 0) + ' t</b></p></div></div>' +
+    '<button class="btn ghost" id="bGuiaCub">' + ICON.infoI + 'Guía de cubicación</button></div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Calculadora de cubicación</h3><div class="sub">Cargá cada pila; la app suma volúmenes y los pasa a toneladas</div></div><div class="row"><button class="btn sm" id="cAdd">+ Agregar pila</button></div></div>' +
     '<div id="cPilas"></div><div class="form mt" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))"><label class="f">Densidad aparente (t/m³)<input id="cDen" type="number" step="0.01" value="' + dens.Playa + '"></label></div>' +
     '<div class="calc-res" id="cRes"></div></div>' +
     '<div class="grid g-21"><div class="card"><div class="card-h"><div class="t"><h3>Registrar ajuste</h3></div></div><div class="form"><label class="f">Fecha<input type="date" id="aF" value="' + hoy() + '"></label><label class="f">Nodo<div id="aNseg"></div></label>' +
     '<label class="f">Tipo<select id="aT">' + opts(['Stock inicial', 'Cubicación', 'Corrección'], 'Cubicación', null) + '</select></label><label class="f">Toneladas<input type="number" step="0.1" id="aV"></label>' +
     '<label class="f full">Observaciones / método<input id="aO" placeholder="Ej: cubicación con cinta, 3 pilas, densidad 1,55 t/m³"></label></div>' +
-    '<div class="sub mt"><b>Stock inicial</b> y <b>Cubicación</b> fijan el stock en ese valor al inicio del día. <b>Corrección</b> suma o resta toneladas (negativo para restar).</div>' +
+    '<div id="aConc" class="mt"></div>' +
     '<div class="row mt"><button class="btn pri" id="aG">' + ICON.guardar + 'Guardar ajuste</button></div></div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Registrados</h3></div></div>' + tabla([[r => fCorta(r.fecha), 'Fecha'], ['nodo', 'Nodo'], ['tipo', 'Tipo'], [r => nf(r.toneladas, 1), 't', 'n'], [r => esc(r.observaciones), 'Método', 'wrap'], [r => '<button class="btn icon sm dan" data-ax="' + r.id + '">' + ICON.borrar + '</button>', '']], lista) + '</div></div></div>';
-  if (!lista.length) $('#guiaCub').open = true;
+  $('#bGuiaCub').onclick = abrirAyuda;
+  if (!lista.length) setTimeout(abrirAyuda, 400);
   let nodo = 'Playa';
+  const conciliacion = () => {
+    const f = $('#aF').value;
+    const v = num($('#aV').value);
+    const el = $('#aConc');
+    if (!f || v === null || $('#aT').value !== 'Cubicación') { el.innerHTML = ''; return; }
+    const b2 = calcBalance(addDias(f, -1), addDias(f, -1));
+    const teo = nodo === 'Playa' ? b2.stockPlaya : b2.stockSilo;
+    const dif = v - teo;
+    const pct = teo ? dif / Math.abs(teo) * 100 : null;
+    const tol = num(par('TOLERANCIA_INVENTARIO', 10)) || 10;
+    const fuera = pct !== null && Math.abs(pct) > tol;
+    el.innerHTML = '<div class="conc ' + (fuera ? 'bad' : 'ok') + '"><div><span class="eyebrow">Calculado al ' + fCorta(f) + '</span><b>' + nf(teo, 0) + ' t</b></div><div><span class="eyebrow">Cubicado</span><b>' + nf(v, 0) + ' t</b></div>' +
+      '<div><span class="eyebrow">Diferencia</span><b>' + (dif >= 0 ? '+' : '') + nf(dif, 0) + ' t' + (pct !== null ? ' · ' + nf(pct, 1) + ' %' : '') + '</b></div><small>' +
+      (fuera ? (dif < 0 ? 'Falta tierra respecto del cálculo: el consumo de molienda puede estar subestimado (factor t/palada bajo) o hay pérdidas.' : 'Sobra tierra respecto del cálculo: el factor t/palada puede estar alto o faltan ingresos registrados.') : 'Dentro de la tolerancia de ±' + tol + ' %.') + '</small></div>';
+  };
   segmento($('#aNseg'), [['Playa', 'Playa'], ['Silo', 'Silo']], 'Playa', k => {
     nodo = k;
     $('#cDen').value = dens[k];
     calcular();
+    conciliacion();
   }, true);
+  ['#aF', '#aV', '#aT'].forEach(q => { $(q).addEventListener('input', conciliacion); $(q).addEventListener('change', conciliacion); });
   const pintarPilas = () => {
     $('#cPilas').innerHTML = pilas.map((p, i) => '<div class="maq" style="margin-bottom:10px"><div class="maq-h"><div class="t"><input data-p="' + i + '" data-k="nombre" value="' + esc(p.nombre) + '" style="width:150px;font-weight:800"><div class="seg sm" style="display:inline-flex">' +
       Object.keys(FORMAS_PILA).map(f => '<button type="button" data-p="' + i + '" data-forma="' + f + '" class="' + (p.forma === f ? 'on' : '') + '" style="' + (p.forma === f ? 'background:var(--panel);box-shadow:var(--shadow);color:var(--text)' : '') + '">' + FORMAS_PILA[f].t + '</button>').join('') + '</div></div>' +
@@ -983,6 +994,7 @@ function edAjustes(volver) {
       $('#aO').value = 'Cubicación ' + pilas.filter(p => volumenPila(p)).map(p => p.nombre + ' ' + FORMAS_PILA[p.forma].t.toLowerCase() + ' ' + nf(volumenPila(p), 0) + ' m³').join(', ') + ' · ' + nf(tot, 0) + ' m³ × ' + nf(d, 2) + ' t/m³';
       $('#aV').scrollIntoView({ behavior: 'smooth', block: 'center' });
       $('#aV').classList.add('lleno');
+      conciliacion();
     };
     lsSet('tierra_pilas', pilas);
   };
@@ -1020,6 +1032,148 @@ function edAjustes(volver) {
       await escribir('eliminarAjuste', { id: b.dataset.ax }, 'Eliminar ajuste');
       await cargarResumen(true);
       edAjustes(volver);
+    } catch (er) {
+      toast(er.message, 'bad');
+    }
+  };
+}
+
+async function edGasoil(f, volver) {
+  app().innerHTML = '<div class="vista"><div class="card"><div class="skel" style="height:260px"></div></div></div>';
+  const ok = vivo();
+  const g = await api('gasoil', { dias: 60 });
+  if (!ok()) return;
+  const cis = g.cisterna && !g.cisterna.error ? g.cisterna : null;
+  const nomCis = par('CISTERNA_NOMBRE_CARGA', 'Cisterna Principal');
+  const maqs = nombres('Maquinas');
+  const cargasMaq = g.cargas.filter(c => !c.cisterna);
+  const rg = rendimientoGasoil(cargasMaq);
+  const ahora = new Date();
+  const hAhora = pad(ahora.getHours()) + ':' + pad(ahora.getMinutes());
+  const tolHor = num(par('TOLERANCIA_HOROMETRO_GASOIL', 3)) || 3;
+  const maxL = num(par('MAX_LITROS_CARGA', 600)) || 600;
+  let modo = 'maquina';
+  const lhMap = {};
+  rg.forEach(x => { lhMap[x.maquina + '|' + x.fecha + '|' + x.hora] = x; });
+  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos · Abastecimiento</div><h1>Gasoil de cantera</h1><p class="sub">Se graba en la planilla «Trabajo en Cantera».</p></div></div></div>' +
+    (g.error ? '<div class="alert bad">' + ICON.alerta + '<div>' + esc(g.error) + '</div></div>' : '') +
+    '<div class="grid g-21"><div class="card"><div class="card-h"><div class="t"><h3>Registrar</h3></div><div id="gModo"></div></div><div id="gForm"></div><div id="gChk" class="mt"></div>' +
+    '<div class="row mt"><button class="btn pri" id="gG">' + ICON.guardar + 'Guardar</button></div></div>' +
+    (cis ? gaugeCisterna(cis) : '<div class="card">' + vacio('No se pudo leer la cisterna.') + '</div>') + '</div>' +
+    '<div class="card"><div class="card-h"><div class="t"><h3>Últimos 60 días</h3><div class="sub">L/h = litros ÷ horas desde la carga anterior de la misma máquina</div></div></div><div id="gTab"></div></div></div>';
+  requestAnimationFrame(() => $$('.gauge .arco').forEach(a => { a.style.strokeDashoffset = a.dataset.off; }));
+  const pintarTabla = () => {
+    $('#gTab').innerHTML = tabla([[x => fMedia(x.fecha), 'Fecha'], ['hora', 'Hora'], [x => x.cisterna ? '<span class="tag t-info">Llenado cisterna</span>' : esc(x.maquina), 'Máquina'], [x => nf(x.litros, 0), 'Litros', 'n'],
+      [x => x.cisterna ? '' : nf(x.horometro, 0), 'Horómetro', 'n'],
+      [x => { const r = lhMap[x.maquina + '|' + x.fecha + '|' + x.hora]; if (!r || x.cisterna) return ''; const mal = r.horas <= 0 || (r.mediana && r.lh > r.mediana * 1.5); return '<span class="tag ' + (mal ? 't-bad' : 't-mut') + '">' + (r.horas <= 0 ? 'horóm. no avanzó' : nf(r.lh, 1)) + '</span>'; }, 'L/h', 'n'],
+      [x => x.app ? '<button class="btn icon sm dan" data-gx="' + x.id + '" aria-label="Borrar">' + ICON.borrar + '</button>' : '<span class="sub">planilla</span>', '']], g.cargas.slice().reverse(), { max: true, vacio: 'Sin cargas en los últimos 60 días.' });
+  };
+  const ultimaDe = mq => cargasMaq.filter(c => c.maquina === mq && c.horometro).slice(-1)[0] || null;
+  const nivelEn = (fe, h) => {
+    if (!cis) return null;
+    const mov = g.cargas.filter(c => (c.fecha + ' ' + c.hora) > (fe + ' ' + h) && (!cis.fechaBase || c.fecha >= cis.fechaBase)).reduce((s2, c) => s2 + (c.cisterna ? c.litros : -c.litros), 0);
+    return cis.nivel - mov;
+  };
+  const chequear = () => {
+    const el = $('#gChk');
+    const fe = $('#gF').value;
+    const h = parseHora($('#gH').value) || '';
+    const lit = num(($('#gL') || {}).value);
+    const avisos = [];
+    if (modo === 'maquina') {
+      const mq = $('#gM').value;
+      const hor = num($('#gHor').value);
+      const ult = mq ? ultimaDe(mq) : null;
+      const jor = (g.horometros[mq] || {})[fe];
+      $('#gPista').innerHTML = mq ? [ult ? 'Última carga: ' + nf(ult.horometro, 0) + ' h el ' + fCorta(ult.fecha) : '', jor ? 'Jornada ' + fCorta(fe) + ': inicial ' + nf(jor, 1) + ' h' : '', (g.horometros[mq] || {}).ultimo ? 'Último horómetro de jornada: ' + nf(g.horometros[mq].ultimo, 1) + ' h' : ''].filter(Boolean).join(' · ') : '';
+      if (lit && lit > maxL) avisos.push(['bad', 'Más de ' + maxL + ' L en una carga: revisá el valor.']);
+      if (ult && hor !== null) {
+        const hs = hor - ult.horometro;
+        if (hs < 0) avisos.push(['bad', 'El horómetro es menor que el de la carga anterior (' + nf(ult.horometro, 0) + ').']);
+        else if (hs === 0) avisos.push(['warn', 'El horómetro no avanzó desde la carga anterior.']);
+        else if (lit) {
+          const lh = lit / hs;
+          const med = medianaDe(rg.filter(x => x.maquina === mq && x.lh !== null && x.horas >= 2).map(x => x.lh));
+          avisos.push([med && lh > med * 1.5 ? 'warn' : 'ok', nf(lit, 0) + ' L en ' + nf(hs, 1) + ' h = <b>' + nf(lh, 1) + ' L/h</b>' + (med ? ' (habitual ' + nf(med, 1) + ' L/h)' : '')]);
+        }
+      }
+      if (jor && hor !== null && Math.abs(hor - jor) > tolHor) avisos.push(['warn', 'Difiere ' + nf(hor - jor, 1) + ' h del horómetro inicial de la jornada de ese día.']);
+    } else if (modo === 'cisterna') {
+      if (cis && cis.capacidad && lit) {
+        const niv = nivelEn(fe, h || '23:59');
+        if (niv !== null && niv + lit > cis.capacidad * 1.05) avisos.push(['warn', 'Con este llenado la cisterna quedaría en ' + nf(niv + lit, 0) + ' L, más que su capacidad (' + nf(cis.capacidad, 0) + ' L).']);
+        else if (niv !== null) avisos.push(['ok', 'Quedaría en ≈ ' + nf(niv + lit, 0) + ' L.']);
+      }
+    } else if (cis && h) {
+      const niv = nivelEn(fe, h);
+      const med = num($('#gMed').value);
+      if (med !== null && niv !== null) {
+        const dif = med - niv;
+        const cap = cis.capacidad || 5000;
+        avisos.push([Math.abs(dif) > cap * 0.05 ? 'bad' : Math.abs(dif) > cap * 0.02 ? 'warn' : 'ok', 'Calculado a esa hora: ' + nf(niv, 0) + ' L · diferencia <b>' + (dif >= 0 ? '+' : '') + nf(dif, 0) + ' L</b>' + (Math.abs(dif) > cap * 0.02 ? (dif < 0 ? '. Falta gasoil: puede haber cargas sin registrar o pérdidas.' : '. Sobra gasoil: puede faltar registrar un consumo o el llenado fue menor.') : '')]);
+      }
+    }
+    el.innerHTML = avisos.map(a => '<div class="chk-g ' + a[0] + '">' + (a[0] === 'ok' ? ICON.ok : ICON.alerta) + '<span>' + a[1] + '</span></div>').join('');
+  };
+  const pintarForm = () => {
+    const base = '<label class="f">Fecha<input type="date" id="gF" value="' + f + '"></label><label class="f">Hora<input id="gH" value="' + hAhora + '" inputmode="numeric"></label>';
+    if (modo === 'maquina') {
+      $('#gForm').innerHTML = '<div class="form">' + base + '<label class="f">Máquina<select id="gM">' + opts(maqs, lsGet('tierra_gasoil_maq', ''), 'Elegir…') + '</select></label>' +
+        '<label class="f">Litros<input id="gL" type="number" min="0" step="1" inputmode="decimal"></label><label class="f">Horómetro<input id="gHor" type="number" min="0" step="0.1" inputmode="decimal"></label><div class="f full sub" id="gPista"></div></div>';
+    } else if (modo === 'cisterna') {
+      $('#gForm').innerHTML = '<div class="form">' + base + '<label class="f">Litros recibidos<input id="gL" type="number" min="0" step="1" inputmode="decimal"></label><label class="f full">Se registra como «' + esc(nomCis) + '» en la planilla de combustible.</label></div>';
+    } else {
+      $('#gForm').innerHTML = '<div class="form">' + base + '<label class="f">Litros medidos (varilla)<input id="gMed" type="number" min="0" step="1" inputmode="decimal"></label><label class="f full">Observaciones<input id="gO" placeholder="Ej: medición con varilla, tabla de conversión"></label>' +
+        '<label class="chk full"><input type="checkbox" id="gBase" checked> Corregir el nivel de la cisterna con esta medición</label></div>';
+    }
+    $('#gForm').oninput = chequear;
+    $('#gForm').onchange = chequear;
+    chequear();
+    const pr = $('#gForm input:not([type=date]):not(#gH), #gForm select');
+    if (pr) pr.focus();
+  };
+  segmento($('#gModo'), [['maquina', 'Carga a máquina'], ['cisterna', 'Llenado cisterna'], ['medicion', 'Medición']], modo, k => { modo = k; pintarForm(); }, true);
+  pintarForm();
+  pintarTabla();
+  $('#gG').onclick = async () => {
+    const fe = $('#gF').value;
+    const h = parseHora($('#gH').value);
+    if (!fe || !h) return toast('Fecha y hora requeridas', 'bad');
+    let accion;
+    let d;
+    if (modo === 'medicion') {
+      accion = 'medirCisterna';
+      d = { fecha: fe, hora: h, litros: $('#gMed').value, observaciones: $('#gO').value, actualizarBase: $('#gBase').checked };
+      if (d.litros === '') return toast('Litros medidos requeridos', 'bad');
+    } else {
+      accion = 'guardarGasoil';
+      d = { fecha: fe, hora: h, maquina: modo === 'cisterna' ? nomCis : $('#gM').value, litros: $('#gL').value, horometro: modo === 'maquina' ? $('#gHor').value : '' };
+      if (!d.maquina || !d.litros) return toast('Completá máquina y litros', 'bad');
+      if (modo === 'maquina' && !d.horometro) return toast('Falta el horómetro', 'bad');
+      if ($('#gChk .bad')) {
+        if (!(await confirmar('Revisar antes de guardar', $('#gChk').innerText, 'Guardar igual'))) return;
+        d.forzar = true;
+      }
+      if (modo === 'maquina') lsSet('tierra_gasoil_maq', d.maquina);
+    }
+    try {
+      bloquear('Guardando en la planilla de cantera…');
+      const r = await escribir(accion, d, (modo === 'medicion' ? 'Medición cisterna ' : 'Gasoil ') + (d.maquina || '') + ' ' + fe);
+      desbloquear();
+      if (!r.encolado) toast(modo === 'medicion' ? 'Medición guardada · diferencia ' + nf(r.diferencia, 0) + ' L' : 'Carga guardada', 'ok');
+      S.resumenVencido = true;
+      edGasoil(fe, volver);
+    } catch (e) {
+      desbloquear();
+      toast(e.message, 'bad', 8000);
+    }
+  };
+  app().onclick = async e => {
+    const b = e.target.closest('button[data-gx]');
+    if (!b || !(await confirmar('Borrar carga', 'Se borra la fila de la planilla de cantera. ¿Continuar?', 'Borrar', true))) return;
+    try {
+      await escribir('eliminarGasoil', { id: b.dataset.gx }, 'Borrar carga de gasoil');
+      edGasoil(f, volver);
     } catch (er) {
       toast(er.message, 'bad');
     }

@@ -18,14 +18,20 @@ const S = {
 };
 
 const PERMISOS = {
-  viajes: ['cantera', 'balanza'],
-  jornada: ['cantera'],
-  pesaje: ['balanza'],
+  jornada: ['abastecimiento'],
+  gasoil: ['abastecimiento'],
+  viajes: ['abastecimiento'],
+  pesaje: ['abastecimiento'],
+  calidad: ['abastecimiento'],
+  liquidacion: ['abastecimiento'],
   molienda: ['molienda'],
-  calidad: ['calidad', 'balanza'],
-  ajustes: ['admin'],
-  liquidacion: ['cantera', 'balanza']
+  ajustes: ['molienda']
 };
+
+const ROL_TXT = { admin: 'Administrador', abastecimiento: 'Responsable de abastecimiento', molienda: 'Responsable de molienda' };
+const ROL_LEGADO = { cantera: 'abastecimiento', balanza: 'abastecimiento', calidad: 'abastecimiento' };
+const rolN = r => ROL_LEGADO[String(r || '').toLowerCase()] || String(r || '').toLowerCase();
+const rolTxt = r => ROL_TXT[rolN(r)] || r;
 
 const P = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
 const ICON = {
@@ -146,7 +152,8 @@ function vivo() {
 }
 
 function puede(mod) {
-  return !!S.ses && (S.ses.rol === 'admin' || (PERMISOS[mod] || []).indexOf(S.ses.rol) >= 0);
+  const r = S.ses ? rolN(S.ses.rol) : '';
+  return !!S.ses && (r === 'admin' || (PERMISOS[mod] || []).indexOf(r) >= 0);
 }
 
 function cargando(on) {
@@ -601,6 +608,7 @@ function tarifas() {
 function calcBalance(desde, hasta) {
   const D = S.resumen.diario || [];
   const fTeo = (num(par('M3_POR_PALADA', 3)) || 3) * (num(par('DENSIDAD_APARENTE', 1.6)) || 1.6);
+  const excl = String(par('EXCLUIR_RECHAZADOS', 'SI')).toUpperCase() === 'SI';
   const tH = sum(D, d => d.molT);
   const pH = sum(D, d => d.molPalConT);
   const fMolHist = pH > 0 ? tH / pH : fTeo;
@@ -609,41 +617,60 @@ function calcBalance(desde, hasta) {
   const pR = sum(R, d => d.molPalConT);
   const fMol = pR > 0 ? tR / pR : fMolHist;
   const fSilo = num(par('F_SILO', '')) || fMolHist;
-  const aj = agrupar(S.resumen.ajustes || [], a => a.fecha);
+  const aj = agrupar((S.resumen.ajustes || []).slice().sort((a, b) => (a.ts || '') < (b.ts || '') ? -1 : 1), a => a.fecha);
   const mapD = {};
   D.forEach(d => { mapD[d.fecha] = d; });
   const fechas = Array.from(new Set(D.map(d => d.fecha).concat(Object.keys(aj)))).sort();
   let sP = 0;
   let sS = 0;
+  const base = { Playa: false, Silo: false };
+  const cubicaciones = [];
   const serie = [];
   fechas.forEach(f => {
     (aj[f] || []).forEach(a => {
       const actual = a.nodo === 'Playa' ? sP : sS;
       const v = a.tipo === 'Corrección' ? actual + (a.toneladas || 0) : (a.toneladas || 0);
+      if (a.tipo === 'Cubicación') {
+        const teo = base[a.nodo] ? actual : null;
+        cubicaciones.push({ fecha: f, nodo: a.nodo, medido: v, teorico: teo, dif: teo === null ? null : v - teo, pct: teo ? (v - teo) / Math.abs(teo) : null, obs: a.observaciones || '' });
+      }
+      base[a.nodo] = true;
       if (a.nodo === 'Playa') sP = v; else sS = v;
     });
     const d = mapD[f] || {};
     const consumo = (d.molT || 0) + ((d.molPal || 0) - (d.molPalConT || 0)) * fMolHist;
     const siloOut = (d.siloPal || 0) * fSilo;
-    sP += (d.ingresoT || 0) - consumo;
+    const rech = excl ? (d.rechT || 0) : 0;
+    const ingresoPlaya = (d.ingresoT || 0) - rech;
+    sP += ingresoPlaya - consumo;
     sS += consumo - siloOut;
     serie.push({
-      fecha: f, ingreso: d.ingresoT || 0, tickets: d.tickets || 0, consumo: consumo, siloOut: siloOut, stockPlaya: sP, stockSilo: sS,
-      tCamion: d.tickets ? d.ingresoT / d.tickets : null, fMol: d.molPalConT > 0 ? d.molT / d.molPalConT : null,
+      fecha: f, ingreso: d.ingresoT || 0, rech: d.rechT || 0, ingresoPlaya: ingresoPlaya, tickets: d.tickets || 0, consumo: consumo, siloOut: siloOut, stockPlaya: sP, stockSilo: sS,
+      tCamion: d.tickets ? d.ingresoT / d.tickets : null, fMol: d.molPalConT > 0 ? d.molT / d.molPalConT : null, litros: d.litros || 0,
       estimado: (d.molPal || 0) > (d.molPalConT || 0)
     });
   });
   const enR = serie.filter(s => s.fecha >= desde && s.fecha <= hasta);
   const previos = serie.filter(s => s.fecha <= hasta);
   const ult = previos.length ? previos[previos.length - 1] : null;
-  const maxP = Math.max.apply(null, serie.map(s => s.stockPlaya).concat([1]));
-  const maxS = Math.max.apply(null, serie.map(s => s.stockSilo).concat([1]));
+  const capP = num(par('CAPACIDAD_PLAYA', '')) || null;
+  const capS = num(par('CAPACIDAD_SILO', '')) || null;
+  const maxP = capP || Math.max.apply(null, serie.map(s => s.stockPlaya).concat([1]));
+  const maxS = capS || Math.max.apply(null, serie.map(s => s.stockSilo).concat([1]));
+  const rec = previos.filter(s => s.consumo > 0).slice(-14);
+  const consumoMedio = rec.length ? sum(rec, s => s.consumo) / rec.length : 0;
+  const recS = previos.filter(s => s.siloOut > 0).slice(-14);
+  const siloMedio = recS.length ? sum(recS, s => s.siloOut) / recS.length : 0;
+  const stockPlaya = ult ? ult.stockPlaya : 0;
+  const stockSilo = ult ? ult.stockSilo : 0;
   return {
-    fTeo: fTeo, fMol: fMol, fMolHist: fMolHist, fSilo: fSilo, serie: enR,
-    stockPlaya: ult ? ult.stockPlaya : 0, stockSilo: ult ? ult.stockSilo : 0, maxPlaya: maxP, maxSilo: maxS,
-    ingreso: sum(R, d => d.ingresoT), tickets: sum(R, d => d.tickets), consumo: sum(enR, s => s.consumo),
-    siloOut: sum(enR, s => s.siloOut), molPal: sum(R, d => d.molPal), siloPal: sum(R, d => d.siloPal),
+    fTeo: fTeo, fMol: fMol, fMolHist: fMolHist, fSilo: fSilo, serie: enR, excluyeRechazos: excl,
+    stockPlaya: stockPlaya, stockSilo: stockSilo, maxPlaya: maxP, maxSilo: maxS, capPlaya: capP, capSilo: capS,
+    ingreso: sum(R, d => d.ingresoT), rechT: sum(R, d => d.rechT), ingresoPlaya: sum(enR, s => s.ingresoPlaya), tickets: sum(R, d => d.tickets), consumo: sum(enR, s => s.consumo),
+    siloOut: sum(enR, s => s.siloOut), molPal: sum(R, d => d.molPal), siloPal: sum(R, d => d.siloPal), litros: sum(R, d => d.litros),
     viajes: sum(R, d => d.viajes), unid: sum(R, d => d.unid), internos: sum(R, d => d.internos),
+    consumoMedio: consumoMedio, siloMedio: siloMedio, diasPlaya: consumoMedio > 0 ? Math.max(0, stockPlaya) / consumoMedio : null, diasSilo: siloMedio > 0 ? Math.max(0, stockSilo) / siloMedio : null,
+    cubicaciones: cubicaciones,
     hayAjuste: (S.resumen.ajustes || []).length > 0, calibrado: pH > 0, estimados: enR.filter(s => s.estimado).length
   };
 }

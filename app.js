@@ -48,7 +48,7 @@ function login(destino) {
 
 function menuSesion() {
   if (!S.ses) return login();
-  modal(S.ses.nombre, '<div class="col"><span class="tag t-acc" style="align-self:flex-start">Rol: ' + esc(S.ses.rol) + '</span><p class="sub">La sesión vence a las ' +
+  modal(S.ses.nombre, '<div class="col"><span class="tag t-acc" style="align-self:flex-start">' + esc(rolTxt(S.ses.rol)) + '</span><p class="sub">La sesión vence a las ' +
     new Date(S.ses.vence).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + '.</p></div>', [
     { txt: 'Cerrar' },
     { txt: 'Salir', cls: 'dan', fn: () => { setSesion(null); location.hash = '#/inicio'; } }
@@ -59,7 +59,7 @@ function itemsNav() {
   const it = [['inicio', 'Inicio', 'inicio'], ['tablero', 'Tablero', 'tablero'], ['calendario', 'Calendario', 'calendario']];
   if (S.ses) it.push(['cargar', 'Cargar', 'cargar']);
   if (puede('liquidacion')) it.push(['liquidacion', 'Liquidación', 'dinero']);
-  if (S.ses && S.ses.rol === 'admin') it.push(['config', 'Configuración', 'config']);
+  if (S.ses && rolN(S.ses.rol) === 'admin') it.push(['config', 'Configuración', 'config']);
   return it;
 }
 
@@ -84,7 +84,7 @@ function menuMas() {
   const it = itemsNav().filter(i => ['inicio', 'tablero', 'calendario', 'cargar'].indexOf(i[0]) < 0);
   const m = modal('Más opciones', '<div class="col">' + it.map(i => '<a class="btn" style="justify-content:flex-start" href="#/' + i[0] + '">' + ICON[i[2]] + i[1] + '</a>').join('') +
     '<button class="btn" style="justify-content:flex-start" id="mTema">' + (tema === 'dark' ? ICON.sol + 'Tema claro' : ICON.luna + 'Tema oscuro') + '</button>' +
-    '<button class="btn" style="justify-content:flex-start" id="mSes">' + ICON.usuario + (S.ses ? esc(S.ses.nombre) + ' · ' + esc(S.ses.rol) : 'Ingresar') + '</button>' +
+    '<button class="btn" style="justify-content:flex-start" id="mSes">' + ICON.usuario + (S.ses ? esc(S.ses.nombre) + ' · ' + esc(rolTxt(S.ses.rol)) : 'Ingresar') + '</button>' +
     (S.ses ? '<button class="btn dan" style="justify-content:flex-start" id="mSal">' + ICON.salir + 'Cerrar sesión</button>' : '') + '</div>');
   $$('a', m).forEach(a => a.addEventListener('click', () => m.cerrar()));
   $('#mTema', m).onclick = () => { m.cerrar(); cambiarTema(); };
@@ -132,10 +132,10 @@ async function render() {
         $('#bLg').onclick = () => login(location.hash);
       } else await vCargar(p[1], p[2]);
     } else if (v === 'liquidacion') {
-      if (!puede('liquidacion')) app().innerHTML = '<div class="vista card empty">' + ICON.alerta + 'Disponible para cantera, balanza y administradores.</div>';
+      if (!puede('liquidacion')) app().innerHTML = '<div class="vista card empty">' + ICON.alerta + 'Disponible para el responsable de abastecimiento y administradores.</div>';
       else await vLiquidacion();
     } else if (v === 'config') {
-      if (!S.ses || S.ses.rol !== 'admin') app().innerHTML = '<div class="vista card empty">' + ICON.alerta + 'Solo administradores.</div>';
+      if (!S.ses || rolN(S.ses.rol) !== 'admin') app().innerHTML = '<div class="vista card empty">' + ICON.alerta + 'Solo administradores.</div>';
       else await vConfig(p[1] || 'Maquinas');
     } else location.hash = '#/inicio';
   } catch (e) {
@@ -143,6 +143,7 @@ async function render() {
     desbloquear();
     app().innerHTML = '<div class="vista"><div class="alert bad">' + ICON.alerta + '<div><b>No se pudo cargar.</b> ' + esc(e.message) + '</div></div><button class="btn" onclick="render()">' + ICON.refrescar + 'Reintentar</button></div>';
   }
+  refrescarAyuda();
   ocultarSplash();
 }
 
@@ -239,7 +240,7 @@ const DEF_CONFIG = {
   Lugares: { t: 'Orígenes y destinos', c: [['nombre', 'Nombre'], ['activo', 'Activo', 'bool']], orig: 'ORIGEN-DESTINO' },
   TiposViaje: { t: 'Tipos de viaje', c: [['nombre', 'Nombre'], ['activo', 'Activo', 'bool']], orig: 'TIPO VIAJE' },
   Responsables: { t: 'Responsables', c: [['nombre', 'Nombre'], ['activo', 'Activo', 'bool']], orig: 'RESPONSABLE' },
-  Usuarios: { t: 'Usuarios', c: [['nombre', 'Usuario'], ['rol', 'Rol', 'sel', ['admin', 'cantera', 'balanza', 'molienda', 'calidad']], ['activo', 'Activo', 'bool'], ['pin', 'Nuevo PIN', 'pin']] },
+  Usuarios: { t: 'Usuarios', c: [['nombre', 'Usuario'], ['rol', 'Rol', 'sel', ['abastecimiento', 'molienda', 'admin'], ROL_TXT], ['activo', 'Activo', 'bool'], ['pin', 'Nuevo PIN', 'pin']] },
   Correos: { t: 'Correos', c: [['nombre', 'Nombre'], ['email', 'Email'], ['tipo', 'Tipo', 'sel', ['PARA', 'CC', 'CCO']], ['activo', 'Activo', 'bool']] },
   Parametros: { t: 'Parámetros', c: [['clave', 'Clave', 'ro'], ['valor', 'Valor'], ['descripcion', 'Descripción', 'ro']], fijo: true }
 };
@@ -254,13 +255,12 @@ async function vConfig(hoja) {
   app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Configuración</div><h1>Catálogos y parámetros</h1></div></div><div id="segCfg" style="margin-bottom:16px"></div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>' + def.t + ' <span class="sub">(' + filas.length + ')</span></h3>' + (def.orig ? '<div class="sub">Se guarda en la planilla original de viajes, hoja «' + def.orig + '»</div>' : '') + '</div><div class="row"><input id="cfgBus" placeholder="Buscar…" style="width:180px">' +
     (def.fijo ? '' : '<button class="btn" id="cfgAdd">+ Agregar</button>') + '<button class="btn pri" id="cfgSave">' + ICON.guardar + 'Guardar cambios</button></div></div>' +
-    (hoja === 'Usuarios' ? '<div class="alert info">' + ICON.infoI + '<div>El PIN se guarda cifrado; dejá «Nuevo PIN» vacío para conservar el actual. 4 a 8 dígitos.</div></div>' : '') +
-    (hoja === 'Parametros' ? '<div class="alert info">' + ICON.infoI + '<div>La clave de la IA para leer fotos no va acá: se carga en Apps Script → Configuración del proyecto → Propiedades del script → <b>GEMINI_API_KEY</b>.</div></div>' : '') +
     '<div class="tw max" style="max-height:62vh"><table class="edit"><thead><tr>' + def.c.map(c => '<th>' + c[1] + '</th>').join('') + (def.fijo ? '' : '<th></th>') + '</tr></thead><tbody id="cfgB"></tbody></table></div></div></div>';
   segmento($('#segCfg'), Object.keys(DEF_CONFIG).map(k => [k, DEF_CONFIG[k].t]), hoja, k => { location.hash = '#/config/' + k; }, true);
   const celda = (c, v, i) => {
     const a = 'data-i="' + i + '" data-c="' + c[0] + '"';
     if (c[2] === 'bool') return '<label class="switch"><input type="checkbox" ' + a + (v ? ' checked' : '') + '><span></span></label>';
+    if (c[2] === 'sel' && c[4]) return '<select ' + a + '>' + c[3].map(o => '<option value="' + o + '"' + (rolN(v) === o ? ' selected' : '') + '>' + esc(c[4][o] || o) + '</option>').join('') + '</select>';
     if (c[2] === 'sel') return '<select ' + a + '>' + opts(c[3], v || '', '') + '</select>';
     if (c[2] === 'pin') return '<input type="password" inputmode="numeric" maxlength="8" placeholder="sin cambio" ' + a + '>';
     if (c[2] === 'ro') return c[0] === 'descripcion' ? '<span class="sub">' + esc(v) + '</span>' : '<code>' + esc(v) + '</code>';
@@ -306,6 +306,7 @@ async function vConfig(hoja) {
 function iniciar() {
   aplicarTema(lsGet('tierra_tema', ''));
   iniciarTips();
+  iniciarAyuda();
   $('#btnTema').onclick = cambiarTema;
   const s = lsGet('tierra_ses', null);
   if (s && s.vence > Date.now()) S.ses = s;

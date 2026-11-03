@@ -3,7 +3,7 @@
 async function vInicio() {
   const dias = Number(lsGet('tierra_inicio_dias', 7)) || 7;
   app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">' + esc(fLarga(hoy())) + '</div><h1>Control de <span>tierra</span></h1>' +
-    '<p class="sub">Desde la cantera hasta el silo: cuánta tierra entra, cuánta se acopia y cuánta se consume.</p></div><div id="segDias"></div></div>' +
+    '<p class="sub">De la cantera al silo.</p></div><div id="segDias"></div></div>' +
     '<div class="card flujo-card"><div class="skel" style="height:150px"></div></div><div class="grid g-21"><div class="card"><div class="skel" style="height:220px"></div></div><div class="card"><div class="skel" style="height:220px"></div></div></div></div>';
   segmento($('#segDias'), [['7', '7 días'], ['15', '15 días'], ['30', '30 días']], String(dias), k => { lsSet('tierra_inicio_dias', Number(k)); vInicio(); }, true);
   const ok = vivo();
@@ -20,29 +20,32 @@ async function vInicio() {
   const pctS = Math.max(0, Math.min(100, b.stockSilo / (b.maxSilo || 1) * 100));
   const nodo = (k, ic, l, v, d, ruta, extra) => '<div class="nodo ' + (extra ? 'stock' : '') + '" data-ir="' + ruta + '" data-k="' + k + '"><div class="ic">' + ICON[ic] + '</div><div class="l">' + l + '</div><div class="v">' + v + '</div><div class="d">' + d + '</div>' + (extra || '') + '</div>';
   const fuentes = [
-    ['viajes', 'Viajes de camiones', 'camion', '#/cargar/viajes'],
-    ['jornada', 'Jornada de cantera', 'pala', '#/cargar/jornada'],
-    ['pesajes', 'Balanza de ingreso', 'balanza', '#/cargar/pesaje'],
-    ['molienda', 'Molienda y silo', 'molienda', '#/cargar/molienda'],
-    ['calidad', 'Calidad de tierra', 'calidad', '#/cargar/calidad']
+    ['jornada', 'Jornada de cantera', 'pala', '#/cargar/jornada', 'abastecimiento'],
+    ['gasoil', 'Gasoil de cantera', 'combustible', '#/cargar/gasoil', 'abastecimiento'],
+    ['viajes', 'Viajes de camiones', 'camion', '#/cargar/viajes', 'abastecimiento'],
+    ['pesajes', 'Balanza de ingreso', 'balanza', '#/cargar/pesaje', 'abastecimiento'],
+    ['calidad', 'Calidad de tierra', 'calidad', '#/cargar/calidad', 'abastecimiento'],
+    ['molienda', 'Molienda y silo', 'molienda', '#/cargar/molienda', 'molienda'],
+    ['cubicacion', 'Cubicación de playa', 'ajuste', '#/cargar/ajustes', 'molienda']
   ];
   app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">' + esc(fLarga(hoy())) + '</div><h1>Control de <span>tierra</span></h1>' +
-    '<p class="sub">Recorrido de la tierra en los últimos ' + dias + ' días. Tocá cada etapa para ver el detalle.</p></div><div id="segDias"></div></div>' +
+    '<p class="sub">Últimos ' + dias + ' días · de la cantera al silo.</p></div><div id="segDias"></div></div>' +
     (R.errorInforme && R.errorInforme !== 'Sin configurar' ? '<div class="alert warn">' + ICON.alerta + '<div><b>No se pudo leer el Informe de Producción (molienda/silo).</b> ' + esc(R.errorInforme) + '</div></div>' : '') +
     (R.errorViajes ? '<div class="alert bad">' + ICON.alerta + '<div><b>No se pudo leer la planilla de viajes.</b> ' + esc(R.errorViajes) + '</div></div>' : '') +
-    '<div class="card flujo-card"><div class="flujo" id="flujo"><svg class="lineas" id="lineas"></svg>' +
+    '<div class="card flujo-card"><div class="tramos-band"><span class="tb abastecimiento">' + ICON.camion + '<b>Abastecimiento</b> cantera → balanza</span><span class="tb molienda">' + ICON.molienda + '<b>Molienda</b> playa → silo</span></div><div class="flujo" id="flujo"><svg class="lineas" id="lineas"></svg>' +
     nodo('cantera', 'cantera', 'Cantera', vn(b.unid + b.internos), 'camiones cargados<br>' + nf(b.internos) + ' internos', '#/tablero/cantera') +
     nodo('viajes', 'camion', 'Viajes', vn(b.viajes), 'a planta registrados', '#/tablero/viajes') +
-    nodo('balanza', 'balanza', 'Balanza', vn(b.ingreso) + '<small> t</small>', nf(b.tickets) + ' tickets · ' + nf(b.tickets ? b.ingreso / b.tickets : null, 1) + ' t/camión', '#/tablero/viajes') +
-    nodo('playa', 'playa', 'Playa', vn(b.stockPlaya) + '<small> t</small>', 'stock acumulado', '#/tablero/balance', '<div class="tanque ' + (b.stockPlaya < 0 ? 'bad' : '') + '"><span data-w="' + pctP + '"></span></div>') +
+    nodo('balanza', 'balanza', 'Balanza', vn(b.ingreso) + '<small> t</small>', nf(b.tickets) + ' tickets · ' + nf(b.tickets ? b.ingreso / b.tickets : null, 1) + ' t/camión' + (b.rechT ? '<br><span class="rojo">' + nf(b.rechT, 0) + ' t rechazadas</span>' : ''), '#/tablero/viajes') +
+    nodo('playa', 'playa', 'Playa', vn(b.stockPlaya) + '<small> t</small>', b.diasPlaya !== null ? '≈ ' + nf(b.diasPlaya, 1) + ' días de molienda' : 'stock acumulado', '#/tablero/balance', '<div class="tanque ' + (b.stockPlaya < 0 ? 'bad' : '') + '"><span data-w="' + pctP + '"></span></div>') +
     nodo('molienda', 'molienda', 'Molienda', vn(b.consumo) + '<small> t</small>', nf(b.molPal) + ' paladas al cajón', '#/tablero/balance') +
     nodo('silo', 'silo', 'Silo', vn(b.stockSilo) + '<small> t</small>', nf(b.siloOut, 0) + ' t extraídas', '#/tablero/balance', '<div class="tanque ' + (b.stockSilo < 0 ? 'bad' : '') + '"><span data-w="' + pctS + '"></span></div>') +
     '</div></div>' +
-    '<div class="grid g-21" style="align-items:start"><div class="card"><div class="card-h"><div class="t"><h3>Para revisar</h3><div class="sub">Controles automáticos de los últimos 14 días</div></div></div><div class="alertas" id="alertas"><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div></div></div>' +
+    '<div class="grid g-21" style="align-items:start"><div class="card"><div class="card-h"><div class="t"><h3>Para revisar</h3><div class="sub">Controles cruzados de los últimos 14 días</div></div><a class="btn sm" href="#/tablero/controles">Ver todos</a></div><div class="alertas" id="alertas"><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div></div></div>' +
     '<div class="col" style="gap:16px"><div class="card"><div class="card-h"><div class="t"><h3>Estado de la carga</h3><div class="sub">Último día con datos por fuente</div></div></div><div class="estado">' +
     fuentes.map(f => {
       const sm = semaforoDias((R.ultimo || {})[f[0]]);
-      return '<a class="fila" href="' + (S.ses ? f[3] : '#/calendario') + '"><span class="ico">' + ICON[f[2]] + '</span><span class="txt"><b>' + f[1] + '</b><small>' + ((R.ultimo || {})[f[0]] ? fMedia(R.ultimo[f[0]]) + ' · ' + sm.txt : 'sin datos') + '</small></span><span class="semaforo ' + sm.cls + '"></span></a>';
+      const smc = f[0] === 'cubicacion' ? (sm.dias !== null && sm.dias <= (num(par('DIAS_CUBICACION', 30)) || 30) ? { cls: 'ok', txt: 'hace ' + sm.dias + ' días' } : { cls: sm.dias === null ? 'bad' : 'warn', txt: sm.dias === null ? 'sin datos' : 'hace ' + sm.dias + ' días' }) : sm;
+      return '<a class="fila ' + f[4] + '" href="' + (S.ses ? f[3] : '#/calendario') + '"><span class="ico">' + ICON[f[2]] + '</span><span class="txt"><b>' + f[1] + '</b><small>' + ((R.ultimo || {})[f[0]] ? fMedia(R.ultimo[f[0]]) + ' · ' + smc.txt : 'sin datos') + '</small></span><span class="semaforo ' + smc.cls + '"></span></a>';
     }).join('') + '</div></div>' + (cis ? gaugeCisterna(cis) : '') + '</div></div>' +
     '<div class="grid g3 stagger">' +
     '<div class="card spark"><div class="row"><span class="eyebrow">Ingreso diario</span><span class="right tag t-mut">t</span></div><div class="chart"><canvas id="spIng"></canvas></div></div>' +
@@ -67,7 +70,7 @@ async function vInicio() {
   grafico('spSto', 'line', L, [{ label: 'Stock playa t', data: serie.map(s => s.stockPlaya), borderColor: color(3), backgroundColor: color(3), fill: false }], mezclar(spark, { scales: { y: { beginAtZero: false } } }));
   try {
     const r14 = await p14;
-    if (ok() && $('#alertas')) pintarAlertas(r14, b, cis);
+    if (ok() && $('#alertas')) pintarAlertas(r14);
   } catch (e) {
     if (ok() && $('#alertas')) $('#alertas').innerHTML = '<div class="alert warn">' + ICON.alerta + '<div>No se pudieron calcular los controles: ' + esc(e.message) + '</div></div>';
   }
@@ -105,36 +108,17 @@ function gaugeCisterna(c) {
     (auton !== null ? '<span class="tag ' + (cls === 'bad' ? 't-bad' : cls === 'warn' ? 't-warn' : 't-ok') + '">' + ICON.reloj.replace('<svg', '<svg width="13" height="13"') + ' ≈ ' + nf(auton, 1) + ' días de autonomía</span>' : '') + '</div></div></a>';
 }
 
-function pintarAlertas(r, b, cis) {
-  const k = conciliar(r);
-  const out = [];
-  const add = (cls, ic, t, d, ruta) => out.push({ cls: cls, ic: ic, t: t, d: d, ruta: ruta });
-  const ult = (S.resumen.ultimo || {});
-  const sv = semaforoDias(ult.viajes);
-  if (sv.dias !== null && sv.dias > 2) add(sv.cls, 'reloj', 'Viajes cargados hasta el ' + fMedia(ult.viajes), 'Hay ' + sv.dias + ' días sin cargar comprobantes de viajes.', '#/cargar/viajes');
-  if (k.pes.length) {
-    if (k.sinTicket.length) add(k.sinTicket.length > 5 ? 'bad' : 'warn', 'balanza', k.sinTicket.length + ' viajes sin ticket de balanza', 'Viajes a planta que no se encontraron en el pesaje (mismo dominio, ±' + par('VENTANA_MATCH_MIN', 120) + ' min).', '#/tablero/viajes');
-    if (k.sinViaje.length) add('warn', 'camion', k.sinViaje.length + ' tickets sin viaje registrado', 'Camiones pesados que no tienen comprobante cargado.', '#/tablero/viajes');
-    if (k.atipicos.length) add('info', 'alerta', k.atipicos.length + ' pesajes fuera de lo normal', 'Netos muy distintos a los habituales del mismo camión.', '#/tablero/viajes');
-  } else {
-    add('info', 'balanza', 'Sin pesajes en los últimos 14 días', 'Importá el PESAJE.XLS para cruzar viajes con la balanza.', '#/cargar/pesaje');
-  }
-  const difer = k.diario.filter(d => d.unid > 0 && Math.abs(d.unid - d.viajes) > Math.max(3, d.unid * 0.15));
-  if (difer.length) add('warn', 'pala', difer.length + ' días con diferencia palas ↔ viajes', 'Camiones a planta declarados por las palas no coinciden con los viajes cargados (ej. ' + fCorta(difer[difer.length - 1].fecha) + ': ' + difer[difer.length - 1].unid + ' vs ' + difer[difer.length - 1].viajes + ').', '#/tablero/viajes');
-  const horBad = r.tramos.filter(t => t.tipo === 'Producción' && t.horometroIni !== null && t.horometroFin !== null && ((t.horometroFin - t.horometroIni) < 0 || (t.horometroFin - t.horometroIni) > dur(t.horaInicio, t.horaFin) + 1));
-  if (horBad.length) add('bad', 'reloj', horBad.length + ' horómetros inconsistentes', horBad.slice(0, 2).map(t => t.maquina + ' ' + fCorta(t.fecha) + ': ' + nf(t.horometroIni, 1) + ' → ' + nf(t.horometroFin, 1)).join(' · '), '#/dia/' + horBad[0].fecha);
-  const largos = k.ciclos.filter(c => c.min > 240);
-  if (largos.length) add('info', 'reloj', largos.length + ' viajes de más de 4 h', 'Revisar hora de carga/descarga (ej. ' + esc(largos[0].v.chofer) + ' ' + fCorta(largos[0].v.fecha) + ' ' + largos[0].v.horaCarga + '→' + largos[0].v.horaDescarga + ').', '#/dia/' + largos[0].v.fecha);
-  const rech = (r.calidad || []).filter(c => c.estado === 'Rechazado');
-  if (rech.length) add('bad', 'calidad', rech.length + ' muestras de tierra rechazadas', rech.slice(0, 2).map(c => (c.origen || c.dominio) + ' ' + fCorta(c.fecha)).join(' · '), '#/tablero/calidad');
-  if (cis && cis.capacidad && cis.nivel / cis.capacidad < 0.25) add('bad', 'combustible', 'Cisterna baja: ' + nf(cis.nivel) + ' L', 'Queda ' + nf(cis.nivel / cis.capacidad * 100) + '% de la capacidad.', '#/tablero/combustible');
-  if (b.stockPlaya < 0) add('warn', 'playa', 'Stock de playa negativo', 'Falta un stock inicial o una cubicación reciente para corregir el balance.', S.ses ? '#/cargar/ajustes' : '#/tablero/balance');
-  if (b.estimados) add('info', 'molienda', b.estimados + ' días sin balanza dinámica', 'El consumo de molienda se estimó con ' + nf(b.fMolHist, 2) + ' t/palada.', '#/tablero/balance');
-  if (!out.length) add('ok', 'ok', 'Todo en orden', 'No se detectaron inconsistencias en los últimos 14 días.', '#/tablero');
-  const orden = { bad: 0, warn: 1, info: 2, ok: 3 };
-  out.sort((a, c) => orden[a.cls] - orden[c.cls]);
-  $('#alertas').innerHTML = out.map((a, i) => '<div class="alerta ' + a.cls + '" data-ir="' + a.ruta + '" style="animation:cardIn .45s var(--ease) both;animation-delay:' + i * 50 + 'ms"><span class="ico">' + ICON[a.ic] + '</span><div><b>' + esc(a.t) + '</b><small>' + a.d + '</small></div></div>').join('');
+function pintarAlertas(r) {
+  const lista = controles(r, calcBalance(addDias(hoy(), -13), hoy()));
+  S.ultControles = lista;
+  const mio = S.ses ? rolN(S.ses.rol) : '';
+  const prob = lista.filter(a => a.sev !== 'ok').sort((a, c) => (SEV_ORDEN[a.sev] - SEV_ORDEN[c.sev]) || ((c.sector === mio) - (a.sector === mio)));
+  const oks = lista.length - prob.length;
+  const vis = prob.slice(0, 7);
+  $('#alertas').innerHTML = (vis.length ? vis.map((a, i) => htmlAlerta(a, i, true)).join('') : htmlAlerta({ sev: 'ok', ic: 'ok', t: 'Todo en orden', d: lista.length + ' controles sin observaciones en los últimos 14 días.', ruta: '#/tablero/controles', sector: 'abastecimiento' }, 0, false)) +
+    '<a class="mas-controles" href="#/tablero/controles">' + (prob.length > vis.length ? '+' + (prob.length - vis.length) + ' observaciones más · ' : '') + oks + ' controles en orden ' + ICON.der.replace('<svg', '<svg width="14" height="14"') + '</a>';
   $$('#alertas .alerta').forEach(a => { a.onclick = () => { location.hash = a.dataset.ir; }; });
+  if (window.refrescarAyuda) refrescarAyuda();
 }
 
 function barraFiltros() {
@@ -163,6 +147,7 @@ function enlazarFiltros(fn) {
 
 const TABS = [
   ['balance', 'Balance', ICON.playa],
+  ['controles', 'Controles', ICON.alerta],
   ['viajes', 'Viajes y balanza', ICON.camion],
   ['cantera', 'Cantera', ICON.pala],
   ['calidad', 'Calidad', ICON.calidad],
@@ -185,7 +170,16 @@ function pintarTab(tab) {
   const c = $('#tabC');
   if (!c) return;
   c.innerHTML = '';
+  S.ayudaExtra = null;
+  S.ayudaSug = null;
+  S.ayudaTab = tab;
+  try {
+    S.ultControles = controles(S.rango, calcBalance(S.desde, S.hasta));
+  } catch (e) {
+    console.warn(e);
+  }
   if (tab === 'viajes') tabViajes(c);
+  else if (tab === 'controles') tabControles(c);
   else if (tab === 'cantera') tabCantera(c);
   else if (tab === 'calidad') tabCalidad(c);
   else if (tab === 'combustible') tabCombustible(c);
@@ -195,10 +189,12 @@ function pintarTab(tab) {
   c.classList.add('vista');
   stagger(c);
   contar(c);
+  if (window.refrescarAyuda) refrescarAyuda();
 }
 
 function guia(items) {
-  return '<details class="guia"><summary>' + ICON.infoI.replace('<svg', '<svg width="18" height="18"') + '¿Cómo leer esta sección?</summary><div class="cuerpo">' + items.map(i => '<div><b>' + i[0] + ':</b> ' + i[1] + '</div>').join('') + '</div></details>';
+  S.ayudaExtra = items;
+  return '';
 }
 
 function irDia(lista) {
@@ -208,32 +204,41 @@ function irDia(lista) {
 function tabBalance(c) {
   const b = calcBalance(S.desde, S.hasta);
   const avisos = [];
-  if (!b.hayAjuste) avisos.push('No hay stock inicial cargado: los stocks se calculan desde el primer registro (base 0). Cargá un <b>Stock inicial</b> o una <b>Cubicación</b> en Cargar → Ajustes de stock.');
-  if (!b.calibrado) avisos.push('Sin turnos con balanza dinámica: se usa el factor teórico ' + nf(b.fTeo, 2) + ' t/palada.');
-  if (b.estimados) avisos.push(b.estimados + ' día(s) con turnos de molienda sin toneladas de balanza dinámica; se estimaron con ' + nf(b.fMolHist, 2) + ' t/palada.');
+  if (!b.hayAjuste) avisos.push('No hay stock inicial: los stocks arrancan en 0. Cargá una cubicación en Cargar → Ajustes de stock.');
+  if (!b.calibrado) avisos.push('Sin balanza dinámica: se usa el factor teórico ' + nf(b.fTeo, 2) + ' t/palada.');
+  if (b.estimados) avisos.push(b.estimados + ' día(s) con molienda estimada con ' + nf(b.fMolHist, 2) + ' t/palada por falta de balanza dinámica.');
+  S.ayudaSug = avisos;
+  const cub = b.cubicaciones.filter(x => x.teorico !== null).slice().reverse();
   const L = b.serie.map(s => fCorta(s.fecha));
   c.innerHTML = guia([
     ['Ingreso', 'toneladas netas pesadas en la balanza de ingreso (solo productos de tierra).'],
+    ['Rechazado', 'toneladas de camiones rechazados por calidad. ' + (b.excluyeRechazos ? 'No suman al stock de playa.' : 'Igual suman al stock (parámetro EXCLUIR_RECHAZADOS).')],
+    ['Cobertura', 'stock de playa ÷ consumo medio de molienda de los últimos 14 días con actividad.'],
+    ['Inventario', 'cada cubicación se compara con el stock que la app calculaba ese día. La diferencia mide el error acumulado del factor t/palada.'],
     ['Consumo de molienda', 'toneladas de la balanza dinámica; los turnos sin balanza se estiman con paladas × factor t/palada.'],
     ['Stock de playa', 'stock inicial o última cubicación + ingresos − consumo de molienda.'],
     ['Stock de silo', 'lo que pasó por la balanza dinámica − paladas extraídas × factor del silo.']
-  ]) + (avisos.length ? '<div class="alert info">' + ICON.infoI + '<ul style="margin:0">' + avisos.map(a => '<li>' + a + '</li>').join('') + '</ul></div>' : '') +
-    '<div class="kpis stagger">' +
+  ]) + '<div class="kpis stagger">' +
     kpi('Ingreso balanza', vn(b.ingreso) + '<small>t</small>', nf(b.tickets) + ' tickets', 'kacc', 'Suma de netos de la balanza de ingreso en el período.') +
     kpi('Consumo molienda', vn(b.consumo) + '<small>t</small>', nf(b.molPal) + ' paladas al cajón', 'kacc', 'Toneladas que entraron a la línea de molienda.') +
     kpi('Variación playa', vn(b.ingreso - b.consumo) + '<small>t</small>', b.ingreso - b.consumo >= 0 ? 'se acumuló tierra' : 'se consumió stock', b.ingreso - b.consumo >= 0 ? 'ok' : 'warn', 'Ingreso − consumo. Positivo: la playa crece.') +
+    (b.rechT ? kpi('Rechazado por calidad', vn(b.rechT) + '<small>t</small>', b.excluyeRechazos ? 'no suma a la playa' : 'suma a la playa', 'bad', 'Neto de los camiones con muestra rechazada.') : '') +
     kpi('Stock playa', vn(b.stockPlaya) + '<small>t</small>', 'al ' + fCorta(S.hasta), b.stockPlaya < 0 ? 'bad' : '', 'Stock calculado al final del período.') +
+    kpi('Cobertura playa', vn(b.diasPlaya, 1) + '<small>días</small>', nf(b.consumoMedio, 0) + ' t/día de molienda', b.diasPlaya !== null && b.diasPlaya < 5 ? 'warn' : '', 'Días de molienda que alcanza el stock de playa.') +
     kpi('Stock silo', vn(b.stockSilo) + '<small>t</small>', nf(b.siloOut, 0) + ' t extraídas', b.stockSilo < 0 ? 'bad' : '', 'Tierra molida disponible en silo.') +
     kpi('t por camión', vn(b.tickets ? b.ingreso / b.tickets : null, 1) + '<small>t</small>', 'neto medio de balanza', '', 'Promedio de toneladas netas por ticket.') +
     kpi('t por palada (molienda)', vn(b.fMol, 2), b.calibrado ? 'balanza dinámica / paladas' : 'teórico', '', 'Se usa para estimar el consumo cuando falta la balanza dinámica.') +
     '</div><div class="grid g2">' + caja('chPlaya', 'Playa: ingreso y consumo diario', 'Tocá una barra para ver el día') + caja('chSilo', 'Silo: entrada y extracción diaria', 'Entrada = consumo de molienda') + '</div>' +
     caja('chStock', 'Evolución de stocks', 'Toneladas al cierre de cada día', 'lg') +
+    '<div class="card"><div class="card-h"><div class="t"><h3>Inventario: cubicado vs calculado</h3><div class="sub">Tolerancia ±' + par('TOLERANCIA_INVENTARIO', 10) + ' %</div></div></div>' +
+    tabla([[x => fMedia(x.fecha), 'Fecha'], ['nodo', 'Nodo'], [x => nf(x.teorico, 0), 'Calculado t', 'n'], [x => nf(x.medido, 0), 'Cubicado t', 'n'], [x => (x.dif >= 0 ? '+' : '') + nf(x.dif, 0), 'Diferencia t', 'n'],
+      [x => '<span class="tag ' + (Math.abs(x.pct) * 100 > (num(par('TOLERANCIA_INVENTARIO', 10)) || 10) ? 't-bad' : 't-ok') + '">' + nf(x.pct * 100, 1) + ' %</span>', '%', 'n'], [x => esc(x.obs), 'Método', 'wrap']], cub, { vacio: 'Con dos o más cubicaciones se mide la diferencia de inventario.' }) + '</div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Detalle diario</h3></div><button class="btn sm" id="csvBal">' + ICON.descargar + 'CSV</button></div>' +
     tabla([[r => '<a href="#/dia/' + r.fecha + '">' + fMedia(r.fecha) + '</a>', 'Fecha'], [r => nf(r.ingreso, 1), 'Ingreso t', 'n'], [r => nf(r.consumo, 1) + (r.estimado ? ' *' : ''), 'Consumo t', 'n'], [r => nf(r.stockPlaya, 0), 'Stock playa', 'n'],
       [r => nf(r.siloOut, 1), 'Extr. silo t', 'n'], [r => nf(r.stockSilo, 0), 'Stock silo', 'n'], [r => nf(r.tCamion, 1), 't/camión', 'n'], [r => nf(r.fMol, 2), 't/palada mol.', 'n']],
     b.serie.slice().reverse(), { max: true }) + '<div class="sub mt">* consumo estimado con factor por falta de balanza dinámica en algún turno.</div></div>';
   grafico('chPlaya', 'bar', L, [
-    { label: 'Ingreso t', data: b.serie.map(s => s.ingreso), backgroundColor: color(1) },
+    { label: 'Ingreso a playa t', data: b.serie.map(s => s.ingresoPlaya), backgroundColor: color(1) },
     { label: 'Consumo t', data: b.serie.map(s => s.consumo), backgroundColor: color(2) }
   ], null, irDia(b.serie));
   grafico('chSilo', 'bar', L, [
@@ -404,19 +409,39 @@ function tabCombustible(c) {
   const fd = Object.keys(porDia).sort();
   const maqs = Array.from(new Set(comb.map(x => x.maquina)));
   if (!cis || cis.error) {
-    c.innerHTML = '<div class="alert info">' + ICON.infoI + '<div>Configurá <b>COMBUSTIBLE_ID</b> en Parámetros para ver la cisterna y el consumo de gasoil.' + (cis && cis.error ? ' (' + esc(cis.error) + ')' : '') + '</div></div>';
+    c.innerHTML = '<div class="alert info">' + ICON.infoI + '<div>No se pudo leer la planilla de gasoil. Revisá <b>COMBUSTIBLE_ID</b> en Parámetros.' + (cis && cis.error ? ' (' + esc(cis.error) + ')' : '') + '</div></div>';
     return;
   }
+  const b = calcBalance(S.desde, S.hasta);
+  const rg = rendimientoGasoil(comb);
+  const litros = sum(comb, x => x.litros);
+  const camiones = sum(st.maqs, x => x.unid + x.internos);
+  const med = (R.mediciones || []).slice().reverse();
   const serie = (cis.serie || []).filter(d => d.fecha >= S.desde && d.fecha <= S.hasta);
   const conL = st.maqs.filter(x => x.lH !== null && x.litros > 0);
   c.innerHTML = guia([
     ['Nivel de cisterna', 'ajuste inicial de la hoja Configuración + cargas de "Cisterna Principal" − cargas a las máquinas.'],
     ['Autonomía', 'nivel actual / consumo medio de los últimos 14 días con cargas.'],
-    ['L/h', 'litros cargados en el período / horas de horómetro de la máquina.']
-  ]) + '<div class="grid g-21"><div>' + caja('chNivel', 'Nivel de la cisterna', 'Litros al cierre de cada día', 'lg') + '</div>' + gaugeCisterna(cis) + '</div>' +
+    ['L/h', 'litros cargados en el período / horas de horómetro de la máquina.'],
+    ['L/h por carga', 'litros de cada carga ÷ horas del horómetro desde la carga anterior de esa máquina. Detecta cargas mal anotadas o consumos anormales.'],
+    ['L por tonelada', 'gasoil de cantera ÷ toneladas ingresadas por balanza: cuánto gasoil cuesta cada tonelada de tierra.'],
+    ['Medición', 'medí la cisterna con varilla y cargala en Cargar → Gasoil: la diferencia con el nivel calculado muestra faltantes o cargas sin registrar.']
+  ]) + '<div class="kpis stagger">' +
+    kpi('Gasoil a máquinas', vn(litros) + '<small>L</small>', comb.length + ' cargas', 'kacc') +
+    kpi('L por tonelada', vn(b.ingreso ? litros / b.ingreso : null, 2) + '<small>L/t</small>', 'gasoil ÷ ingreso de balanza', '', 'Costo en gasoil de cada tonelada que entró.') +
+    kpi('L por camión', vn(camiones ? litros / camiones : null, 1) + '<small>L</small>', nf(camiones) + ' camiones cargados', '', 'Gasoil ÷ camiones cargados por las palas (a planta + internos).') +
+    kpi('Nivel cisterna', vn(cis.nivel) + '<small>L</small>', cis.consumoMedio ? '≈ ' + nf(cis.nivel / cis.consumoMedio, 1) + ' días' : '', cis.nivel < 0 || (cis.capacidad && cis.nivel > cis.capacidad * 1.05) ? 'bad' : '') +
+    '</div><div class="grid g-21"><div>' + caja('chNivel', 'Nivel de la cisterna', 'Litros al cierre de cada día', 'lg') + '</div>' + gaugeCisterna(cis) + '</div>' +
     '<div class="grid g2">' + caja('chMov', 'Entradas y salidas de la cisterna', 'Litros por día', '') + caja('chCons', 'Consumo diario por máquina', 'Litros cargados', '') + '</div>' +
     '<div class="grid g2">' + caja('chLh', 'Litros por hora de horómetro', 'Período seleccionado') +
-    '<div class="card"><div class="card-h"><div class="t"><h3>Resumen por máquina</h3></div></div>' + tabla([['n', 'Máquina'], [r => nf(r.litros, 0), 'Litros', 'n'], [r => nf(r.hHor, 1), 'h horóm.', 'n'], [r => nf(r.lH, 1), 'L/h', 'n']], st.maqs.filter(x => x.litros > 0)) + '</div></div>';
+    '<div class="card"><div class="card-h"><div class="t"><h3>Resumen por máquina</h3></div></div>' + tabla([['n', 'Máquina'], [r => nf(r.litros, 0), 'Litros', 'n'], [r => nf(r.hHor, 1), 'h horóm.', 'n'], [r => nf(r.lH, 1), 'L/h', 'n'],
+      [r => nf(medianaDe(rg.filter(x => x.maquina === r.n && x.lh !== null && x.horas >= 2).map(x => x.lh)), 1), 'L/h por carga', 'n']], st.maqs.filter(x => x.litros > 0)) + '</div></div>' +
+    '<div class="grid g2"><div class="card"><div class="card-h"><div class="t"><h3>Consumo entre cargas</h3><div class="sub">Rojo: más de 1,5 veces lo habitual de la máquina</div></div></div>' +
+    tabla([[x => fCorta(x.fecha), 'Fecha'], ['maquina', 'Máquina'], [x => nf(x.litros, 0), 'Litros', 'n'], [x => nf(x.horas, 1), 'Horas', 'n'],
+      [x => '<span class="tag ' + (x.horas <= 0 || (x.mediana && x.lh > x.mediana * 1.5) ? 't-bad' : 't-mut') + '">' + nf(x.lh, 1) + '</span>', 'L/h', 'n']], rg.slice().reverse(), { max: true, vacio: 'Cargá el horómetro en cada carga de gasoil.' }) + '</div>' +
+    '<div class="card"><div class="card-h"><div class="t"><h3>Mediciones de cisterna</h3><div class="sub">Medido con varilla vs calculado</div></div></div>' +
+    tabla([[x => fCorta(x.fecha), 'Fecha'], ['hora', 'Hora'], [x => nf(x.litrosMedidos), 'Medido L', 'n'], [x => nf(x.litrosEstimados), 'Calculado L', 'n'],
+      [x => '<span class="tag ' + (Math.abs(x.diferencia) > (cis.capacidad || 5000) * 0.03 ? 't-bad' : 't-ok') + '">' + nf(x.diferencia) + '</span>', 'Diferencia', 'n']], med, { vacio: 'Sin mediciones en el período.' }) + '</div></div>';
   requestAnimationFrame(() => $$('.gauge .arco').forEach(a => { a.style.strokeDashoffset = a.dataset.off; }));
   const L = serie.map(d => fCorta(d.fecha));
   grafico('chNivel', 'line', L, [{ label: 'Nivel L', data: serie.map(d => d.nivel), borderColor: color(1), backgroundColor: color(1), fill: false }], { scales: { y: { beginAtZero: true, suggestedMax: cis.capacidad || undefined } } });
@@ -540,6 +565,7 @@ async function vDia(f) {
   const elegir = arr => (arr || []).find(x => x.fuente === 'Manual') || (arr || [])[0] || null;
   const acc = [];
   if (puede('jornada')) acc.push('<a class="btn" href="#/cargar/jornada/' + f + '">' + ICON.pala + 'Jornada</a>');
+  if (puede('gasoil')) acc.push('<a class="btn" href="#/cargar/gasoil/' + f + '">' + ICON.combustible + 'Gasoil</a>');
   if (puede('viajes')) acc.push('<a class="btn" href="#/cargar/viajes/' + f + '">' + ICON.camion + 'Viajes</a>');
   if (puede('molienda')) acc.push('<a class="btn" href="#/cargar/molienda/' + f + '">' + ICON.molienda + 'Molienda</a>');
   if (puede('calidad')) acc.push('<a class="btn" href="#/cargar/calidad/' + f + '">' + ICON.calidad + 'Calidad</a>');
