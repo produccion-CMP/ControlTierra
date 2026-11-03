@@ -29,7 +29,7 @@ async function vInicio() {
     ['cubicacion', 'Cubicación de playa', 'ajuste', '#/cargar/ajustes', 'molienda']
   ];
   app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">' + esc(fLarga(hoy())) + '</div><h1>Control de <span>tierra</span></h1>' +
-    '<p class="sub">Últimos ' + dias + ' días · de la cantera al silo.</p></div><div id="segDias"></div></div>' +
+    '<p class="sub">Últimos ' + dias + ' días · de la cantera al silo.</p></div><div class="row">' + (S.ses ? botonInforme('diario', { fecha: addDias(hoy(), -1) }, 'Resumen diario') : '') + '<div id="segDias"></div></div></div>' +
     (R.errorInforme && R.errorInforme !== 'Sin configurar' ? '<div class="alert warn">' + ICON.alerta + '<div><b>No se pudo leer el Informe de Producción (molienda/silo).</b> ' + esc(R.errorInforme) + '</div></div>' : '') +
     (R.errorViajes ? '<div class="alert bad">' + ICON.alerta + '<div><b>No se pudo leer la planilla de viajes.</b> ' + esc(R.errorViajes) + '</div></div>' : '') +
     '<div class="card flujo-card"><div class="tramos-band"><span class="tb abastecimiento">' + ICON.camion + '<b>Abastecimiento</b> cantera → balanza</span><span class="tb molienda">' + ICON.molienda + '<b>Molienda</b> playa → silo</span></div><div class="flujo" id="flujo"><svg class="lineas" id="lineas"></svg>' +
@@ -56,6 +56,7 @@ async function vInicio() {
   stagger(app());
   contar(app());
   $$('.nodo').forEach(n => { n.onclick = () => { location.hash = n.dataset.ir; }; });
+  enlazarInformes(app());
   requestAnimationFrame(() => {
     $$('.tanque span').forEach(s => { s.style.width = s.dataset.w + '%'; });
     $$('.gauge .arco').forEach(a => { a.style.strokeDashoffset = a.dataset.off; });
@@ -228,7 +229,7 @@ function tabBalance(c) {
     kpi('Stock silo', vn(b.stockSilo) + '<small>t</small>', nf(b.siloOut, 0) + ' t extraídas', b.stockSilo < 0 ? 'bad' : '', 'Tierra molida disponible en silo.') +
     kpi('t por camión', vn(b.tickets ? b.ingreso / b.tickets : null, 1) + '<small>t</small>', 'neto medio de balanza', '', 'Promedio de toneladas netas por ticket.') +
     kpi('t por palada (molienda)', vn(b.fMol, 2), b.calibrado ? 'balanza dinámica / paladas' : 'teórico', '', 'Se usa para estimar el consumo cuando falta la balanza dinámica.') +
-    '</div><div class="grid g2">' + caja('chPlaya', 'Playa: ingreso y consumo diario', 'Tocá una barra para ver el día') + caja('chSilo', 'Silo: entrada y extracción diaria', 'Entrada = consumo de molienda') + '</div>' +
+    '</div>' + tarjetaCalibracion(b) + '<div class="grid g2">' + caja('chPlaya', 'Playa: ingreso y consumo diario', 'Tocá una barra para ver el día') + caja('chSilo', 'Silo: entrada y extracción diaria', 'Entrada = consumo de molienda') + '</div>' +
     caja('chStock', 'Evolución de stocks', 'Toneladas al cierre de cada día', 'lg') +
     '<div class="card"><div class="card-h"><div class="t"><h3>Inventario: cubicado vs calculado</h3><div class="sub">Tolerancia ±' + par('TOLERANCIA_INVENTARIO', 10) + ' %</div></div></div>' +
     tabla([[x => fMedia(x.fecha), 'Fecha'], ['nodo', 'Nodo'], [x => nf(x.teorico, 0), 'Calculado t', 'n'], [x => nf(x.medido, 0), 'Cubicado t', 'n'], [x => (x.dif >= 0 ? '+' : '') + nf(x.dif, 0), 'Diferencia t', 'n'],
@@ -250,6 +251,18 @@ function tabBalance(c) {
     { label: 'Stock silo t', data: b.serie.map(s => s.stockSilo), borderColor: color(3), backgroundColor: color(3) }
   ], { scales: { y: { beginAtZero: false } } }, irDia(b.serie));
   $('#csvBal').onclick = () => csv('balance_' + S.desde + '_' + S.hasta, [['fecha', 'Fecha'], ['ingreso', 'Ingreso t'], ['consumo', 'Consumo t'], ['stockPlaya', 'Stock playa t'], ['siloOut', 'Extraccion silo t'], ['stockSilo', 'Stock silo t'], ['tCamion', 't/camion'], ['fMol', 't/palada molienda']], b.serie);
+}
+
+function tarjetaCalibracion(b) {
+  const tc = S.rango ? tPaladaCantera(conciliar(S.rango)) : { tp: null };
+  const m3 = num(par('M3_POR_PALADA', 3)) || 3;
+  const fila = (t, v, d, cls) => '<div class="cal-it ' + (cls || '') + '"><span class="eyebrow">' + t + '</span><b>' + (v === null ? '–' : nf(v, 2)) + '<small> t/palada</small></b><small>' + d + '</small></div>';
+  return '<div class="card"><div class="card-h"><div class="t"><h3>Toneladas por palada</h3><div class="sub">Balde de ' + nf(m3) + ' m³. Se recalcula solo con cada balanza importada y cada turno de molienda.</div></div></div><div class="calibra">' +
+    fila('Cantera → balanza de ingreso', tc.tp, tc.tp ? nf(tc.tCamion, 1) + ' t/camión ÷ ' + nf(tc.ppc, 1) + ' paladas/camión · ' + nf(tc.tp / m3, 2) + ' t/m³' : 'faltan jornadas o pesajes en el período', 'a') +
+    fila('Molienda → balanza dinámica', b.calibrado ? b.fMol : null, b.calibrado ? 'toneladas de cinta ÷ paladas al cajón · ' + nf(b.fMol / m3, 2) + ' t/m³' : 'sin turnos con balanza dinámica', 'm') +
+    fila('Teórico (parámetros)', b.fTeo, nf(m3) + ' m³ × ' + nf(num(par('DENSIDAD_APARENTE', 1.48)), 2) + ' t/m³ · se usa solo si falta lo medido', '') +
+    (tc.tp && b.calibrado ? '<div class="cal-dif"><b>' + nf((b.fMol - tc.tp) / tc.tp * 100, 1) + ' %</b><small>molienda vs cantera. Una diferencia sostenida indica tierra pegada en el balde, humedad distinta o paladas mal contadas; lo que queda en el cajón alimentador explica diferencias de un turno.</small></div>' : '') +
+    '</div></div>';
 }
 
 function tabViajes(c) {
@@ -569,7 +582,7 @@ async function vDia(f) {
   if (puede('viajes')) acc.push('<a class="btn" href="#/cargar/viajes/' + f + '">' + ICON.camion + 'Viajes</a>');
   if (puede('molienda')) acc.push('<a class="btn" href="#/cargar/molienda/' + f + '">' + ICON.molienda + 'Molienda</a>');
   if (puede('calidad')) acc.push('<a class="btn" href="#/cargar/calidad/' + f + '">' + ICON.calidad + 'Calidad</a>');
-  if (S.ses) acc.push('<button class="btn" id="bParte">' + ICON.correo + 'Enviar parte</button>');
+  if (S.ses) acc.push(botonInforme('dia', { fecha: f }, 'Enviar parte'));
   const porMaq = agrupar(j.tramos, t => t.maquina);
   const conTicket = new Set(k.pares.map(p => p.v));
   const aPlanta = new Set(k.viajes);
@@ -612,34 +625,5 @@ async function vDia(f) {
       [c => [c.arcilla, c.limo, c.arena].map(x => x === null ? '–' : nf(x, 0)).join(' / '), 'A/L/Ar %'], [c => esc(c.observaciones), 'Obs.', 'wrap']], j.calidad) + '</div></div></div>';
   stagger(app());
   contar(app());
-  const bp = $('#bParte');
-  if (bp) bp.onclick = () => enviarParte(f);
-}
-
-async function enviarParte(f) {
-  let lista = [];
-  try {
-    lista = await api('correos');
-  } catch (e) {
-    return toast(e.message, 'bad');
-  }
-  if (!lista.length) return toast('No hay correos configurados', 'warn');
-  modal('Enviar parte del ' + fCorta(f), '<p class="sub" style="margin-bottom:10px">Se envía el parte diario (cantera, viajes, balanza y calidad) con PDF adjunto.</p>' +
-    lista.map((c, i) => '<label class="chk" style="display:flex;padding:7px 0"><input type="checkbox" data-i="' + i + '"' + (c.tipo !== 'CCO' ? ' checked' : '') + '> ' + esc(c.nombre || '') + ' <span class="sub">' + esc(c.email) + ' · ' + esc(c.tipo) + '</span></label>').join(''), [
-    { txt: 'Cancelar' },
-    {
-      txt: 'Enviar', cls: 'pri', fn: async m => {
-        const emails = $$('input[data-i]:checked', m).map(x => lista[Number(x.dataset.i)].email);
-        if (!emails.length) { toast('Seleccioná destinatarios', 'warn'); return false; }
-        try {
-          await api('enviarParte', { fecha: f, emails: emails });
-          toast('Parte enviado a ' + emails.length + ' destinatario(s)', 'ok');
-        } catch (e) {
-          toast(e.message, 'bad');
-          return false;
-        }
-        return true;
-      }
-    }
-  ]);
+  enlazarInformes(app());
 }

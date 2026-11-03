@@ -6,6 +6,7 @@ const AYUDA = {
   inicio: {
     t: 'Inicio', que: 'Muestra el recorrido de la tierra: lo que se carga en cantera, lo que entra por balanza, lo que queda en la playa, lo que se muele y lo que hay en el silo.',
     pasos: ['Tocá una etapa del recorrido para ver su análisis.', '«Para revisar» junta los controles cruzados con observaciones de los últimos 14 días.', '«Estado de la carga» muestra qué fuente está atrasada (verde al día, amarillo atrasada, rojo sin datos).'],
+    fuentes: true,
     calc: [['Abastecimiento', 'cantera, gasoil, viajes y balanza de ingreso. Lo carga el responsable de abastecimiento.'], ['Molienda', 'playa, molienda, silo y cubicaciones. Lo carga el responsable de molienda.'], ['Playa', 'stock inicial o última cubicación + ingresos de balanza (sin rechazados) − consumo de molienda.'], ['Silo', 'lo que pasó por la balanza dinámica − paladas extraídas × factor del silo.']],
     controles: '*'
   },
@@ -47,10 +48,12 @@ const AYUDA = {
   },
   cargar: {
     t: 'Cargar datos', que: 'Cada responsable ve solo los módulos de su sector.',
+    fuentes: true,
     calc: [['Abastecimiento', 'jornada de cantera, gasoil, viajes, balanza de ingreso y calidad.'], ['Molienda', 'turnos de molienda y silo, cubicaciones y ajustes de stock.'], ['Sin conexión', 'lo que guardes queda en el equipo y se envía solo al volver la señal (ver «pendientes» arriba).']]
   },
   'cargar/jornada': {
-    t: 'Jornada de cantera', sector: 'abastecimiento', que: 'Tramos de producción y paradas de cada máquina en el día.',
+    t: 'Jornada de cantera', sector: 'abastecimiento', que: 'Informe de trabajos de cantera: tramos de producción y paradas de cada máquina. Se graba en «Trabajo en Cantera» (hojas ProduccionCantera y MantenimientoCantera), igual que la app anterior.',
+    calc: [['Producción', 'operador, horario, horómetro inicial y final (deben coincidir con las horas del tramo), paladas a camión y a acopio, camiones a planta e internos.'], ['Avería o mantenimiento', 'horómetro de la máquina y personal que intervino (mecánicos y operarios).'], ['Ausencia de operario', 'quién faltó.'], ['Condiciones climáticas', 'operario afectado.'], ['Sin operario / Otro', 'solo horario y observaciones.'], ['Camiones', 'en la planilla, UnidadesCargadas guarda el total (a planta + internos) y la columna N, los internos.']],
     pasos: ['Elegí la fecha y agregá una máquina.', 'Cargá horario, operador, horómetro inicial y final.', 'Camiones a planta e internos: lo que informa el palero.', 'Las paladas a camión se calculan solas como (a planta + internos) × ' + 'paladas por camión; si el operador informó otro número, escribilo y queda «manual».', '«Copiar día anterior» trae las máquinas y operadores de ayer.'],
     tips: ['Si el horómetro inicial no coincide con el final anterior, la app sugiere la corrección más probable.', 'Cargá también las paradas: alimentan la disponibilidad y el color del calendario.'],
     controles: ['a_horometros', 'a_palas', 'g_horometro']
@@ -68,8 +71,8 @@ const AYUDA = {
     controles: ['a_sin_ticket', 'a_superpuestos', 'a_ciclos']
   },
   'cargar/pesaje': {
-    t: 'Balanza de ingreso', sector: 'abastecimiento', que: 'Importa el archivo PESAJE.XLS exportado de la balanza para cruzarlo con los viajes.',
-    pasos: ['Elegí el archivo .xls/.xlsx/.csv.', 'Revisá que cada columna quedó asociada (fecha, hora, dominio, bruto, tara, neto, producto).', 'Importá: los tickets repetidos se actualizan, no se duplican.'],
+    t: 'Balanza de ingreso', que: 'Importa el PESAJE.XLS exportado del software de la balanza para cruzarlo con los viajes y calcular las toneladas por palada. Lo puede importar el responsable de abastecimiento o el de molienda.',
+    pasos: ['Exportá el PESAJE.XLS y soltalo acá: el formato del software se reconoce solo.', 'Se toman los camiones de tierra (material 002) con entrada y salida. Neto = entrada − salida.', 'Los camiones que todavía no salieron se importan en la próxima exportación.', 'Importá: los tickets repetidos se actualizan, no se duplican, y se envía el informe de balanza.'],
     tips: ['Importá al menos una vez por día para que los controles estén al día.', 'Si la tara de un camión cambia mucho, el neto puede estar mal: aparece en Controles.'],
     controles: ['a_sin_viaje', 'a_tara', 'a_doble', 'a_atipicos']
   },
@@ -103,10 +106,20 @@ const AYUDA = {
   },
   liquidacion: { t: 'Liquidación a choferes', sector: 'abastecimiento', que: 'Viajes con «PAGAR = SI» por chofer y período, con la tarifa por origen.', calc: [['Tarifa', 'parámetro TARIFAS_VIAJE (ORIGEN=importe; …).'], ['Media jornada', 'si algún viaje del día tiene «Jornada completa = NO».']] },
   config: {
-    t: 'Configuración', que: 'Catálogos, usuarios, correos y parámetros. Solo administradores.',
-    calc: [['Roles', 'Administrador (todo), Responsable de abastecimiento (cantera, gasoil, viajes, balanza, calidad, liquidación) y Responsable de molienda (molienda, silo, cubicaciones).'], ['PIN', 'se guarda cifrado; dejá «Nuevo PIN» vacío para conservar el actual. 4 a 8 dígitos.'], ['IA de fotos', 'la clave va en Apps Script → Propiedades del script → GEMINI_API_KEY, nunca en Parámetros.'], ['Catálogos de viajes', 'choferes, dominios, lugares, tipos y responsables se guardan en la planilla original de viajes.']]
+    t: 'Configuración', que: 'Catálogos, usuarios, correos, informes y parámetros. Solo administradores.',
+    fuentes: true,
+    calc: [['Correos', 'cada destinatario marca qué informes recibe (cantera, viajes, balanza, gasoil, calidad, molienda, cubicación, resumen diario) y si va como Para, CC o CCO.'], ['Informes', '«Enviar al guardar» manda el informe solo cada vez que se carga ese dato. «Adjuntar PDF» agrega el PDF. El resumen diario sale todos los días a la hora INFORME_DIARIO_HORA.'], ['Roles', 'Administrador (todo), Responsable de abastecimiento (cantera, gasoil, viajes, balanza, calidad, liquidación) y Responsable de molienda (molienda, silo, cubicaciones).'], ['PIN', 'se guarda cifrado; dejá «Nuevo PIN» vacío para conservar el actual. 4 a 8 dígitos.'], ['IA de fotos', 'la clave va en Apps Script → Propiedades del script → GEMINI_API_KEY, nunca en Parámetros.'], ['Catálogos de viajes', 'choferes, dominios, lugares, tipos y responsables se guardan en la planilla original de viajes.']]
   }
 };
+
+const FUENTES_DATOS = [
+  ['Trabajos de cantera', 'Trabajo en Cantera → ProduccionCantera y MantenimientoCantera', 'Responsable de abastecimiento'],
+  ['Gasoil', 'Trabajo en Cantera → CargaCombustibleCantera y Configuracion', 'Responsable de abastecimiento'],
+  ['Viajes de camiones', 'Carga de viajes de tierra (respuestas) → Respuestas de formulario 1 (se lee ViajesUnificados)', 'Responsable de abastecimiento'],
+  ['Balanza de ingreso', 'PESAJE.XLS del software de la balanza → hoja Pesajes de esta base', 'Abastecimiento (molienda también puede importar)'],
+  ['Molienda y silo', 'Informe de Producción CMP → hoja Molienda (D paladas, G paladas de silo, J balanza dinámica)', 'Formulario de turno; correcciones: responsable de molienda'],
+  ['Cubicaciones y calidad', 'Base de Control de Tierra → Ajustes y Calidad', 'Molienda (cubicación) · abastecimiento (calidad)']
+];
 
 function claveAyuda() {
   const p = location.hash.replace(/^#\/?/, '').split('/');
@@ -136,6 +149,7 @@ function htmlAyuda() {
   return '<div class="ay-h"><div><div class="eyebrow">Ayuda</div><h3>' + esc(def.t) + '</h3>' + (def.sector ? '<span class="chip-sector ' + def.sector + '">' + AYUDA_SECTOR[def.sector] + '</span>' : '') + '</div><button class="btn icon sm" id="ayCerrar" aria-label="Cerrar ayuda">' + ICON.x + '</button></div>' +
     '<div class="ay-c"><p class="ay-que">' + def.que + '</p>' +
     secc('Ahora conviene revisar', sug.map(x => '<a class="ay-sug ' + x.sev + '"' + (x.ruta ? ' href="' + x.ruta + '"' : '') + '><b>' + esc(x.t) + '</b>' + (x.d ? '<small>' + x.d + '</small>' : '') + '</a>').join('')) +
+    secc('De dónde sale cada dato', def.fuentes ? '<dl>' + FUENTES_DATOS.map(x => '<dt>' + x[0] + '</dt><dd>' + x[1] + '<br><small>' + x[2] + '</small></dd>').join('') + '</dl>' : '') +
     secc('Cómo se usa', def.pasos ? '<ol>' + def.pasos.map(x => '<li>' + x + '</li>').join('') + '</ol>' : '') +
     secc('Guía de cubicación', def.guia ? '<div class="guia-cub">' + def.guia.map((p, i) => '<div class="paso"><b><i>' + (i + 1) + '</i>' + p[0] + '</b><div>' + p[1] + '</div></div>').join('') + '</div>' : '') +
     secc('Cómo se calcula', calc.length ? '<dl>' + calc.map(x => '<dt>' + x[0] + '</dt><dd>' + x[1] + '</dd>').join('') + '</dl>' : '') +

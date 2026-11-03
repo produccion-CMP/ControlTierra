@@ -289,7 +289,7 @@ input:disabled, select:disabled { opacity: .55; }
 .form .w2 { grid-column: span 2; }
 .form .full { grid-column: 1 / -1; }
 .chk { display: inline-flex; align-items: center; gap: 8px; font-size: .88rem; font-weight: 700; color: var(--text); cursor: pointer; user-select: none; }
-.switch { position: relative; width: 42px; height: 24px; flex: none; }
+.switch { position: relative; display: inline-block; vertical-align: middle; width: 42px; height: 24px; flex: none; }
 .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
 .switch span { position: absolute; inset: 0; border-radius: 99px; background: var(--line-2); transition: background .25s; }
 .switch span::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: transform .3s var(--spring); }
@@ -877,3 +877,19 @@ details.oks .ok-it b { color: var(--text); }
   .btn-ayuda { bottom: calc(78px + env(safe-area-inset-bottom)); right: 12px; width: 42px; height: 42px; }
 }
 @media print { .btn-ayuda, #ayuda, #ayudaFondo { display: none !important; } }
+.calibra { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.cal-it { padding: 12px 14px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.cal-it.a { border-top: 3px solid var(--sec-a); }
+.cal-it.m { border-top: 3px solid var(--sec-m); }
+.cal-it b { font-size: 1.5rem; letter-spacing: -.02em; }
+.cal-it b small { font-size: .75rem; color: var(--muted); font-weight: 600; }
+.cal-it > small { color: var(--muted); font-size: .76rem; }
+.cal-dif { grid-column: 1 / -1; display: flex; gap: 12px; align-items: baseline; font-size: .82rem; color: var(--muted); }
+.cal-dif b { color: var(--text); font-size: 1rem; }
+.modal.grande { width: min(1040px, 96vw); max-width: none; }
+.inf-prev { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #f4f4f5; }
+.inf-prev iframe { width: 100%; height: 56vh; border: 0; display: block; background: #f4f4f5; }
+.inf-dest { margin-top: 14px; display: flex; flex-direction: column; gap: 4px; }
+.inf-dest h4 { margin: 0 0 4px; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.inf-dest .dest { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
+.inf-dest .dest small { color: var(--muted); }

@@ -241,7 +241,9 @@ const DEF_CONFIG = {
   TiposViaje: { t: 'Tipos de viaje', c: [['nombre', 'Nombre'], ['activo', 'Activo', 'bool']], orig: 'TIPO VIAJE' },
   Responsables: { t: 'Responsables', c: [['nombre', 'Nombre'], ['activo', 'Activo', 'bool']], orig: 'RESPONSABLE' },
   Usuarios: { t: 'Usuarios', c: [['nombre', 'Usuario'], ['rol', 'Rol', 'sel', ['abastecimiento', 'molienda', 'admin'], ROL_TXT], ['activo', 'Activo', 'bool'], ['pin', 'Nuevo PIN', 'pin']] },
-  Correos: { t: 'Correos', c: [['nombre', 'Nombre'], ['email', 'Email'], ['tipo', 'Tipo', 'sel', ['PARA', 'CC', 'CCO']], ['activo', 'Activo', 'bool']] },
+  Correos: { t: 'Correos', c: [['nombre', 'Nombre'], ['email', 'Email'], ['tipo', 'Tipo', 'sel', ['PARA', 'CC', 'CCO']], ['activo', 'Activo', 'bool'], ['rJornada', 'Cantera', 'bool'], ['rViajes', 'Viajes', 'bool'], ['rBalanza', 'Balanza', 'bool'],
+    ['rGasoil', 'Gasoil', 'bool'], ['rCalidad', 'Calidad', 'bool'], ['rMolienda', 'Molienda', 'bool'], ['rCubicacion', 'Cubicación', 'bool'], ['rDiario', 'Resumen diario', 'bool']] },
+  Informes: { t: 'Informes', c: [['nombre', 'Informe', 'ro'], ['automatico', 'Enviar al guardar', 'bool'], ['pdf', 'Adjuntar PDF', 'bool'], ['descripcion', 'Qué contiene', 'ro']], fijo: true },
   Parametros: { t: 'Parámetros', c: [['clave', 'Clave', 'ro'], ['valor', 'Valor'], ['descripcion', 'Descripción', 'ro']], fijo: true }
 };
 
@@ -263,7 +265,7 @@ async function vConfig(hoja) {
     if (c[2] === 'sel' && c[4]) return '<select ' + a + '>' + c[3].map(o => '<option value="' + o + '"' + (rolN(v) === o ? ' selected' : '') + '>' + esc(c[4][o] || o) + '</option>').join('') + '</select>';
     if (c[2] === 'sel') return '<select ' + a + '>' + opts(c[3], v || '', '') + '</select>';
     if (c[2] === 'pin') return '<input type="password" inputmode="numeric" maxlength="8" placeholder="sin cambio" ' + a + '>';
-    if (c[2] === 'ro') return c[0] === 'descripcion' ? '<span class="sub">' + esc(v) + '</span>' : '<code>' + esc(v) + '</code>';
+    if (c[2] === 'ro') return c[0] === 'descripcion' ? '<span class="sub">' + esc(v) + '</span>' : c[0] === 'clave' ? '<code>' + esc(v) + '</code>' : '<b>' + esc(v) + '</b>';
     return '<input ' + a + ' value="' + esc(v) + '">';
   };
   const pintar = () => {

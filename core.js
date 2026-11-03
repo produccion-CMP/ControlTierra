@@ -84,7 +84,7 @@ const ICON = {
 
 const COL = n => 'var(--s' + n + ')';
 const CAUSAS_PERSONAL_MULTI = ['Avería mecánica', 'Mantenimiento programado'];
-const CAUSAS_PERSONAL_UNO = ['Ausencia de operario', 'Condiciones climáticas', 'Sin operario', 'Sin Operario'];
+const CAUSAS_PERSONAL_UNO = ['Ausencia de operario', 'Condiciones climáticas'];
 const CAUSAS_HOROMETRO = ['Avería mecánica', 'Mantenimiento programado'];
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -727,9 +727,13 @@ function conciliar(datos) {
   pes.forEach(p => { const x = di(p.fecha); x.tickets++; x.neto += p.neto || 0; });
   pares.forEach(pr => { di(pr.v.fecha).pares++; });
   const ciclos = viajes.filter(v => v.horaCarga && v.horaDescarga).map(v => ({ v: v, min: dur(v.horaCarga, v.horaDescarga) * 60 }));
+  const ultPes = {};
+  pes.forEach(p => { const m = minDe(p.hora); if (m !== null && (ultPes[p.fecha] === undefined || m > ultPes[p.fecha])) ultPes[p.fecha] = m; });
+  const sinT = viajes.filter((_, i) => !uV.has(i));
+  const despues = v => ultPes[v.fecha] === undefined || (minDe(v.horaDescarga || v.horaCarga) || 0) > ultPes[v.fecha] + 30;
   return {
-    viajesTot: viajesTot, viajes: viajes, pes: pes, pares: pares, ciclos: ciclos,
-    sinTicket: viajes.filter((_, i) => !uV.has(i)), sinViaje: pes.filter((_, i) => !uP.has(i)),
+    viajesTot: viajesTot, viajes: viajes, pes: pes, pares: pares, ciclos: ciclos, ultPes: ultPes,
+    sinTicket: sinT.filter(v => !despues(v)), sinTicketFuera: sinT.filter(despues), sinViaje: pes.filter((_, i) => !uP.has(i)),
     atipicos: atipicos, diario: Object.keys(dias).sort().map(k => dias[k])
   };
 }

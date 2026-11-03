@@ -93,7 +93,7 @@ function pintarQV(volver) {
   const atraso = S.info && S.info.ultimaFecha ? difDias(S.info.ultimaFecha, hoy()) : null;
   const sugDom = c.chofer && S.info.choferes[c.chofer] ? S.info.choferes[c.chofer].dominios[0] : '';
   app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + (volver || VOLVER_QV) + '<div><div class="eyebrow">' + (QV.editando ? 'Editando comprobante' : 'Carga rápida') + '</div><h1>Viajes de camiones</h1></div></div>' +
-    '<div class="row"><input type="file" id="qvFoto" accept="image/*" capture="environment" class="hide"><button class="btn brillo" id="qvIA" style="border-color:var(--s7);color:var(--s7)">' + ICON.camara + 'Leer foto del talonario</button></div></div>' +
+    '<div class="row"><input type="file" id="qvFoto" accept="image/*" capture="environment" class="hide"><button class="btn brillo" id="qvIA" style="border-color:var(--s7);color:var(--s7)">' + ICON.camara + 'Leer foto del talonario</button>' + botonInforme('viajes', { fecha: QV.fecha }, 'Informe del día') + '</div></div>' +
     (atraso !== null && atraso > 2 && !QV.editando ? '<div class="alert warn">' + ICON.reloj + '<div>El último viaje cargado es del <b>' + fMedia(S.info.ultimaFecha) + '</b> (' + atraso + ' días). Cargá los talonarios en orden de fecha.</div></div>' : '') +
     '<div class="qr-wrap"><div class="col" style="gap:16px">' +
     '<div class="comp-card" id="qvCard">' +
@@ -127,6 +127,7 @@ function pintarQV(volver) {
   pintarSesionQV();
   pintarDiaQV();
   enlazarQV();
+  enlazarInformes(app());
   validarNumeroQV();
   resumenQV();
   refrescarInternosQV();
@@ -597,6 +598,7 @@ async function guardarQV() {
   pintarQV();
   try {
     const r = await escribir('guardarViajes', datos, 'Talonario ' + datos.comprobante);
+    avisarInforme(r);
     item.estado = r.encolado ? 'cola' : 'ok';
     if (!r.encolado) {
       S.info.usados[datos.comprobante] = datos.fecha + ' · ' + datos.chofer;

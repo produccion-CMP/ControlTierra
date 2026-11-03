@@ -29,6 +29,23 @@ function rendimientoGasoil(cargas) {
   return out;
 }
 
+function tPaladaCantera(k) {
+  const rx = new RegExp(String(par('ORIGEN_CANTERA', 'CANTERA')), 'i');
+  let ton = 0;
+  let tk = 0;
+  let pal = 0;
+  let cam = 0;
+  k.diario.filter(d => (d.unid + d.internos) > 0 && d.tickets > 0 && d.palCam > 0).forEach(d => {
+    const otros = k.pares.filter(x => x.v.fecha === d.fecha && !rx.test(x.v.origen));
+    ton += d.neto - sum(otros, x => x.p.neto);
+    tk += d.tickets - otros.length;
+    pal += d.palCam;
+    cam += d.unid + d.internos;
+  });
+  const ppc = cam ? pal / cam : null;
+  return { tp: tk && ppc ? ton / tk / ppc : null, ppc: ppc, tCamion: tk ? ton / tk : null, tickets: tk };
+}
+
 function controles(r, b) {
   const R = S.resumen;
   const k = conciliar(r);
@@ -76,8 +93,8 @@ function controles(r, b) {
 
   add('a_sin_ticket', A, 'balanza', 'Viajes con ticket de balanza', 'Cada viaje a planta debe tener su pesada (mismo dominio, hora cercana).', () => {
     if (!k.pes.length) return { sev: 'info', t: 'Sin pesajes en el período', d: 'Importá el PESAJE.XLS para cruzar viajes con la balanza.', ruta: '#/cargar/pesaje' };
-    if (!k.sinTicket.length) return { sev: 'ok', t: 'Todos los viajes a planta tienen ticket', d: nf(k.pares.length) + ' viajes cruzados con la balanza.' };
-    return { sev: k.sinTicket.length > 5 ? 'bad' : 'warn', t: pl(k.sinTicket.length, 'viaje sin ticket de balanza', 'viajes sin ticket de balanza'), d: 'Puede faltar el pesaje, estar mal el dominio o la hora (±' + par('VENTANA_MATCH_MIN', 120) + ' min).', ruta: '#/tablero/viajes', filas: k.sinTicket, cols: cols.viaje };
+    if (!k.sinTicket.length) return k.sinTicketFuera.length ? { sev: 'info', t: k.sinTicketFuera.length + ' viajes después del último pesaje importado', d: 'Importá la balanza completa de esos días para cruzarlos.', ruta: '#/cargar/pesaje', filas: k.sinTicketFuera, cols: cols.viaje } : { sev: 'ok', t: 'Todos los viajes a planta tienen ticket', d: nf(k.pares.length) + ' viajes cruzados con la balanza.' };
+    return { sev: k.sinTicket.length > 5 ? 'bad' : 'warn', t: pl(k.sinTicket.length, 'viaje sin ticket de balanza', 'viajes sin ticket de balanza'), d: 'Puede faltar el pesaje, estar mal el dominio o la hora (±' + par('VENTANA_MATCH_MIN', 120) + ' min).' + (k.sinTicketFuera.length ? ' Además ' + k.sinTicketFuera.length + ' viajes son posteriores al último pesaje importado de su día (falta importar la balanza).' : ''), ruta: '#/tablero/viajes', filas: k.sinTicket, cols: cols.viaje };
   });
 
   add('a_sin_viaje', A, 'camion', 'Tickets con viaje', 'Cada camión pesado debe tener su comprobante de viaje cargado.', () => {
@@ -139,16 +156,21 @@ function controles(r, b) {
 
   add('a_carga', A, 'pala', 'Carga real de los camiones', 'Toneladas de balanza por palada declarada en cantera, comparado con el factor de molienda.', () => {
     const f = b.fMol;
-    const dias = k.diario.filter(d => d.unid > 0 && d.tickets > 0 && d.palCam > 0).map(d => {
-      const pal = d.palCam * d.unid / Math.max(1, d.unid + d.internos);
-      return Object.assign({}, d, { tp: d.neto / pal, pal: pal, desvio: f ? (d.neto / pal - f) / f : null });
-    });
+    const rx = new RegExp(String(par('ORIGEN_CANTERA', 'CANTERA')), 'i');
+    const dias = k.diario.filter(d => (d.unid + d.internos) > 0 && d.tickets > 0 && d.palCam > 0).map(d => {
+      const otros = k.pares.filter(x => x.v.fecha === d.fecha && !rx.test(x.v.origen));
+      const tk = d.tickets - otros.length;
+      const ton = d.neto - sum(otros, x => x.p.neto);
+      const ppc = d.palCam / (d.unid + d.internos);
+      const tp = tk > 0 ? ton / tk / ppc : null;
+      return Object.assign({}, d, { tp: tp, pal: ppc * tk, ppc: ppc, desvio: f && tp ? (tp - f) / f : null });
+    }).filter(d => d.tp !== null);
     if (dias.length < 3) return { sev: 'info', t: 'Pocos días para medir la carga real', d: 'Se necesitan jornadas con paladas a camión y pesajes del mismo día.' };
     const med = medianaDe(dias.map(d => d.tp));
     const mal = dias.filter(d => d.desvio !== null && Math.abs(d.desvio) > 0.2);
     const txt = nf(med, 2) + ' t por palada en cantera vs ' + nf(f, 2) + ' en molienda';
     if (!mal.length) return { sev: 'ok', t: 'Carga de camiones coherente', d: txt + '.' };
-    return { sev: 'info', t: pl(mal.length, 'día', 'días') + ' con carga de camiones distinta', d: txt + '. Puede haber paladas mal contadas o baldes poco llenos.', ruta: '#/tablero/cantera', filas: mal, cols: [[x => fCorta(x.fecha), 'Fecha'], [x => nf(x.pal, 0), 'Paladas a planta', 'n'], [x => nf(x.neto, 1), 't balanza', 'n'], [x => nf(x.tp, 2), 't/palada', 'n'], [x => nf(x.desvio * 100, 0) + '%', 'Desvío', 'n']] };
+    return { sev: 'info', t: pl(mal.length, 'día', 'días') + ' con carga de camiones distinta', d: txt + '. Puede haber paladas mal contadas o baldes poco llenos.', ruta: '#/tablero/cantera', filas: mal, cols: [[x => fCorta(x.fecha), 'Fecha'], [x => nf(x.ppc, 1), 'Paladas/camión', 'n'], [x => nf(x.neto, 1), 't balanza', 'n'], [x => nf(x.tp, 2), 't/palada', 'n'], [x => nf(x.desvio * 100, 0) + '%', 'Desvío', 'n']] };
   });
 
   add('a_horometros', A, 'reloj', 'Horómetros de la jornada', 'Que el horómetro avance y no supere las horas del tramo.', () => {

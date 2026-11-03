@@ -187,7 +187,7 @@ async function edJornada(f, volver) {
   const t = maqs.map(m => j.tramos.filter(x => x.maquina === m.nombre)
     .sort((a, b) => linMin(a.horaInicio) - linMin(b.horaInicio))
     .map(x => Object.assign(nuevoTramo(), x, {
-      personal: x.personal ? String(x.personal).split(',').map(s => s.trim()).filter(Boolean) : [],
+      personal: separarPersonal(x.personal),
       viajesInternos: x.viajesInternos || 0,
       palAuto: x.tipo === 'Producción' && Number(x.paladasCamiones || 0) === ((x.unidadesCargadas || 0) + (x.viajesInternos || 0)) * ppc()
     })));
@@ -197,10 +197,11 @@ async function edJornada(f, volver) {
   if (bor && bor.t) aviso += '<div class="alert warn" id="avBor">' + ICON.alerta + '<div style="flex:1">Hay un borrador sin guardar de esta fecha. <button class="btn sm" id="bRest">Restaurar</button> <button class="btn sm dan" id="bDesc">Descartar</button></div></div>';
   app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos</div><h1>Jornada de cantera</h1></div></div>' +
     '<div class="row"><label class="f">Fecha<div class="row" style="flex-wrap:nowrap;gap:4px"><a class="btn icon" href="#/cargar/jornada/' + addDias(f, -1) + '">' + ICON.izq + '</a><input type="date" id="edF" value="' + f + '" style="width:170px"><a class="btn icon" href="#/cargar/jornada/' + addDias(f, 1) + '">' + ICON.der + '</a></div></label>' +
-    '<button class="btn" id="bCopia" style="align-self:flex-end">' + ICON.copiar + 'Copiar día anterior</button><button class="btn pri" id="bGuardar" style="align-self:flex-end">' + ICON.guardar + 'Guardar jornada</button></div></div>' +
+    '<button class="btn" id="bCopia" style="align-self:flex-end">' + ICON.copiar + 'Copiar día anterior</button>' + botonInforme('jornada', { fecha: f }, 'Informe') + '<button class="btn pri" id="bGuardar" style="align-self:flex-end">' + ICON.guardar + 'Guardar jornada</button></div></div>' +
     aviso + '<div id="edErr"></div><div id="edMaqs"></div>' +
     '<div class="row mt"><button class="btn pri" id="bGuardar2">' + ICON.guardar + 'Guardar jornada</button></div></div>';
   $('#edF').onchange = e => { location.hash = '#/cargar/jornada/' + e.target.value; };
+  enlazarInformes(app());
   $('#bGuardar').onclick = guardarJornada;
   $('#bGuardar2').onclick = guardarJornada;
   $('#bCopia').onclick = copiarAnterior;
@@ -267,10 +268,10 @@ function pintarEditor() {
         } else {
           campos += '<label class="f">Motivo<select ' + d('motivoParada') + '>' + opts(causas, t.motivoParada) + '</select></label>';
           if (CAUSAS_HOROMETRO.indexOf(t.motivoParada) >= 0) campos += '<label class="f">Horómetro en parada<input inputmode="decimal" ' + d('horometroParada') + ' value="' + esc(t.horometroParada) + '"></label>';
-          if (CAUSAS_PERSONAL_UNO.indexOf(t.motivoParada) >= 0) campos += '<label class="f">Operario<select ' + d('personal') + '>' + opts(ops.map(o => o.nombre), (t.personal || [])[0] || '') + '</select></label>';
+          if (CAUSAS_PERSONAL_UNO.indexOf(t.motivoParada) >= 0) campos += '<label class="f">' + (/clim/i.test(t.motivoParada) ? 'Operario afectado' : 'Operario ausente') + '<select ' + d('personal') + '>' + opts(ops.map(o => o.nombre), (t.personal || [])[0] || '') + '</select></label>';
           if (CAUSAS_PERSONAL_MULTI.indexOf(t.motivoParada) >= 0) {
             const lista = ops.slice().sort((a, b) => (b.mecanico ? 1 : 0) - (a.mecanico ? 1 : 0)).map(o => o.nombre);
-            campos += '<div class="f full" id="' + id('personal') + '"><label class="f">Personal interviniente</label><div class="chips">' +
+            campos += '<div class="f full" id="' + id('personal') + '"><label class="f">Personal interviniente (mecánicos y operarios)</label><div class="chips">' +
               lista.map(n => '<label class="chip"><input type="checkbox" data-m="' + mi + '" data-i="' + i + '" data-k="personalMulti" value="' + esc(n) + '"' + ((t.personal || []).indexOf(n) >= 0 ? ' checked' : '') + '>' + esc(n) + '</label>').join('') + '</div></div>';
           }
         }
@@ -280,6 +281,18 @@ function pintarEditor() {
       }).join('') + '</div>';
   }).join('');
   $('#edMaqs').innerHTML = html;
+}
+
+function separarPersonal(txt) {
+  const s = String(txt || '').trim();
+  if (!s) return [];
+  if (s.indexOf(';') >= 0) return s.split(';').map(x => x.trim()).filter(Boolean);
+  const cat = ((S.resumen.catalogos || {}).Operadores || []).map(o => o.nombre).filter(Boolean).sort((a, b) => b.length - a.length);
+  const out = [];
+  let resto = ' ' + s + ' ';
+  cat.forEach(n => { if (resto.indexOf(n) >= 0) { out.push(n); resto = resto.replace(n, ' '); } });
+  resto.split(/\s*,\s*(?=[A-ZÁÉÍÓÚÑ][^,]*,)/).map(x => x.trim().replace(/^,|,$/g, '').trim()).filter(x => x.length > 2).forEach(x => out.push(x));
+  return out.length ? out : [s];
 }
 
 function horasTxt(t) {
@@ -513,6 +526,7 @@ async function guardarJornada() {
   bloquear('Guardando jornada…');
   try {
     const r = await escribir('guardarJornada', { fecha: S.ed.fecha, tramos: tramos }, 'Jornada cantera ' + S.ed.fecha);
+    avisarInforme(r);
     lsDel('tierra_borrador_' + S.ed.fecha);
     S.ed.sucio = false;
     if (!r.encolado) {
@@ -612,8 +626,52 @@ function prepararHoja() {
   });
   S.imp.filas = filas;
   S.imp.encab = mejor;
+  if (esFormatoBalanza(filas[0] || [])) {
+    S.imp.balanza = convertirBalanza(XLSX.utils.sheet_to_json(ws, { raw: false, defval: '' }), par('BALANZA_COD_TIERRA', '002'));
+    pintarImportBalanza();
+    return;
+  }
+  S.imp.balanza = null;
   autoMapear(lsGet('tierra_mapeo_pesaje', null));
   pintarImport();
+}
+
+function pintarImportBalanza() {
+  const b = S.imp.balanza;
+  const val = b.filas.filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) && x.neto > 0);
+  const fechas = val.map(x => x.fecha).sort();
+  const porDia = agrupar(val, x => x.fecha);
+  const porDom = agrupar(val, x => normDom(x.dominio));
+  $('#impC').innerHTML = '<div class="mt vista"><div class="alert ok">' + ICON.ok + '<div><b>Archivo del software de la balanza reconocido.</b> Se toman solo los pesajes de tierra (material ' + esc(par('BALANZA_COD_TIERRA', '002')) + ') con entrada y salida: neto = peso de entrada − peso de salida.</div></div>' +
+    '<div class="kpis mt stagger">' + kpi('Pesajes de tierra', nf(val.length), fechas.length ? fCorta(fechas[0]) + ' – ' + fCorta(fechas[fechas.length - 1]) : '', 'kacc') +
+    kpi('Toneladas netas', nf(sum(val, x => x.neto), 1), nf(val.length ? sum(val, x => x.neto) / val.length : null, 1) + ' t/camión') +
+    kpi('Camiones con entrada sin salida', nf(b.resumen.abiertas - val.length > 0 ? b.resumen.abiertas - val.length : 0), 'quedan para la próxima importación') +
+    kpi('Otros materiales', nf(b.resumen.otros), 'filas que no son tierra (no se importan)') + '</div>' +
+    '<div class="grid g2 mt"><div>' + tabla([[r => fMedia(r), 'Fecha'], [r => porDia[r].length, 'Camiones', 'n'], [r => nf(sum(porDia[r], x => x.neto), 1), 't', 'n'], [r => nf(sum(porDia[r], x => x.neto) / porDia[r].length, 1), 't/camión', 'n'],
+      [r => porDia[r].map(x => x.hora).sort().pop(), 'Último pesaje']], Object.keys(porDia).sort()) + '</div><div>' +
+    tabla([[r => r, 'Dominio'], [r => porDom[r].length, 'Pesajes', 'n'], [r => nf(sum(porDom[r], x => x.neto) / porDom[r].length, 1), 'Neto medio t', 'n'], [r => nf(quant(porDom[r].map(x => x.tara).sort((a, c) => a - c), 0.5), 2), 'Tara habitual t', 'n']], Object.keys(porDom).sort()) + '</div></div>' +
+    '<h3 class="mt2">Vista previa</h3><div class="mt">' + tabla([['ticket', 'Ticket'], [r => fCorta(r.fecha), 'Fecha'], ['hora', 'Entrada'], ['dominio', 'Dominio'], [r => nf(r.bruto, 2), 'Bruto t', 'n'], [r => nf(r.tara, 2), 'Tara t', 'n'], [r => nf(r.neto, 2), 'Neto t', 'n'], ['origen', 'Transportista']], val.slice(0, 12)) + '</div>' +
+    '<div class="row mt"><button class="btn pri" id="iImp"' + (val.length ? '' : ' disabled') + '>' + ICON.descargar + 'Importar ' + nf(val.length) + ' pesajes</button></div></div>';
+  stagger($('#impC'));
+  $('#iImp').onclick = () => importarPesajesUI(val);
+}
+
+async function importarPesajesUI(val) {
+  bloquear('Importando ' + val.length + ' pesajes…');
+  try {
+    const r = await escribir('importarPesajes', { filas: val }, 'Importación ' + S.imp.nombre);
+    if (!r.encolado) {
+      avisarInforme(r);
+      const fs = val.map(x => x.fecha).sort();
+      $('#impC').innerHTML = '<div class="alert ok mt">' + ICON.ok + '<div><b>Importación completa.</b> ' + r.nuevos + ' nuevos · ' + r.actualizados + ' actualizados · ' + r.total + ' pesajes en la base.</div></div>' +
+        '<div class="row"><a class="btn pri" href="#/tablero/viajes">' + ICON.tablero + 'Ver cruce viajes ↔ balanza</a>' + botonInforme('balanza', { desde: fs[0], hasta: fs[fs.length - 1] }, 'Informe de balanza') + '</div>';
+      enlazarInformes($('#impC'));
+    }
+  } catch (e) {
+    toast(e.message, 'bad', 8000);
+  } finally {
+    desbloquear();
+  }
 }
 
 function autoMapear(guardado) {
@@ -689,20 +747,9 @@ function pintarImport() {
   $('#iEnc').onchange = e => { S.imp.encab = Math.max(0, Number(e.target.value) - 1); autoMapear(null); pintarImport(); };
   $('#iUni').onchange = e => { S.imp.unidad = e.target.value; pintarImport(); };
   $$('[data-map]').forEach(s => { s.onchange = () => { S.imp.map[s.dataset.map] = s.value; pintarImport(); }; });
-  $('#iImp').onclick = async () => {
+  $('#iImp').onclick = () => {
     lsSet('tierra_mapeo_pesaje', { map: S.imp.map, unidad: S.imp.unidad });
-    bloquear('Importando ' + val.length + ' pesajes…');
-    try {
-      const r = await escribir('importarPesajes', { filas: val }, 'Importación ' + S.imp.nombre);
-      if (!r.encolado) {
-        $('#impC').innerHTML = '<div class="alert ok mt">' + ICON.ok + '<div><b>Importación completa.</b> ' + r.nuevos + ' nuevos · ' + r.actualizados + ' actualizados · ' + r.total + ' pesajes en la base.</div></div>' +
-          '<a class="btn pri" href="#/tablero/viajes">' + ICON.tablero + 'Ver cruce viajes ↔ balanza</a>';
-      }
-    } catch (e) {
-      toast(e.message, 'bad', 8000);
-    } finally {
-      desbloquear();
-    }
+    importarPesajesUI(val);
   };
 }
 
@@ -717,7 +764,7 @@ async function edMolienda(f, volver) {
   R.silo.forEach(s => { fila(s)[s.fuente === 'Manual' ? 'man' : 'inf'].silo = s.paladas; });
   const lista = Object.keys(filas).sort().reverse().map(k => filas[k]);
   const val = (r, k) => r.man[k] !== undefined && r.man[k] !== null ? r.man[k] : r.inf[k];
-  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos · Molienda</div><h1>Molienda y silo</h1><p class="sub">Se lee del Informe de Producción. Cargá solo para corregir un turno.</p></div></div></div>' +
+  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos · Molienda</div><h1>Molienda y silo</h1><p class="sub">Se lee del Informe de Producción. Cargá solo para corregir un turno.</p></div></div>' + botonInforme('molienda', { fecha: f }, 'Informe del día') + '</div>' +
     '<div class="grid g-21"><div class="card"><div class="card-h"><div class="t"><h3>Cargar turno</h3></div></div><div class="form"><label class="f">Fecha<input type="date" id="mF" value="' + f + '"></label><label class="f">Turno<div id="mTseg"></div></label>' +
     '<label class="f">Paladas al cajón alimentador<input type="number" min="0" id="mP" inputmode="numeric"></label><label class="f">Toneladas balanza dinámica<input type="number" step="0.1" min="0" id="mTon" inputmode="decimal"></label>' +
     '<label class="f">Paladas extraídas de silo<input type="number" min="0" id="mS" inputmode="numeric"></label><label class="f">t por palada<input id="mFac" disabled></label>' +
@@ -731,6 +778,7 @@ async function edMolienda(f, volver) {
       [r => '<button class="btn sm" data-me="' + r.fecha + '|' + r.turno + '">' + ICON.editar + '</button>' + (Object.keys(r.man).length ? ' <button class="btn sm dan" data-md="' + r.fecha + '|' + r.turno + '">' + ICON.borrar + '</button>' : ''), '']], lista) + '</div></div>';
   let turno = 'T2';
   segmento($('#mTseg'), [['T1', 'T1'], ['T2', 'T2'], ['T3', 'T3']], 'T2', k => { turno = k; }, true);
+  enlazarInformes(app());
   const fac = () => { const p = num($('#mP').value); const t = num($('#mTon').value); $('#mFac').value = p && t ? nf(t / p, 2) : ''; };
   $('#mP').oninput = fac;
   $('#mTon').oninput = fac;
@@ -744,6 +792,7 @@ async function edMolienda(f, volver) {
     if (p && t && (t / p < 1 || t / p > 10) && !(await confirmar('Factor fuera de rango', nf(t / p, 2) + ' t/palada es inusual. ¿Guardar igual?', 'Guardar'))) return;
     try {
       const r = await escribir('guardarMolienda', d, 'Molienda ' + d.fecha + ' ' + d.turno);
+      avisarInforme(r);
       if (!r.encolado) toast('Turno ' + d.turno + ' guardado', 'ok');
       edMolienda(d.fecha, volver);
     } catch (e) {
@@ -795,7 +844,7 @@ function pintarCalidad(volver, reg) {
   const colores = ['Rojiza', 'Marrón', 'Gris', 'Amarillenta', 'Negra', 'Mixta'];
   const defs = [['piedras', 'Piedras'], ['raices', 'Raíces / vegetal'], ['calcareo', 'Calcáreo / tosca'], ['humedadExcesiva', 'Humedad excesiva'], ['materialExtrano', 'Material extraño']];
   const vv = x => x === null || x === undefined ? '' : x;
-  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos</div><h1>' + (r.id ? 'Editar muestra' : 'Calidad de tierra') + '</h1><p class="sub">Inspección visual, ensayo de sedimentación y decisión sobre el viaje.</p></div></div></div>' +
+  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos</div><h1>' + (r.id ? 'Editar muestra' : 'Calidad de tierra') + '</h1><p class="sub">Inspección visual, ensayo de sedimentación y decisión sobre el viaje.</p></div></div>' + botonInforme('calidad', { fecha: c.fecha }, 'Informe del día') + '</div>' +
     '<div class="grid g-21"><div class="card"><div id="cErr"></div><div class="form"><label class="f">Fecha<input type="date" id="cF" value="' + c.fecha + '"></label><label class="f">Hora<input type="time" id="cH" value="' + esc(r.hora || '') + '"></label>' +
     '<label class="f w2">Vincular a un viaje del día<select id="cV"><option value="">— sin vincular —</option>' + c.viajes.map((v, i) => '<option value="' + i + '"' +
       (r.comprobante && r.comprobante === v.comprobante && normDom(r.dominio) === normDom(v.dominio) ? ' selected' : '') + '>' + esc(v.horaCarga + ' · ' + v.dominio + ' · ' + v.chofer + ' · comp. ' + v.comprobante) + '</option>').join('') + '</select></label>' +
@@ -842,6 +891,7 @@ function pintarCalidad(volver, reg) {
     ['cDom', 'cCh', 'cOr', 'cComp'].forEach(id => $('#' + id).classList.add('lleno'));
   };
   $('#cG').onclick = () => guardarCalidad(volver, defs);
+  enlazarInformes(app());
   if ($('#cN')) $('#cN').onclick = () => pintarCalidad(volver);
   app().onclick = async e => {
     const b = e.target.closest('button');
@@ -884,6 +934,7 @@ async function guardarCalidad(volver, defs) {
   defs.forEach(x => { d[x[0]] = $('#cd_' + x[0]).checked; });
   try {
     const r = await escribir('guardarCalidad', d, 'Calidad ' + d.fecha + ' ' + (d.dominio || d.origen));
+    avisarInforme(r);
     if (!r.encolado) toast('Muestra guardada', 'ok');
     edCalidad(d.fecha, volver);
   } catch (e) {
@@ -932,7 +983,7 @@ function edAjustes(volver) {
   const dens = { Playa: num(par('DENSIDAD_APARENTE', 1.6)) || 1.6, Silo: 1.3 };
   const bal = calcBalance(addDias(hoy(), -30), hoy());
   app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos · Molienda</div><h1>Cubicación y ajustes</h1><p class="sub">Stock calculado hoy: playa <b>' + nf(bal.stockPlaya, 0) + ' t</b> · silo <b>' + nf(bal.stockSilo, 0) + ' t</b></p></div></div>' +
-    '<button class="btn ghost" id="bGuiaCub">' + ICON.infoI + 'Guía de cubicación</button></div>' +
+    '<div class="row"><button class="btn ghost" id="bGuiaCub">' + ICON.infoI + 'Guía de cubicación</button>' + botonInforme('cubicacion', { fecha: hoy() }, 'Informe') + '</div></div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Calculadora de cubicación</h3><div class="sub">Cargá cada pila; la app suma volúmenes y los pasa a toneladas</div></div><div class="row"><button class="btn sm" id="cAdd">+ Agregar pila</button></div></div>' +
     '<div id="cPilas"></div><div class="form mt" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))"><label class="f">Densidad aparente (t/m³)<input id="cDen" type="number" step="0.01" value="' + dens.Playa + '"></label></div>' +
     '<div class="calc-res" id="cRes"></div></div>' +
@@ -943,6 +994,7 @@ function edAjustes(volver) {
     '<div class="row mt"><button class="btn pri" id="aG">' + ICON.guardar + 'Guardar ajuste</button></div></div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Registrados</h3></div></div>' + tabla([[r => fCorta(r.fecha), 'Fecha'], ['nodo', 'Nodo'], ['tipo', 'Tipo'], [r => nf(r.toneladas, 1), 't', 'n'], [r => esc(r.observaciones), 'Método', 'wrap'], [r => '<button class="btn icon sm dan" data-ax="' + r.id + '">' + ICON.borrar + '</button>', '']], lista) + '</div></div></div>';
   $('#bGuiaCub').onclick = abrirAyuda;
+  enlazarInformes(app());
   if (!lista.length) setTimeout(abrirAyuda, 400);
   let nodo = 'Playa';
   const conciliacion = () => {
@@ -1017,7 +1069,7 @@ function edAjustes(volver) {
     const d = { fecha: $('#aF').value, nodo: nodo, tipo: $('#aT').value, toneladas: $('#aV').value, observaciones: $('#aO').value };
     if (!d.fecha || d.toneladas === '') return toast('Fecha y toneladas requeridas', 'bad');
     try {
-      await escribir('guardarAjuste', d, 'Ajuste ' + d.nodo + ' ' + d.fecha);
+      avisarInforme(await escribir('guardarAjuste', d, 'Ajuste ' + d.nodo + ' ' + d.fecha));
       await cargarResumen(true);
       toast('Ajuste guardado', 'ok');
       edAjustes(volver);
@@ -1057,6 +1109,7 @@ async function edGasoil(f, volver) {
   rg.forEach(x => { lhMap[x.maquina + '|' + x.fecha + '|' + x.hora] = x; });
   app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos · Abastecimiento</div><h1>Gasoil de cantera</h1><p class="sub">Se graba en la planilla «Trabajo en Cantera».</p></div></div></div>' +
     (g.error ? '<div class="alert bad">' + ICON.alerta + '<div>' + esc(g.error) + '</div></div>' : '') +
+    '<div class="row" style="justify-content:flex-end;margin-bottom:12px">' + botonInforme('gasoil', { fecha: f }, 'Informe del día') + '</div>' +
     '<div class="grid g-21"><div class="card"><div class="card-h"><div class="t"><h3>Registrar</h3></div><div id="gModo"></div></div><div id="gForm"></div><div id="gChk" class="mt"></div>' +
     '<div class="row mt"><button class="btn pri" id="gG">' + ICON.guardar + 'Guardar</button></div></div>' +
     (cis ? gaugeCisterna(cis) : '<div class="card">' + vacio('No se pudo leer la cisterna.') + '</div>') + '</div>' +
@@ -1133,6 +1186,7 @@ async function edGasoil(f, volver) {
     if (pr) pr.focus();
   };
   segmento($('#gModo'), [['maquina', 'Carga a máquina'], ['cisterna', 'Llenado cisterna'], ['medicion', 'Medición']], modo, k => { modo = k; pintarForm(); }, true);
+  enlazarInformes(app());
   pintarForm();
   pintarTabla();
   $('#gG').onclick = async () => {
@@ -1159,6 +1213,7 @@ async function edGasoil(f, volver) {
     try {
       bloquear('Guardando en la planilla de cantera…');
       const r = await escribir(accion, d, (modo === 'medicion' ? 'Medición cisterna ' : 'Gasoil ') + (d.maquina || '') + ' ' + fe);
+      avisarInforme(r);
       desbloquear();
       if (!r.encolado) toast(modo === 'medicion' ? 'Medición guardada · diferencia ' + nf(r.diferencia, 0) + ' L' : 'Carga guardada', 'ok');
       S.resumenVencido = true;
