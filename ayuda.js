@@ -7,16 +7,16 @@ const AYUDA = {
     t: 'Inicio', que: 'Muestra el recorrido de la tierra: lo que se carga en cantera, lo que entra por balanza, lo que queda en la playa, lo que se muele y lo que hay en el silo.',
     pasos: ['Tocá una etapa del recorrido para ver su análisis.', '«Para revisar» junta los controles cruzados con observaciones de los últimos 14 días.', '«Estado de la carga» muestra qué fuente está atrasada (verde al día, amarillo atrasada, rojo sin datos).'],
     fuentes: true,
-    calc: [['Abastecimiento', 'cantera, gasoil, viajes y balanza de ingreso. Lo carga el responsable de abastecimiento.'], ['Molienda', 'playa, molienda, silo y cubicaciones. Lo carga el responsable de molienda.'], ['Playa', 'stock inicial o última cubicación + ingresos de balanza (sin rechazados) − consumo de molienda.'], ['Silo', 'lo que pasó por la balanza dinámica − paladas extraídas × factor del silo.']],
+    calc: [['Abastecimiento', 'cantera, gasoil, viajes y balanza de ingreso. Lo carga el responsable de abastecimiento.'], ['Molienda', 'playa, molienda, silo y ajustes de stock. Lo carga el responsable de molienda.'], ['Playa', 'stock inicial o última cubicación + ingresos de balanza (sin rechazados) − consumo de molienda.'], ['Silo', 'lo que pasó por la balanza dinámica − paladas extraídas × factor del silo.']],
     controles: '*'
   },
   'tablero/balance': {
     t: 'Balance de tierra', que: 'Cuánta tierra entró, cuánta se consumió y cuánta queda en playa y silo, día por día.',
-    pasos: ['Elegí el período arriba.', 'Tocá una barra para abrir el parte de ese día.', 'Compará las cubicaciones con el stock calculado en la tabla de inventario.'],
+    pasos: ['Elegí el período arriba.', 'Tocá una barra para abrir el parte de ese día.', 'Compará los ajustes de stock con lo calculado en la tabla de ajustes.'],
     controles: ['m_inventario', 'm_cubicacion', 'm_stock', 'm_cobertura', 'm_estimados']
   },
   'tablero/controles': {
-    t: 'Controles cruzados', que: 'La app compara datos que vienen de fuentes distintas (palas, viajes, balanza, gasoil, molienda, cubicaciones) para encontrar errores de carga, faltantes o desvíos.',
+    t: 'Controles cruzados', que: 'La app compara datos que vienen de fuentes distintas (palas, viajes, balanza, gasoil, molienda, ajustes de stock) para encontrar errores de carga, faltantes o desvíos.',
     pasos: ['Cada sector tiene su lista: abastecimiento arriba a la izquierda, molienda a la derecha.', 'Tocá un control para ver qué compara y la lista de registros a revisar.', '«Ir a revisar» te lleva a la pantalla donde se corrige.'],
     calc: [['Rojo', 'problema que cambia los números (stock imposible, horómetro mal, rechazos).'], ['Amarillo', 'diferencia a explicar (viajes sin ticket, tara distinta, factor fuera de rango).'], ['Azul', 'aviso o dato faltante para poder controlar.'], ['Verde', 'el control pasa.']],
     controles: '*'
@@ -49,7 +49,7 @@ const AYUDA = {
   cargar: {
     t: 'Cargar datos', que: 'Cada responsable ve solo los módulos de su sector.',
     fuentes: true,
-    calc: [['Abastecimiento', 'jornada de cantera, gasoil, viajes, balanza de ingreso y calidad.'], ['Molienda', 'turnos de molienda y silo, cubicaciones y ajustes de stock.'], ['Sin conexión', 'lo que guardes queda en el equipo y se envía solo al volver la señal (ver «pendientes» arriba).']]
+    calc: [['Abastecimiento', 'jornada de cantera, gasoil, viajes, balanza de ingreso y calidad.'], ['Molienda', 'turnos de molienda y silo y ajustes de stock.'], ['Sin conexión', 'lo que guardes queda en el equipo y se envía solo al volver la señal (ver «pendientes» arriba).']]
   },
   'cargar/jornada': {
     t: 'Jornada de cantera', sector: 'abastecimiento', que: 'Informe de trabajos de cantera: tramos de producción y paradas de cada máquina. Se graba en «Trabajo en Cantera» (hojas ProduccionCantera y MantenimientoCantera), igual que la app anterior.',
@@ -90,25 +90,25 @@ const AYUDA = {
     controles: ['m_atraso', 'm_factor', 'm_estimados']
   },
   'cargar/ajustes': {
-    t: 'Cubicación y ajustes', sector: 'molienda', que: 'El balance acumula pequeñas diferencias del factor t/palada. Una cubicación periódica las corrige y mide el error.',
+    t: 'Ajuste de stock', sector: 'molienda', que: 'Cargá cuánta tierra hay en la playa o el silo, en toneladas o en m³. La app convierte con la densidad y compara con lo calculado. Hace falta un primer ajuste (stock inicial) para que se vea el stock.',
     guia: [
-      ['Cuándo cubicar', 'Una vez por mes y cada vez que el balance se aleje de lo que se ve. Al cierre de un turno, sin palas trabajando. El ajuste fija el stock al inicio del día.'],
+      ['Cuándo medir', 'Una vez por mes y cada vez que el stock calculado se aleje de lo que se ve. Al cierre de un turno, sin palas trabajando. El ajuste fija el stock al inicio del día.'],
       ['Qué llevar', 'Cinta de 50 m o rueda medidora, regla de 3 m, celular con inclinómetro y un balde de volumen conocido.'],
       ['Pila cónica', 'Perímetro del pie con la cinta a ras del suelo. Si no se puede subir, medí el largo del talud y la app calcula la altura.<span class="formula">r = P / 2π · h = √(talud² − r²) · V = π·r²·h / 3</span>'],
       ['Pila alargada', 'Largo y ancho al pie, largo y ancho de la cresta y altura media. Cresta en filo: ancho 0.<span class="formula">V = h/6 · (A_pie + 4·A_media + A_cresta)</span>'],
       ['Pilas irregulares', 'Dividilas en tramos parecidos a un cono o a una pila alargada y cargá cada tramo como una pila.'],
       ['Densidad aparente', 'Balde lleno sin apretar, enrasado y pesado: (peso − tara) ÷ volumen. Promediá 3 pilas. Con lluvia sube. Alternativa: neto de un camión ÷ volumen de su caja enrasada.'],
       ['Drone o topografía', 'Lo más preciso (±2–3 %). Cargalo como «Volumen medido».'],
-      ['Precisión', 'Con cinta y fórmulas el error es de ±10 %: cubicá siempre con el mismo método y mirá la tendencia.']
+      ['Precisión', 'Con cinta y fórmulas el error es de ±10 %: medí siempre con el mismo método y mirá la tendencia.']
     ],
-    calc: [['Stock inicial / Cubicación', 'fijan el stock en ese valor al inicio del día.'], ['Corrección', 'suma o resta toneladas (negativo para restar).'], ['Diferencia de inventario', 'cubicado − calculado. Si se repite en el mismo sentido, ajustá DENSIDAD_APARENTE o el factor de silo.']],
+    calc: [['Lo que hay ahora / Stock inicial', 'fijan el stock en ese valor al inicio del día.'], ['Sumar / restar', 'suma o resta toneladas (negativo para restar).'], ['t ↔ m³', 'densidad = t por palada de molienda ÷ m³ del balde (M3_POR_PALADA).'], ['Diferencia', 'medido − calculado. Si se repite en el mismo sentido, revisá el t/palada o los ingresos.'], ['Sin dato', 'si el stock calculado da negativo, la app no lo muestra hasta el próximo ajuste.']],
     controles: ['m_cubicacion', 'm_inventario', 'm_stock']
   },
   liquidacion: { t: 'Liquidación a choferes', sector: 'abastecimiento', que: 'Viajes con «PAGAR = SI» por chofer y período, con la tarifa por origen.', calc: [['Tarifa', 'parámetro TARIFAS_VIAJE (ORIGEN=importe; …).'], ['Media jornada', 'si algún viaje del día tiene «Jornada completa = NO».']] },
   config: {
     t: 'Configuración', que: 'Catálogos, usuarios, correos, informes y parámetros. Solo administradores.',
     fuentes: true,
-    calc: [['Correos', 'cada destinatario marca qué informes recibe (cantera, viajes, balanza, gasoil, calidad, molienda, cubicación, resumen diario) y si va como Para, CC o CCO.'], ['Informes', '«Enviar al guardar» manda el informe solo cada vez que se carga ese dato. «Adjuntar PDF» agrega el PDF. El resumen diario sale todos los días a la hora INFORME_DIARIO_HORA.'], ['Roles', 'Administrador (todo), Responsable de abastecimiento (cantera, gasoil, viajes, balanza, calidad, liquidación) y Responsable de molienda (molienda, silo, cubicaciones).'], ['PIN', 'se guarda cifrado; dejá «Nuevo PIN» vacío para conservar el actual. 4 a 8 dígitos.'], ['IA de fotos', 'la clave va en Apps Script → Propiedades del script → GEMINI_API_KEY, nunca en Parámetros.'], ['Catálogos de viajes', 'choferes, dominios, lugares, tipos y responsables se guardan en la planilla original de viajes.']]
+    calc: [['Correos', 'cada destinatario marca qué informes recibe (cantera, viajes, balanza, gasoil, calidad, molienda, ajuste de stock, resumen diario, estado de playa, semanal, mensual y advertencias) y si va como Para, CC o CCO.'], ['Informes', '«Envío automático» manda el informe solo cada vez que se carga ese dato. El resumen diario sale a la hora INFORME_DIARIO_HORA, el semanal el día INFORME_SEMANAL_DIA y el mensual el día 1.'], ['Datos controlados', 'los informes diario, semanal y mensual solo salen si los datos están completos (stock con ajuste, balanza importada, molienda al día). Si no, quedan retenidos en Inicio y se avisa por mail a los marcados en «Advertencias».'], ['Roles', 'Administrador (todo), Responsable de abastecimiento (cantera, gasoil, viajes, balanza, calidad, liquidación) y Responsable de molienda (molienda, silo, ajustes de stock).'], ['PIN', 'se guarda cifrado; dejá «Nuevo PIN» vacío para conservar el actual. 4 a 8 dígitos.'], ['IA de fotos', 'la clave va en Apps Script → Propiedades del script → GEMINI_API_KEY, nunca en Parámetros.'], ['Catálogos de viajes', 'choferes, dominios, lugares, tipos y responsables se guardan en la planilla original de viajes.']]
   }
 };
 
@@ -118,7 +118,7 @@ const FUENTES_DATOS = [
   ['Viajes de camiones', 'Carga de viajes de tierra (respuestas) → Respuestas de formulario 1 (se lee ViajesUnificados)', 'Responsable de abastecimiento'],
   ['Balanza de ingreso', 'PESAJE.XLS del software de la balanza → hoja Pesajes de esta base', 'Abastecimiento (molienda también puede importar)'],
   ['Molienda y silo', 'Informe de Producción CMP → hoja Molienda (D paladas, G paladas de silo, J balanza dinámica)', 'Formulario de turno; correcciones: responsable de molienda'],
-  ['Cubicaciones y calidad', 'Base de Control de Tierra → Ajustes y Calidad', 'Molienda (cubicación) · abastecimiento (calidad)']
+  ['Ajustes de stock y calidad', 'Base de Control de Tierra → Ajustes y Calidad', 'Molienda (ajustes) · abastecimiento (calidad)']
 ];
 
 function claveAyuda() {
@@ -151,7 +151,7 @@ function htmlAyuda() {
     secc('Ahora conviene revisar', sug.map(x => '<a class="ay-sug ' + x.sev + '"' + (x.ruta ? ' href="' + x.ruta + '"' : '') + '><b>' + esc(x.t) + '</b>' + (x.d ? '<small>' + x.d + '</small>' : '') + '</a>').join('')) +
     secc('De dónde sale cada dato', def.fuentes ? '<dl>' + FUENTES_DATOS.map(x => '<dt>' + x[0] + '</dt><dd>' + x[1] + '<br><small>' + x[2] + '</small></dd>').join('') + '</dl>' : '') +
     secc('Cómo se usa', def.pasos ? '<ol>' + def.pasos.map(x => '<li>' + x + '</li>').join('') + '</ol>' : '') +
-    secc('Guía de cubicación', def.guia ? '<div class="guia-cub">' + def.guia.map((p, i) => '<div class="paso"><b><i>' + (i + 1) + '</i>' + p[0] + '</b><div>' + p[1] + '</div></div>').join('') + '</div>' : '') +
+    secc('Cómo medir una pila', def.guia ? '<div class="guia-cub">' + def.guia.map((p, i) => '<div class="paso"><b><i>' + (i + 1) + '</i>' + p[0] + '</b><div>' + p[1] + '</div></div>').join('') + '</div>' : '') +
     secc('Cómo se calcula', calc.length ? '<dl>' + calc.map(x => '<dt>' + x[0] + '</dt><dd>' + x[1] + '</dd>').join('') + '</dl>' : '') +
     secc('Consejos', def.tips ? '<ul>' + def.tips.map(x => '<li>' + x + '</li>').join('') + '</ul>' : '') +
     '</div>';

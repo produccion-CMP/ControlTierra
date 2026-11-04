@@ -3,7 +3,8 @@
 function avisarInforme(r) {
   const i = r && r.informe;
   if (!i || i.automatico === false) return;
-  if (i.error) toast('Se guardó, pero no se pudo enviar el informe: ' + i.error, 'warn', 8000);
+  if (i.retenido) toast('Se guardó. El informe quedó retenido: ' + i.motivo, 'warn', 9000);
+  else if (i.error) toast('Se guardó, pero no se pudo enviar el informe: ' + i.error, 'warn', 8000);
   else if (i.enviados) toast('Informe «' + i.asunto + '» enviado a ' + i.enviados + ' destinatario' + (i.enviados > 1 ? 's' : ''), 'ok', 6000);
   else if (i.motivo) toast('Informe no enviado: ' + i.motivo, 'info', 6000);
 }
@@ -37,7 +38,9 @@ async function abrirInforme(clave, datos) {
   }
   desbloquear();
   const lista = correos.map((c, i) => '<label class="chk dest"><input type="checkbox" data-ci="' + i + '"' + (c[clave] ? ' checked' : '') + '><span><b>' + esc(c.nombre || c.email) + '</b> <small>' + esc(c.email) + ' · ' + esc(c.tipo || 'PARA') + '</small></span></label>').join('');
-  const m = modal(inf.asunto, '<div class="inf-prev"><iframe title="Vista previa del informe" sandbox="" srcdoc="' + esc(inf.html) + '"></iframe></div>' +
+  const adv = (inf.advertencias || []).filter(a => a[0] === 'bad');
+  const aviso = inf.controlado && adv.length ? '<div class="alert warn" style="margin-bottom:10px">' + ICON.alerta + '<div><b>Los datos no están completos.</b> Este informe no se envía solo hasta corregirlo: ' + adv.map(a => esc(a[1])).join(' · ') + ' Si lo enviás ahora, va con estas advertencias.</div></div>' : '';
+  const m = modal(inf.asunto, aviso + '<div class="inf-prev"><iframe title="Vista previa del informe" sandbox="" srcdoc="' + esc(inf.html) + '"></iframe></div>' +
     '<div class="inf-dest"><h4>Enviar a</h4>' + (lista || '<p class="sub">No hay correos activos. Cargalos en Configuración → Correos.</p>') +
     '<label class="f mt">Otros correos (separados por coma)<input id="infOtros" placeholder="nombre@empresa.com"></label></div>', [
     { txt: 'Cerrar' },

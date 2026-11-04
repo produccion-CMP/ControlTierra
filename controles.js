@@ -147,11 +147,11 @@ function controles(r, b) {
     return { sev: 'warn', t: pl(mal.length, 'viaje superpuesto', 'viajes superpuestos'), d: 'Hay cargas que empiezan antes de terminar el viaje anterior.', ruta: '#/tablero/viajes', filas: mal, cols: cols.viaje.concat([['tipo', 'Motivo'], ['choque', 'Choca con']]) };
   });
 
-  add('a_palas', A, 'pala', 'Palas ↔ viajes', 'Camiones a planta que declaran las palas contra los viajes cargados.', () => {
+  add('a_palas', A, 'pala', 'Camiones declarados ↔ viajes', 'Camiones a planta que declaran las palas contra los viajes cargados.', () => {
     const difer = k.diario.filter(d => d.unid > 0 && Math.abs(d.unid - d.viajes) > Math.max(3, d.unid * 0.15));
-    if (!difer.length) return { sev: 'ok', t: 'Palas y viajes coinciden', d: 'Diferencias dentro de lo normal.' };
+    if (!difer.length) return { sev: 'ok', t: 'Cantera y viajes coinciden', d: 'Diferencias dentro de lo normal.' };
     const u = difer[difer.length - 1];
-    return { sev: 'warn', t: pl(difer.length, 'día', 'días') + ' con diferencia palas ↔ viajes', d: 'Ej. ' + fCorta(u.fecha) + ': ' + u.unid + ' declarados vs ' + u.viajes + ' viajes.', ruta: '#/tablero/viajes', filas: difer, cols: [[x => fCorta(x.fecha), 'Fecha'], ['unid', 'Palas a planta', 'n'], ['viajes', 'Viajes', 'n'], [x => x.unid - x.viajes, 'Diferencia', 'n']] };
+    return { sev: 'warn', t: pl(difer.length, 'día', 'días') + ' con diferencia cantera ↔ viajes', d: 'Ej. ' + fCorta(u.fecha) + ': ' + u.unid + ' declarados vs ' + u.viajes + ' viajes.', ruta: '#/tablero/viajes', filas: difer, cols: [[x => fCorta(x.fecha), 'Fecha'], ['unid', 'Declarados en cantera', 'n'], ['viajes', 'Viajes', 'n'], [x => x.unid - x.viajes, 'Diferencia', 'n']] };
   });
 
   add('a_carga', A, 'pala', 'Carga real de los camiones', 'Toneladas de balanza por palada declarada en cantera, comparado con el factor de molienda.', () => {
@@ -243,17 +243,17 @@ function controles(r, b) {
 
   add('m_atraso', Mo, 'reloj', 'Molienda al día', 'Que el Informe de Producción o la carga manual tengan los turnos hasta ayer.', atraso('molienda', 'Molienda', '#/cargar/molienda'));
 
-  add('m_cubicacion', Mo, 'ajuste', 'Cubicación periódica', 'Cubicar la playa al menos cada ' + diasCub + ' días para corregir el balance.', () => {
-    if (!b.hayAjuste) return { sev: 'warn', t: 'Sin stock inicial ni cubicación', d: 'Los stocks se calculan desde cero. Cargá una cubicación.', ruta: '#/cargar/ajustes' };
+  add('m_cubicacion', Mo, 'ajuste', 'Ajuste de stock periódico', 'Medir la playa al menos cada ' + diasCub + ' días para corregir el balance.', () => {
+    if (!b.hayAjuste) return { sev: 'warn', t: 'Sin stock inicial ni ajuste', d: 'Sin un ajuste no se puede saber el stock. Cargá cuánta tierra hay en la playa.', ruta: '#/cargar/ajustes' };
     const f = ult.cubicacion;
     const dd = f ? difDias(f, hoy()) : null;
-    if (dd === null || dd > diasCub) return { sev: 'warn', t: f ? 'Última cubicación hace ' + dd + ' días' : 'Sin cubicaciones de playa', d: 'Conviene cubicar cada ' + diasCub + ' días.', ruta: '#/cargar/ajustes' };
-    return { sev: 'ok', t: 'Cubicación reciente (' + fMedia(f) + ')', d: 'Hace ' + dd + ' días.' };
+    if (dd === null || dd > diasCub) return { sev: 'warn', t: f ? 'Último ajuste hace ' + dd + ' días' : 'Sin ajustes de playa', d: 'Conviene medir cada ' + diasCub + ' días.', ruta: '#/cargar/ajustes' };
+    return { sev: 'ok', t: 'Ajuste reciente (' + fMedia(f) + ')', d: 'Hace ' + dd + ' días.' };
   });
 
-  add('m_inventario', Mo, 'playa', 'Diferencia de inventario', 'Diferencia entre la cubicación y el stock calculado en ese momento (tolerancia ' + nf(tolInv * 100) + ' %).', () => {
+  add('m_inventario', Mo, 'playa', 'Diferencia en los ajustes', 'Diferencia entre lo medido y el stock calculado en ese momento (tolerancia ' + nf(tolInv * 100) + ' %).', () => {
     const cub = (b.cubicaciones || []).filter(c => c.teorico !== null);
-    if (!cub.length) return { sev: 'info', t: 'Sin cubicaciones para comparar', d: 'Con dos o más cubicaciones se mide la diferencia de inventario.' };
+    if (!cub.length) return { sev: 'info', t: 'Sin ajustes para comparar', d: 'Con dos o más ajustes de stock se mide la diferencia.' };
     const u = cub[cub.length - 1];
     const sev = Math.abs(u.pct) > tolInv * 2 ? 'bad' : Math.abs(u.pct) > tolInv ? 'warn' : 'ok';
     return {
@@ -267,16 +267,18 @@ function controles(r, b) {
     const capP = num(par('CAPACIDAD_PLAYA', '')) || null;
     const capS = num(par('CAPACIDAD_SILO', '')) || null;
     const mal = [];
-    if (b.stockPlaya < 0) mal.push('Playa negativa (' + nf(b.stockPlaya, 0) + ' t)');
-    if (b.stockSilo < 0) mal.push('Silo negativo (' + nf(b.stockSilo, 0) + ' t)');
+    if (!b.inicioPlaya) return { sev: 'warn', t: 'Playa sin stock inicial', d: 'Sin un ajuste de stock no se puede saber cuánta tierra hay.', ruta: '#/cargar/ajustes' };
+    if (b.stockPlaya === null) mal.push('El stock de playa da negativo desde el ' + fCorta(b.playaInvalidaDesde) + ': faltan ingresos o un ajuste');
+    if (b.inicioSilo && b.stockSilo === null) mal.push('El stock de silo da negativo desde el ' + fCorta(b.siloInvalidoDesde));
     if (capP && b.stockPlaya > capP) mal.push('Playa sobre su capacidad');
     if (capS && b.stockSilo > capS) mal.push('Silo sobre su capacidad');
-    if (!mal.length) return { sev: 'ok', t: 'Stocks dentro de lo posible', d: 'Playa ' + nf(b.stockPlaya, 0) + ' t · silo ' + nf(b.stockSilo, 0) + ' t.' };
-    return { sev: 'bad', t: mal.join(' · '), d: 'Cargá una cubicación o revisá el factor t/palada.', ruta: '#/cargar/ajustes' };
+    if (!mal.length) return { sev: 'ok', t: 'Stocks dentro de lo posible', d: 'Playa ' + nf(b.stockPlaya, 0) + ' t (≈ ' + nf(b.stockPlaya / b.densidad, 0) + ' m³)' + (b.stockSilo !== null ? ' · silo ' + nf(b.stockSilo, 0) + ' t' : '') + '.' };
+    return { sev: 'bad', t: mal.join(' · '), d: 'Cargá un ajuste de stock o revisá el factor t/palada.', ruta: '#/cargar/ajustes' };
   });
 
   add('m_cobertura', Mo, 'molienda', 'Días de cobertura', 'Cuántos días de molienda alcanza la tierra de la playa y del silo.', () => {
     if (!b.consumoMedio) return { sev: 'info', t: 'Sin consumo para estimar cobertura', d: 'Faltan turnos de molienda recientes.' };
+    if (b.stockPlaya === null) return { sev: 'info', t: 'Sin stock válido para estimar cobertura', d: 'Cargá un ajuste de stock de playa.', ruta: '#/cargar/ajustes' };
     const dp = b.diasPlaya;
     const ds = b.diasSilo;
     const txt = 'Playa: ' + nf(dp, 1) + ' días' + (ds !== null ? ' · Silo: ' + nf(ds, 1) + ' días' : '');

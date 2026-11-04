@@ -193,8 +193,7 @@ function cicloQV(x) {
   if (a === null || b === null) return { txt: '', cls: '', min: null };
   let m = b - a;
   if (m < 0) m += 1440;
-  if (b < a && !(a >= 1020 && b <= 360)) return { txt: 'descarga antes de carga', cls: 'mal', min: null };
-  return { txt: (m >= 60 ? Math.floor(m / 60) + ' h ' : '') + (m % 60) + ' min', cls: m > 240 ? 'adv' : '', min: m };
+  return { txt: (m >= 60 ? Math.floor(m / 60) + ' h ' : '') + (m % 60) + ' min' + (b < a ? ' (pasa la medianoche)' : ''), cls: m > 240 || (b < a && m > 480) ? 'adv' : '', min: m };
 }
 
 function ticketsUsadosDia(excluir) {
@@ -518,12 +517,11 @@ function validarQV() {
     if (!x.c) marca(q('c'), 'hora de carga del viaje ' + (i + 1));
     if (!x.d) marca(q('d'), 'hora de descarga del viaje ' + (i + 1));
     const ci = cicloQV(x);
-    if (ci.cls === 'mal') marca(q('d'), 'viaje ' + (i + 1) + ': descarga antes de la carga');
-    if (ci.cls === 'adv') adv.push('Viaje ' + (i + 1) + ': ciclo de ' + ci.txt);
+    if (ci.cls === 'adv') adv.push('Viaje ' + (i + 1) + ': ciclo de ' + ci.txt + '. ¿Está bien la hora?');
     if (!x.c) return;
     let a = minDe(x.c) + off;
     if (prev !== null && a < prev.c && prev.c - a > 600) { off += 1440; a += 1440; }
-    if (prev !== null && a < prev.d - 10) marca(q('c'), 'viaje ' + (i + 1) + ': carga antes de la descarga del viaje anterior');
+    if (prev !== null && a < prev.d - 10) adv.push('Viaje ' + (i + 1) + ': la carga (' + x.c + ') es antes de la descarga del viaje anterior');
     let d = minDe(x.d || x.c) + off;
     if (d < a) d += 1440;
     prev = { c: a, d: d };

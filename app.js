@@ -13,17 +13,29 @@ function pintarSesion() {
   b.classList.toggle('pri', !S.ses);
 }
 
+async function listaUsuarios() {
+  try {
+    const l = await api('usuarios');
+    if (Array.isArray(l) && l.length) lsSet('tierra_usuarios', l);
+    return l;
+  } catch (e) {
+    return lsGet('tierra_usuarios', []);
+  }
+}
+
 function login(destino) {
   const ult = lsGet('tierra_ultimo_usuario', '');
-  const m = modal('Ingresar para cargar datos', '<div class="col" style="gap:12px"><label class="f">Usuario<input id="lgN" autocomplete="username" value="' + esc(ult) + '"></label>' +
-    '<label class="f">PIN<input id="lgP" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8"></label><div id="lgE"></div>' +
+  const cache = lsGet('tierra_usuarios', []);
+  const opcs = l => '<option value="">Elegí tu usuario…</option>' + l.map(u => '<option value="' + esc(u.nombre) + '"' + (normTxt(u.nombre) === normTxt(ult) ? ' selected' : '') + '>' + esc(u.nombre) + ' · ' + esc(rolTxt(u.rol)) + '</option>').join('');
+  const m = modal('Ingresar para cargar datos', '<div class="col" style="gap:12px"><label class="f">Usuario<select id="lgN" autocomplete="username">' + opcs(cache) + '</select></label>' +
+    '<label class="f">Contraseña<input id="lgP" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8"></label><div id="lgE"></div>' +
     '<p class="sub">El inicio, el tablero y el calendario son públicos. La carga y la configuración requieren usuario.</p></div>', [
     { txt: 'Cancelar' },
     {
       txt: 'Ingresar', cls: 'pri', fn: async mm => {
         const n = $('#lgN', mm).value.trim();
         const p = $('#lgP', mm).value.trim();
-        if (!n || !p) { $('#lgE', mm).innerHTML = '<div class="alert bad">' + ICON.alerta + '<div>Completá usuario y PIN</div></div>'; return false; }
+        if (!n || !p) { $('#lgE', mm).innerHTML = '<div class="alert bad">' + ICON.alerta + '<div>' + (n ? 'Escribí la contraseña' : 'Elegí tu usuario') + '</div></div>'; return false; }
         try {
           const s = await api('login', { nombre: n, pin: p });
           lsSet('tierra_ultimo_usuario', n);
@@ -41,9 +53,17 @@ function login(destino) {
       }
     }
   ]);
-  setTimeout(() => { const pi = $('#lgP', m); if (pi && ult) pi.focus(); }, 80);
+  listaUsuarios().then(l => {
+    const sel = $('#lgN', m);
+    if (!sel || !l || !l.length) return;
+    const v = sel.value;
+    sel.innerHTML = opcs(l);
+    if (v) sel.value = v;
+    if (sel.value) $('#lgP', m).focus();
+  });
+  setTimeout(() => { const pi = $('#lgP', m); if (pi && $('#lgN', m).value) pi.focus(); }, 80);
   $('#lgP', m).addEventListener('keydown', e => { if (e.key === 'Enter') $$('.btn.pri', m).pop().click(); });
-  $('#lgN', m).addEventListener('keydown', e => { if (e.key === 'Enter') $('#lgP', m).focus(); });
+  $('#lgN', m).addEventListener('change', () => $('#lgP', m).focus());
 }
 
 function menuSesion() {
@@ -242,8 +262,8 @@ const DEF_CONFIG = {
   Responsables: { t: 'Responsables', c: [['nombre', 'Nombre'], ['activo', 'Activo', 'bool']], orig: 'RESPONSABLE' },
   Usuarios: { t: 'Usuarios', c: [['nombre', 'Usuario'], ['rol', 'Rol', 'sel', ['abastecimiento', 'molienda', 'admin'], ROL_TXT], ['activo', 'Activo', 'bool'], ['pin', 'Nuevo PIN', 'pin']] },
   Correos: { t: 'Correos', c: [['nombre', 'Nombre'], ['email', 'Email'], ['tipo', 'Tipo', 'sel', ['PARA', 'CC', 'CCO']], ['activo', 'Activo', 'bool'], ['rJornada', 'Cantera', 'bool'], ['rViajes', 'Viajes', 'bool'], ['rBalanza', 'Balanza', 'bool'],
-    ['rGasoil', 'Gasoil', 'bool'], ['rCalidad', 'Calidad', 'bool'], ['rMolienda', 'Molienda', 'bool'], ['rCubicacion', 'Cubicación', 'bool'], ['rDiario', 'Resumen diario', 'bool']] },
-  Informes: { t: 'Informes', c: [['nombre', 'Informe', 'ro'], ['automatico', 'Enviar al guardar', 'bool'], ['pdf', 'Adjuntar PDF', 'bool'], ['descripcion', 'Qué contiene', 'ro']], fijo: true },
+    ['rGasoil', 'Gasoil', 'bool'], ['rCalidad', 'Calidad', 'bool'], ['rMolienda', 'Molienda', 'bool'], ['rCubicacion', 'Ajuste de stock', 'bool'], ['rDiario', 'Resumen diario', 'bool'], ['rPlaya', 'Estado de playa', 'bool'], ['rSemanal', 'Semanal', 'bool'], ['rMensual', 'Mensual', 'bool'], ['rAlertas', 'Advertencias', 'bool']] },
+  Informes: { t: 'Informes', c: [['nombre', 'Informe', 'ro'], ['automatico', 'Envío automático', 'bool'], ['pdf', 'Adjuntar PDF', 'bool'], ['descripcion', 'Qué contiene', 'ro']], fijo: true },
   Parametros: { t: 'Parámetros', c: [['clave', 'Clave', 'ro'], ['valor', 'Valor'], ['descripcion', 'Descripción', 'ro']], fijo: true }
 };
 
@@ -309,6 +329,7 @@ function iniciar() {
   aplicarTema(lsGet('tierra_tema', ''));
   iniciarTips();
   iniciarAyuda();
+  iniciarClima();
   $('#btnTema').onclick = cambiarTema;
   const s = lsGet('tierra_ses', null);
   if (s && s.vence > Date.now()) S.ses = s;
@@ -335,7 +356,9 @@ function iniciar() {
   pintarSesion();
   pintarCola();
   red();
+  if (location.hash.replace(/^#\/?/, '').split('/')[0] !== 'inicio') history.replaceState(null, '', '#/inicio');
   render();
+  setTimeout(listaUsuarios, 1500);
   setInterval(() => { if (S.ses && S.ses.vence < Date.now()) { setSesion(null); toast('La sesión venció', 'warn'); } }, 60000);
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(e => console.warn(e));
 }

@@ -7,7 +7,7 @@ const MODULOS = [
   ['pesaje', 'Balanza de ingreso', 'Importar el PESAJE.XLS para cruzarlo con los viajes.', 'balanza', 2, 'pesajes', 'abastecimiento'],
   ['calidad', 'Calidad de tierra', 'Inspección visual, ensayo arcilla/limo/arena y decisión por viaje.', 'calidad', 5, 'calidad', 'abastecimiento'],
   ['molienda', 'Molienda y silo', 'Se lee del Informe de Producción; acá se corrige un turno.', 'molienda', 7, 'molienda', 'molienda'],
-  ['ajustes', 'Cubicación y ajustes', 'Cubicar playa y silo y comparar con el stock calculado.', 'ajuste', 4, 'cubicacion', 'molienda']
+  ['ajustes', 'Ajuste de stock', 'Cargar cuánta tierra hay en playa o silo, en t o m³.', 'ajuste', 4, 'cubicacion', 'molienda']
 ];
 
 async function vCargar(mod, arg) {
@@ -177,11 +177,52 @@ function sugerirHorometro(valor, previo) {
   return best;
 }
 
+function aprenderPatrones(tramos) {
+  const pat = lsGet('tierra_patron', {});
+  const porMaq = {};
+  tramos.filter(t => t.tipo === 'Producción' && parseHora(t.horaInicio) && parseHora(t.horaFin)).forEach(t => {
+    const k = t.maquina;
+    if (!k) return;
+    (porMaq[k] = porMaq[k] || {})[parseHora(t.horaInicio) + '-' + parseHora(t.horaFin)] = ((porMaq[k] || {})[parseHora(t.horaInicio) + '-' + parseHora(t.horaFin)] || 0) + 1;
+  });
+  Object.keys(porMaq).forEach(k => {
+    const prev = pat[k] || {};
+    Object.keys(prev).forEach(x => { prev[x] = prev[x] * 0.7; });
+    Object.keys(porMaq[k]).forEach(x => { prev[x] = (prev[x] || 0) + porMaq[k][x]; });
+    const top = Object.keys(prev).sort((a, b) => prev[b] - prev[a]).slice(0, 6);
+    pat[k] = {};
+    top.forEach(x => { pat[k][x] = Math.round(prev[x] * 100) / 100; });
+  });
+  lsSet('tierra_patron', pat);
+}
+
+function patronesMaq(nombre) {
+  const p = lsGet('tierra_patron', {})[nombre] || {};
+  const l = Object.keys(p).sort((a, b) => p[b] - p[a]).slice(0, 3);
+  return (l.length ? l : ['06:00-14:00', '14:00-22:00']).sort();
+}
+
+function duracionHabitual(nombre) {
+  const d = patronesMaq(nombre).map(x => { const h = x.split('-'); return (((minDe(h[1]) - minDe(h[0])) + 1440) % 1440) || 1440; }).sort((a, b) => a - b);
+  return d.length ? d[Math.floor(d.length / 2)] : 480;
+}
+
+function botonesTramo(mi) {
+  const m = S.ed.maqs[mi];
+  const usados = S.ed.t[mi].map(t => [linMin(t.horaInicio), linMin(t.horaFin, true)]);
+  const libre = x => { const h = x.split('-'); const a = minDe(h[0]); const b = minDe(h[1]) || 1440; return !usados.some(u => u[0] !== null && u[1] !== null && a < u[1] && b > u[0]); };
+  return patronesMaq(m.nombre).filter(libre).map(x => '<button class="btn sm" data-add="' + mi + '" data-h="' + x + '" title="Horario habitual de esta máquina; después se puede cambiar">+ ' + x.replace('-', '–') + '</button>').join('') +
+    '<button class="btn sm" data-add="' + mi + '" data-h="" title="Empieza donde terminó el tramo anterior">+ Tramo</button><button class="btn sm dan" data-add="' + mi + '" data-par="1">+ Parada</button>';
+}
+
 async function edJornada(f, volver) {
   app().innerHTML = '<div class="vista"><div class="card"><div class="skel" style="height:60px"></div></div><div class="card"><div class="skel" style="height:220px"></div></div></div>';
   const ok = vivo();
+  const hist = api('rango', { desde: addDias(f, -21), hasta: addDias(f, -1) }).catch(() => null);
   const j = await api('jornada', { fecha: f });
   if (!ok()) return;
+  try { const h = await hist; if (h && h.tramos) aprenderPatrones(h.tramos); } catch (e) { console.warn(e); }
+  if (j.tramos.length) aprenderPatrones(j.tramos);
   const maqs = activos('Maquinas').map(m => ({ nombre: m.nombre, tipo: m.tipo }));
   j.tramos.forEach(t => { if (!maqs.some(m => m.nombre === t.maquina)) maqs.push({ nombre: t.maquina, tipo: maqInfo(t.maquina).tipo }); });
   const t = maqs.map(m => j.tramos.filter(x => x.maquina === m.nombre)
@@ -245,14 +286,13 @@ function pintarEditor() {
     const resumen = tramos.length ? (tipoM === 'pala' ? sum(prod, x => num(x.unidadesCargadas) || 0) + ' a planta · ' + sum(prod, x => num(x.viajesInternos) || 0) + ' internos · ' : '') + tramos.length + ' tramo(s)' : 'sin actividad';
     return '<div class="maq" style="animation-delay:' + mi * 60 + 'ms"><div class="maq-h"><div class="t"><span class="ic">' + (tipoM === 'topadora' ? ICON.topadora : ICON.pala) + '</span><div><b>' + esc(m.nombre) + '</b> <span class="tag t-acc">' + esc(m.tipo) + '</span><div class="sub" id="res-' + mi + '">' + resumen +
       (S.ed.previos[m.nombre] ? ' · último horómetro ' + nf(S.ed.previos[m.nombre], 1) : '') + '</div></div></div><div class="row">' +
-      '<button class="btn sm" data-add="' + mi + '" data-h="04:00-14:00">+ 04–14</button><button class="btn sm" data-add="' + mi + '" data-h="06:00-14:00">+ 06–14</button><button class="btn sm" data-add="' + mi + '" data-h="14:00-22:00">+ 14–22</button>' +
-      '<button class="btn sm" data-add="' + mi + '" data-h="">+ Tramo</button><button class="btn sm dan" data-add="' + mi + '" data-par="1">+ Parada</button></div>' + (tramos.length ? '<div style="flex-basis:100%" id="pista-' + mi + '">' + pistaMaq(mi) + '</div>' : '') + '</div>' +
+      botonesTramo(mi) + '</div>' + (tramos.length ? '<div style="flex-basis:100%" id="pista-' + mi + '">' + pistaMaq(mi) + '</div>' : '') + '</div>' +
       tramos.map((t, i) => {
         const id = k => 'e-' + mi + '-' + i + '-' + k;
         const d = k => 'data-m="' + mi + '" data-i="' + i + '" data-k="' + k + '" id="' + id(k) + '"';
         let campos = '<label class="f">Régimen<select ' + d('tipo') + '>' + opts(['Producción', 'Parada'], t.tipo, null) + '</select></label>' +
-          '<label class="f">Inicio<input type="time" ' + d('horaInicio') + ' value="' + esc(t.horaInicio) + '"></label>' +
-          '<label class="f">Fin<input type="time" ' + d('horaFin') + ' value="' + esc(t.horaFin) + '"></label>';
+          '<label class="f">Inicio' + inputHora(d('horaInicio'), t.horaInicio) + '</label>' +
+          '<label class="f">Fin' + inputHora(d('horaFin'), t.horaFin) + '</label>';
         if (t.tipo === 'Producción') {
           const sug = sugerirHorometro(t.horometroIni, horPrevio(mi, i));
           campos += '<label class="f">Operador<select ' + d('operador') + '>' + opts(aptos, t.operador) + '</select></label>' +
@@ -328,7 +368,7 @@ function refrescarAuto(mi, i) {
 function onEdInput(e) {
   const el = e.target;
   const k = el.dataset.k;
-  if (!k || k === 'personalMulti' || el.tagName === 'SELECT' || el.type === 'time') return;
+  if (!k || k === 'personalMulti' || el.tagName === 'SELECT' || el.classList.contains('hora')) return;
   const mi = Number(el.dataset.m);
   const i = Number(el.dataset.i);
   const t = S.ed.t[mi][i];
@@ -407,6 +447,10 @@ function onEdClick(e) {
     let hi = ult ? ult.horaFin : '';
     let hf = '';
     if (b.dataset.h) { hi = b.dataset.h.split('-')[0]; hf = b.dataset.h.split('-')[1]; }
+    else {
+      if (!hi) hi = patronesMaq(S.ed.maqs[mi].nombre)[0].split('-')[0];
+      if (!b.dataset.par && minDe(hi) !== null) hf = hDe(Math.min(minDe(hi) + duracionHabitual(S.ed.maqs[mi].nombre), 1440) % 1440);
+    }
     const nt = nuevoTramo(b.dataset.par ? 'Parada' : 'Producción', hi, hf);
     if (nt.tipo === 'Producción') nt.horometroIni = horPrevio(mi, lista.length);
     lista.push(nt);
@@ -468,11 +512,14 @@ function validarJornada() {
     lista.forEach((t, i) => {
       if (!t.horaInicio) marcar(mi, i, 'horaInicio', 'falta hora de inicio');
       if (!t.horaFin) marcar(mi, i, 'horaFin', 'falta hora de fin');
+      if (t.horaInicio && parseHora(t.horaInicio) === null) marcar(mi, i, 'horaInicio', 'hora de inicio inválida (HH:MM)');
+      if (t.horaFin && parseHora(t.horaFin) === null) marcar(mi, i, 'horaFin', 'hora de fin inválida (HH:MM)');
       const a = linMin(t.horaInicio, false);
-      const b = linMin(t.horaFin, true);
-      if (t.horaInicio && t.horaFin) {
-        if (b <= a) marcar(mi, i, 'horaFin', 'el fin debe ser posterior al inicio');
+      let b = linMin(t.horaFin, true);
+      if (a !== null && b !== null) {
+        if (b === a) marcar(mi, i, 'horaFin', 'el tramo no tiene duración');
         else {
+          if (b < a) { b += 1440; avisos.push(S.ed.maqs[mi].nombre + ' · tramo ' + (i + 1) + ': termina después de la medianoche (' + t.horaInicio + ' → ' + t.horaFin + ')'); }
           intervalos.forEach(x => { if (a < x[1] && b > x[0]) marcar(mi, i, 'horaInicio', 'se superpone con el tramo ' + (x[2] + 1)); });
           intervalos.push([a, b, i]);
         }
@@ -530,6 +577,7 @@ async function guardarJornada() {
     lsDel('tierra_borrador_' + S.ed.fecha);
     S.ed.sucio = false;
     if (!r.encolado) {
+      aprenderPatrones([].concat.apply([], S.ed.maqs.map((m, mi) => S.ed.t[mi].map(t => Object.assign({}, t, { maquina: m.nombre })))));
       toast('Jornada guardada: ' + r.guardados + ' tramo(s)', 'ok');
       location.hash = '#/dia/' + S.ed.fecha;
     }
@@ -753,6 +801,17 @@ function pintarImport() {
   };
 }
 
+function resumenMolienda() {
+  const h = ((S.resumen || {}).ultimo || {}).molienda || hoy();
+  const b = calcBalance(addDias(h, -6), h);
+  const it = (l, v, d, cls) => '<div class="' + (cls || '') + '"><div class="l">' + l + '</div><div class="v">' + v + '</div><div class="s">' + d + '</div></div>';
+  return '<div class="card"><div class="card-h"><div class="t"><h3>Cómo está la tierra</h3><div class="sub">7 días al ' + fCorta(h) + '</div></div><a class="btn sm" href="#/cargar/ajustes">Ajustar stock</a></div><div class="ajuste-res" style="grid-template-columns:1fr 1fr">' +
+    it('Playa', b.stockPlaya === null ? 'sin dato' : nf(b.stockPlaya, 0) + ' t', b.stockPlaya === null ? 'cargá un ajuste de stock' : '≈ ' + nf(b.stockPlaya / b.densidad, 0) + ' m³' + (b.diasPlaya !== null ? ' · ' + nf(b.diasPlaya, 1) + ' días' : ''), b.stockPlaya === null ? 'bad' : '') +
+    it('Silo', b.stockSilo === null ? 'sin dato' : nf(b.stockSilo, 0) + ' t', b.stockSilo === null ? 'cargá un ajuste del silo' : '≈ ' + nf(b.stockSilo / b.densidad, 0) + ' m³') +
+    it('Molido', nf(b.consumo, 0) + ' t', '≈ ' + nf(b.consumo / b.densidad, 0) + ' m³ · ' + nf(b.molPal) + ' paladas') +
+    it('t por palada', nf(b.fMol, 2), nf(b.densidad, 2) + ' t/m³') + '</div></div>';
+}
+
 async function edMolienda(f, volver) {
   app().innerHTML = '<div class="vista"><div class="card"><div class="skel" style="height:200px"></div></div></div>';
   const ok = vivo();
@@ -764,13 +823,13 @@ async function edMolienda(f, volver) {
   R.silo.forEach(s => { fila(s)[s.fuente === 'Manual' ? 'man' : 'inf'].silo = s.paladas; });
   const lista = Object.keys(filas).sort().reverse().map(k => filas[k]);
   const val = (r, k) => r.man[k] !== undefined && r.man[k] !== null ? r.man[k] : r.inf[k];
-  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos · Molienda</div><h1>Molienda y silo</h1><p class="sub">Se lee del Informe de Producción. Cargá solo para corregir un turno.</p></div></div>' + botonInforme('molienda', { fecha: f }, 'Informe del día') + '</div>' +
+  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos · Molienda</div><h1>Molienda y silo</h1><p class="sub">Los turnos llegan solos del Informe de Producción. Cargá acá solo si falta un turno o hay que corregirlo.</p></div></div>' + botonInforme('molienda', { fecha: f }, 'Informe del día') + '</div>' +
     '<div class="grid g-21"><div class="card"><div class="card-h"><div class="t"><h3>Cargar turno</h3></div></div><div class="form"><label class="f">Fecha<input type="date" id="mF" value="' + f + '"></label><label class="f">Turno<div id="mTseg"></div></label>' +
     '<label class="f">Paladas al cajón alimentador<input type="number" min="0" id="mP" inputmode="numeric"></label><label class="f">Toneladas balanza dinámica<input type="number" step="0.1" min="0" id="mTon" inputmode="decimal"></label>' +
     '<label class="f">Paladas extraídas de silo<input type="number" min="0" id="mS" inputmode="numeric"></label><label class="f">t por palada<input id="mFac" disabled></label>' +
     '<label class="f full">Observaciones<input id="mO"></label></div><div class="row mt"><button class="btn pri" id="mG">' + ICON.guardar + 'Guardar turno</button></div></div>' +
-    '<div class="card"><div class="card-h"><div class="t"><h3>Vinculado al Informe de Producción</h3><div class="sub">Se lee en vivo de la hoja «' + esc(par('INFORME_HOJA', 'Molienda')) + '»</div></div></div>' +
-    '<div class="col sub"><span><b>D</b> · paladas que ingresan a molienda</span><span><b>G</b> · paladas del silo a producción</span><span><b>J</b> · toneladas de balanza dinámica (molienda → silo)</span></div></div></div>' +
+    (rolN(S.ses.rol) === 'admin' ? '<div class="card"><div class="card-h"><div class="t"><h3>Vinculado al Informe de Producción</h3><div class="sub">Se lee en vivo de la hoja «' + esc(par('INFORME_HOJA', 'Molienda')) + '»</div></div></div>' +
+    '<div class="col sub"><span><b>D</b> · paladas que ingresan a molienda</span><span><b>G</b> · paladas del silo a producción</span><span><b>J</b> · toneladas de balanza dinámica (molienda → silo)</span></div></div>' : resumenMolienda()) + '</div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Últimos 14 días</h3></div></div>' +
     tabla([[r => fMedia(r.fecha), 'Fecha'], ['turno', 'Turno'], [r => nf(val(r, 'pal')), 'Pal. cajón', 'n'], [r => nf(val(r, 't'), 1), 't bal. din.', 'n'],
       [r => { const p = val(r, 'pal'); const t = val(r, 't'); return p && t ? nf(t / p, 2) : '–'; }, 't/palada', 'n'], [r => nf(val(r, 'silo')), 'Pal. silo', 'n'],
@@ -845,7 +904,7 @@ function pintarCalidad(volver, reg) {
   const defs = [['piedras', 'Piedras'], ['raices', 'Raíces / vegetal'], ['calcareo', 'Calcáreo / tosca'], ['humedadExcesiva', 'Humedad excesiva'], ['materialExtrano', 'Material extraño']];
   const vv = x => x === null || x === undefined ? '' : x;
   app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos</div><h1>' + (r.id ? 'Editar muestra' : 'Calidad de tierra') + '</h1><p class="sub">Inspección visual, ensayo de sedimentación y decisión sobre el viaje.</p></div></div>' + botonInforme('calidad', { fecha: c.fecha }, 'Informe del día') + '</div>' +
-    '<div class="grid g-21"><div class="card"><div id="cErr"></div><div class="form"><label class="f">Fecha<input type="date" id="cF" value="' + c.fecha + '"></label><label class="f">Hora<input type="time" id="cH" value="' + esc(r.hora || '') + '"></label>' +
+    '<div class="grid g-21"><div class="card"><div id="cErr"></div><div class="form"><label class="f">Fecha<input type="date" id="cF" value="' + c.fecha + '"></label><label class="f">Hora' + inputHora('id="cH"', r.hora || '') + '</label>' +
     '<label class="f w2">Vincular a un viaje del día<select id="cV"><option value="">— sin vincular —</option>' + c.viajes.map((v, i) => '<option value="' + i + '"' +
       (r.comprobante && r.comprobante === v.comprobante && normDom(r.dominio) === normDom(v.dominio) ? ' selected' : '') + '>' + esc(v.horaCarga + ' · ' + v.dominio + ' · ' + v.chofer + ' · comp. ' + v.comprobante) + '</option>').join('') + '</select></label>' +
     '<label class="f">Dominio<input id="cDom" value="' + esc(r.dominio || '') + '"></label><label class="f">Chofer<input id="cCh" value="' + esc(r.chofer || '') + '"></label>' +
@@ -977,48 +1036,75 @@ function figuraPila(forma) {
   return '<svg class="figura" viewBox="0 0 220 110"><path class="rel" d="M10 90 C40 40 70 30 100 50 C130 20 170 30 210 90 Z"/><circle cx="110" cy="18" r="8" style="fill:none;stroke:var(--accent);stroke-width:2"/><path d="M96 18 H124 M110 4 V32" style="stroke:var(--accent);stroke-width:2"/><text x="64" y="106">drone / topografía</text></svg>';
 }
 
+const TIPO_AJUSTE_TXT = { 'Cubicación': 'Medición', 'Stock inicial': 'Stock inicial', 'Corrección': 'Corrección' };
+
 function edAjustes(volver) {
   const lista = (S.resumen.ajustes || []).slice().sort((a, b) => a.fecha < b.fecha ? 1 : -1);
   const pilas = lsGet('tierra_pilas', [{ nombre: 'Pila 1', forma: 'cono' }]);
-  const dens = { Playa: num(par('DENSIDAD_APARENTE', 1.6)) || 1.6, Silo: 1.3 };
   const bal = calcBalance(addDias(hoy(), -30), hoy());
-  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos · Molienda</div><h1>Cubicación y ajustes</h1><p class="sub">Stock calculado hoy: playa <b>' + nf(bal.stockPlaya, 0) + ' t</b> · silo <b>' + nf(bal.stockSilo, 0) + ' t</b></p></div></div>' +
-    '<div class="row"><button class="btn ghost" id="bGuiaCub">' + ICON.infoI + 'Guía de cubicación</button>' + botonInforme('cubicacion', { fecha: hoy() }, 'Informe') + '</div></div>' +
-    '<div class="card"><div class="card-h"><div class="t"><h3>Calculadora de cubicación</h3><div class="sub">Cargá cada pila; la app suma volúmenes y los pasa a toneladas</div></div><div class="row"><button class="btn sm" id="cAdd">+ Agregar pila</button></div></div>' +
-    '<div id="cPilas"></div><div class="form mt" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))"><label class="f">Densidad aparente (t/m³)<input id="cDen" type="number" step="0.01" value="' + dens.Playa + '"></label></div>' +
-    '<div class="calc-res" id="cRes"></div></div>' +
-    '<div class="grid g-21"><div class="card"><div class="card-h"><div class="t"><h3>Registrar ajuste</h3></div></div><div class="form"><label class="f">Fecha<input type="date" id="aF" value="' + hoy() + '"></label><label class="f">Nodo<div id="aNseg"></div></label>' +
-    '<label class="f">Tipo<select id="aT">' + opts(['Stock inicial', 'Cubicación', 'Corrección'], 'Cubicación', null) + '</select></label><label class="f">Toneladas<input type="number" step="0.1" id="aV"></label>' +
-    '<label class="f full">Observaciones / método<input id="aO" placeholder="Ej: cubicación con cinta, 3 pilas, densidad 1,55 t/m³"></label></div>' +
-    '<div id="aConc" class="mt"></div>' +
-    '<div class="row mt"><button class="btn pri" id="aG">' + ICON.guardar + 'Guardar ajuste</button></div></div>' +
-    '<div class="card"><div class="card-h"><div class="t"><h3>Registrados</h3></div></div>' + tabla([[r => fCorta(r.fecha), 'Fecha'], ['nodo', 'Nodo'], ['tipo', 'Tipo'], [r => nf(r.toneladas, 1), 't', 'n'], [r => esc(r.observaciones), 'Método', 'wrap'], [r => '<button class="btn icon sm dan" data-ax="' + r.id + '">' + ICON.borrar + '</button>', '']], lista) + '</div></div></div>';
+  const densNodo = { Playa: bal.densidad, Silo: num(par('DENSIDAD_SILO', '')) || bal.densidad };
+  const stk = (v, d) => v === null || v === undefined ? '<b>sin dato</b>' : '<b>' + nf(v, 0) + ' t</b> (≈ ' + nf(v / d, 0) + ' m³)';
+  let nodo = 'Playa';
+  let tipo = lista.some(a => a.nodo === 'Playa' && a.tipo !== 'Corrección') ? 'Cubicación' : 'Stock inicial';
+  let unidad = lsGet('tierra_ajuste_unidad', 't');
+  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos · Molienda</div><h1>Ajuste de stock</h1><p class="sub">Calculado hoy: playa ' + stk(bal.stockPlaya, densNodo.Playa) + ' · silo ' + stk(bal.stockSilo, densNodo.Silo) + '</p></div></div>' +
+    '<div class="row">' + botonInforme('cubicacion', { fecha: hoy() }, 'Informe') + '</div></div>' +
+    '<div class="grid g-21" style="align-items:start"><div class="card"><div class="card-h"><div class="t"><h3>¿Cuánta tierra hay?</h3><div class="sub">Escribí lo que hay en toneladas o en metros cúbicos; la app hace la conversión.</div></div></div>' +
+    '<div class="form"><label class="f">Fecha<input type="date" id="aF" value="' + hoy() + '"></label><label class="f">Lugar<div id="aNseg"></div></label>' +
+    '<label class="f full">Qué cargás<div id="aTseg"></div></label>' +
+    '<label class="f">Cantidad<div class="row" style="gap:8px;flex-wrap:nowrap"><input type="number" step="0.1" id="aV" inputmode="decimal" style="flex:1"><span class="unid-tog" id="aU"><button type="button" data-u="t">t</button><button type="button" data-u="m3">m³</button></span></div></label>' +
+    '<label class="f">Observaciones<input id="aO" placeholder="Opcional: cómo se midió"></label></div>' +
+    '<div id="aRes"></div>' +
+    '<div class="row mt"><button class="btn pri" id="aG">' + ICON.guardar + 'Guardar ajuste</button></div>' +
+    '<details class="mt calc-pilas"><summary><b>¿No sabés los m³? Calculalos midiendo las pilas</b></summary><div class="mt"><div class="row"><button class="btn sm" id="cAdd">+ Agregar pila</button><button class="btn ghost sm" id="bGuiaCub">' + ICON.infoI + 'Cómo medir</button></div><div id="cPilas" class="mt"></div><div class="calc-res" id="cRes"></div></div></details></div>' +
+    '<div class="card"><div class="card-h"><div class="t"><h3>Registrados</h3></div></div>' + tabla([[r => fCorta(r.fecha), 'Fecha'], ['nodo', 'Lugar'], [r => TIPO_AJUSTE_TXT[r.tipo] || r.tipo, 'Qué'], [r => nf(r.toneladas, 0), 't', 'n'], [r => nf(r.toneladas / (densNodo[r.nodo] || bal.densidad), 0), '≈ m³', 'n'], [r => esc(r.observaciones), 'Obs.', 'wrap'], [r => '<button class="btn icon sm dan" data-ax="' + r.id + '">' + ICON.borrar + '</button>', '']], lista) + '</div></div></div>';
   $('#bGuiaCub').onclick = abrirAyuda;
   enlazarInformes(app());
-  if (!lista.length) setTimeout(abrirAyuda, 400);
-  let nodo = 'Playa';
-  const conciliacion = () => {
+  const toT = v => v === null ? null : unidad === 't' ? v : v * densNodo[nodo];
+  const pintarU = () => $$('#aU button').forEach(b => b.classList.toggle('on', b.dataset.u === unidad));
+  const resultado = () => {
     const f = $('#aF').value;
     const v = num($('#aV').value);
-    const el = $('#aConc');
-    if (!f || v === null || $('#aT').value !== 'Cubicación') { el.innerHTML = ''; return; }
+    const el = $('#aRes');
+    if (!f || v === null) { el.innerHTML = '<p class="sub mt">Densidad usada: ' + nf(densNodo[nodo], 2) + ' t/m³ (t por palada ÷ ' + nf(bal.m3Palada) + ' m³ del balde).</p>'; return; }
+    const t = toT(v);
+    const m3 = t / densNodo[nodo];
     const b2 = calcBalance(addDias(f, -1), addDias(f, -1));
     const teo = nodo === 'Playa' ? b2.stockPlaya : b2.stockSilo;
-    const dif = v - teo;
-    const pct = teo ? dif / Math.abs(teo) * 100 : null;
     const tol = num(par('TOLERANCIA_INVENTARIO', 10)) || 10;
-    const fuera = pct !== null && Math.abs(pct) > tol;
-    el.innerHTML = '<div class="conc ' + (fuera ? 'bad' : 'ok') + '"><div><span class="eyebrow">Calculado al ' + fCorta(f) + '</span><b>' + nf(teo, 0) + ' t</b></div><div><span class="eyebrow">Cubicado</span><b>' + nf(v, 0) + ' t</b></div>' +
-      '<div><span class="eyebrow">Diferencia</span><b>' + (dif >= 0 ? '+' : '') + nf(dif, 0) + ' t' + (pct !== null ? ' · ' + nf(pct, 1) + ' %' : '') + '</b></div><small>' +
-      (fuera ? (dif < 0 ? 'Falta tierra respecto del cálculo: el consumo de molienda puede estar subestimado (factor t/palada bajo) o hay pérdidas.' : 'Sobra tierra respecto del cálculo: el factor t/palada puede estar alto o faltan ingresos registrados.') : 'Dentro de la tolerancia de ±' + tol + ' %.') + '</small></div>';
+    let tarj3 = '';
+    let nota = '';
+    if (tipo === 'Corrección') {
+      tarj3 = '<div><div class="l">Queda</div><div class="v">' + (teo === null ? '–' : nf(teo + t, 0) + ' t') + '</div><div class="s">' + (teo === null ? 'sin stock calculado' : '≈ ' + nf((teo + t) / densNodo[nodo], 0) + ' m³') + '</div></div>';
+      nota = 'Suma (o resta, con negativo) a lo calculado.';
+    } else if (teo === null) {
+      tarj3 = '<div><div class="l">Calculado</div><div class="v">sin dato</div><div class="s">este ajuste fija el punto de partida</div></div>';
+      nota = 'Desde esta fecha la app suma lo que entra y resta lo que se muele. Los días anteriores se reconstruyen hacia atrás.';
+    } else {
+      const dif = t - teo;
+      const pct = teo ? dif / Math.abs(teo) * 100 : null;
+      const fuera = pct !== null && Math.abs(pct) > tol;
+      tarj3 = '<div class="' + (fuera ? 'bad' : '') + '"><div class="l">Diferencia con lo calculado</div><div class="v">' + (dif >= 0 ? '+' : '') + nf(dif, 0) + ' t</div><div class="s">calculado ' + nf(teo, 0) + ' t' + (pct !== null ? ' · ' + nf(pct, 1) + ' %' : '') + '</div></div>';
+      nota = fuera ? (dif < 0 ? 'Hay menos tierra que lo calculado: puede que se muela más de lo que se registra o falten salidas.' : 'Hay más tierra que lo calculado: pueden faltar ingresos registrados o el t/palada de molienda está alto.') : 'Dentro de lo esperable (±' + tol + ' %).';
+    }
+    el.innerHTML = '<div class="ajuste-res"><div><div class="l">Toneladas</div><div class="v">' + nf(t, 0) + ' t</div><div class="s">' + (unidad === 'm3' ? 'convertido' : 'cargado') + '</div></div><div><div class="l">Metros cúbicos</div><div class="v">≈ ' + nf(m3, 0) + ' m³</div><div class="s">' + (unidad === 'm3' ? 'cargado' : 'convertido') + ' · ' + nf(densNodo[nodo], 2) + ' t/m³</div></div>' + tarj3 + '</div><p class="sub mt">' + nota + '</p>';
   };
-  segmento($('#aNseg'), [['Playa', 'Playa'], ['Silo', 'Silo']], 'Playa', k => {
-    nodo = k;
-    $('#cDen').value = dens[k];
-    calcular();
-    conciliacion();
-  }, true);
-  ['#aF', '#aV', '#aT'].forEach(q => { $(q).addEventListener('input', conciliacion); $(q).addEventListener('change', conciliacion); });
+  const tipos = () => segmento($('#aTseg'), [['Cubicación', 'Lo que hay ahora (medición)'], ['Stock inicial', 'Stock inicial'], ['Corrección', 'Sumar / restar']], tipo, k => { tipo = k; resultado(); }, true);
+  segmento($('#aNseg'), [['Playa', 'Playa'], ['Silo', 'Silo']], 'Playa', k => { nodo = k; resultado(); }, true);
+  tipos();
+  pintarU();
+  $('#aU').onclick = e => {
+    const b = e.target.closest('[data-u]');
+    if (!b || b.dataset.u === unidad) return;
+    const v = num($('#aV').value);
+    if (v !== null) $('#aV').value = Math.round((b.dataset.u === 'm3' ? v / densNodo[nodo] : v * densNodo[nodo]) * 10) / 10;
+    unidad = b.dataset.u;
+    lsSet('tierra_ajuste_unidad', unidad);
+    pintarU();
+    resultado();
+  };
+  ['#aF', '#aV'].forEach(q => { $(q).addEventListener('input', resultado); $(q).addEventListener('change', resultado); });
+  resultado();
   const pintarPilas = () => {
     $('#cPilas').innerHTML = pilas.map((p, i) => '<div class="maq" style="margin-bottom:10px"><div class="maq-h"><div class="t"><input data-p="' + i + '" data-k="nombre" value="' + esc(p.nombre) + '" style="width:150px;font-weight:800"><div class="seg sm" style="display:inline-flex">' +
       Object.keys(FORMAS_PILA).map(f => '<button type="button" data-p="' + i + '" data-forma="' + f + '" class="' + (p.forma === f ? 'on' : '') + '" style="' + (p.forma === f ? 'background:var(--panel);box-shadow:var(--shadow);color:var(--text)' : '') + '">' + FORMAS_PILA[f].t + '</button>').join('') + '</div></div>' +
@@ -1036,21 +1122,21 @@ function edAjustes(volver) {
       if (el) el.textContent = v ? nf(v, 1) + ' m³' : '—';
       if (v) { tot += v; ok++; }
     });
-    const d = num($('#cDen').value) || 0;
-    const t = tot * d;
-    $('#cRes').innerHTML = '<div><div class="eyebrow">Volumen total</div><b>' + nf(tot, 1) + ' m³</b></div><div><div class="eyebrow">Toneladas (' + nf(d, 2) + ' t/m³)</div><b>' + nf(t, 1) + ' t</b></div>' +
-      '<div class="sub">' + ok + ' de ' + pilas.length + ' pilas completas</div><button class="btn pri right" id="cUsar"' + (t > 0 ? '' : ' disabled') + '>' + ICON.der + 'Usar como cubicación</button>';
+    $('#cRes').innerHTML = '<div><div class="eyebrow">Volumen total</div><b>' + nf(tot, 1) + ' m³</b></div><div><div class="eyebrow">≈ toneladas</div><b>' + nf(tot * densNodo[nodo], 0) + ' t</b></div>' +
+      '<div class="sub">' + ok + ' de ' + pilas.length + ' pilas completas</div><button class="btn pri right" id="cUsar"' + (tot > 0 ? '' : ' disabled') + '>' + ICON.der + 'Usar estos m³</button>';
     $('#cUsar').onclick = () => {
-      $('#aT').value = 'Cubicación';
-      $('#aV').value = Math.round(t * 10) / 10;
-      $('#aO').value = 'Cubicación ' + pilas.filter(p => volumenPila(p)).map(p => p.nombre + ' ' + FORMAS_PILA[p.forma].t.toLowerCase() + ' ' + nf(volumenPila(p), 0) + ' m³').join(', ') + ' · ' + nf(tot, 0) + ' m³ × ' + nf(d, 2) + ' t/m³';
+      tipo = 'Cubicación';
+      tipos();
+      unidad = 'm3';
+      pintarU();
+      $('#aV').value = Math.round(tot * 10) / 10;
+      $('#aO').value = 'Pilas: ' + pilas.filter(p => volumenPila(p)).map(p => p.nombre + ' ' + nf(volumenPila(p), 0) + ' m³').join(', ');
       $('#aV').scrollIntoView({ behavior: 'smooth', block: 'center' });
       $('#aV').classList.add('lleno');
-      conciliacion();
+      resultado();
     };
     lsSet('tierra_pilas', pilas);
   };
-  $('#cDen').oninput = calcular;
   $('#cAdd').onclick = () => { pilas.push({ nombre: 'Pila ' + (pilas.length + 1), forma: 'cono' }); pintarPilas(); };
   $('#cPilas').addEventListener('input', e => {
     const el = e.target;
@@ -1066,8 +1152,12 @@ function edAjustes(volver) {
   });
   pintarPilas();
   $('#aG').onclick = async () => {
-    const d = { fecha: $('#aF').value, nodo: nodo, tipo: $('#aT').value, toneladas: $('#aV').value, observaciones: $('#aO').value };
-    if (!d.fecha || d.toneladas === '') return toast('Fecha y toneladas requeridas', 'bad');
+    const v = num($('#aV').value);
+    if (!$('#aF').value || v === null) return toast('Fecha y cantidad requeridas', 'bad');
+    const t = Math.round(toT(v) * 10) / 10;
+    if (tipo !== 'Corrección' && t < 0) return toast('La cantidad no puede ser negativa', 'bad');
+    const obs = [$('#aO').value.trim(), unidad === 'm3' ? nf(v, 0) + ' m³ × ' + nf(densNodo[nodo], 2) + ' t/m³' : ''].filter(Boolean).join(' · ');
+    const d = { fecha: $('#aF').value, nodo: nodo, tipo: tipo, toneladas: t, observaciones: obs };
     try {
       avisarInforme(await escribir('guardarAjuste', d, 'Ajuste ' + d.nodo + ' ' + d.fecha));
       await cargarResumen(true);
@@ -1169,12 +1259,15 @@ async function edGasoil(f, volver) {
     el.innerHTML = avisos.map(a => '<div class="chk-g ' + a[0] + '">' + (a[0] === 'ok' ? ICON.ok : ICON.alerta) + '<span>' + a[1] + '</span></div>').join('');
   };
   const pintarForm = () => {
-    const base = '<label class="f">Fecha<input type="date" id="gF" value="' + f + '"></label><label class="f">Hora<input id="gH" value="' + hAhora + '" inputmode="numeric"></label>';
+    const base = '<label class="f">Fecha<input type="date" id="gF" value="' + f + '"></label><label class="f">Hora' + inputHora('id="gH"', hAhora) + '</label>';
     if (modo === 'maquina') {
       $('#gForm').innerHTML = '<div class="form">' + base + '<label class="f">Máquina<select id="gM">' + opts(maqs, lsGet('tierra_gasoil_maq', ''), 'Elegir…') + '</select></label>' +
         '<label class="f">Litros<input id="gL" type="number" min="0" step="1" inputmode="decimal"></label><label class="f">Horómetro<input id="gHor" type="number" min="0" step="0.1" inputmode="decimal"></label><div class="f full sub" id="gPista"></div></div>';
     } else if (modo === 'cisterna') {
       $('#gForm').innerHTML = '<div class="form">' + base + '<label class="f">Litros recibidos<input id="gL" type="number" min="0" step="1" inputmode="decimal"></label><label class="f full">Se registra como «' + esc(nomCis) + '» en la planilla de combustible.</label></div>';
+    } else if (modo === 'nivel') {
+      $('#gForm').innerHTML = '<div class="form">' + base + '<label class="f">Litros que hay ahora en la cisterna<input id="gMed" type="number" min="0" step="1" inputmode="decimal"' + (cis ? ' placeholder="calculado ' + nf(cis.nivel, 0) + ' L"' : '') + '></label><label class="f full">Observaciones<input id="gO" placeholder="Opcional"></label>' +
+        '<p class="f full sub">Fija el nivel de la cisterna en este valor a esa hora. Desde ahí se suman los llenados y se restan las cargas a máquinas.</p></div>';
     } else {
       $('#gForm').innerHTML = '<div class="form">' + base + '<label class="f">Litros medidos (varilla)<input id="gMed" type="number" min="0" step="1" inputmode="decimal"></label><label class="f full">Observaciones<input id="gO" placeholder="Ej: medición con varilla, tabla de conversión"></label>' +
         '<label class="chk full"><input type="checkbox" id="gBase" checked> Corregir el nivel de la cisterna con esta medición</label></div>';
@@ -1185,7 +1278,10 @@ async function edGasoil(f, volver) {
     const pr = $('#gForm input:not([type=date]):not(#gH), #gForm select');
     if (pr) pr.focus();
   };
-  segmento($('#gModo'), [['maquina', 'Carga a máquina'], ['cisterna', 'Llenado cisterna'], ['medicion', 'Medición']], modo, k => { modo = k; pintarForm(); }, true);
+  const nivelMal = cis && (cis.nivel < 0 || (cis.capacidad && cis.nivel > cis.capacidad * 1.05));
+  if (nivelMal) modo = 'nivel';
+  segmento($('#gModo'), [['maquina', 'Carga a máquina'], ['cisterna', 'Llenado cisterna'], ['medicion', 'Medición'], ['nivel', 'Ajustar nivel']], modo, k => { modo = k; pintarForm(); }, true);
+  if (nivelMal) $('#gChk').insertAdjacentHTML('beforebegin', '<div class="alert warn mt">' + ICON.alerta + '<div>El nivel calculado de la cisterna (' + nf(cis.nivel, 0) + ' L) no es posible' + (cis.capacidad ? ' para ' + nf(cis.capacidad, 0) + ' L de capacidad' : '') + '. Cargá cuánto hay ahora para corregirlo.</div></div>');
   enlazarInformes(app());
   pintarForm();
   pintarTabla();
@@ -1195,7 +1291,11 @@ async function edGasoil(f, volver) {
     if (!fe || !h) return toast('Fecha y hora requeridas', 'bad');
     let accion;
     let d;
-    if (modo === 'medicion') {
+    if (modo === 'nivel') {
+      accion = 'ajustarCisterna';
+      d = { fecha: fe, hora: h, litros: $('#gMed').value, observaciones: $('#gO').value };
+      if (d.litros === '') return toast('Cargá los litros que hay en la cisterna', 'bad');
+    } else if (modo === 'medicion') {
       accion = 'medirCisterna';
       d = { fecha: fe, hora: h, litros: $('#gMed').value, observaciones: $('#gO').value, actualizarBase: $('#gBase').checked };
       if (d.litros === '') return toast('Litros medidos requeridos', 'bad');
@@ -1212,10 +1312,10 @@ async function edGasoil(f, volver) {
     }
     try {
       bloquear('Guardando en la planilla de cantera…');
-      const r = await escribir(accion, d, (modo === 'medicion' ? 'Medición cisterna ' : 'Gasoil ') + (d.maquina || '') + ' ' + fe);
+      const r = await escribir(accion, d, (modo === 'medicion' || modo === 'nivel' ? 'Cisterna ' : 'Gasoil ') + (d.maquina || '') + ' ' + fe);
       avisarInforme(r);
       desbloquear();
-      if (!r.encolado) toast(modo === 'medicion' ? 'Medición guardada · diferencia ' + nf(r.diferencia, 0) + ' L' : 'Carga guardada', 'ok');
+      if (!r.encolado) toast(modo === 'nivel' ? 'Nivel de la cisterna ajustado a ' + nf(r.litrosMedidos, 0) + ' L' : modo === 'medicion' ? 'Medición guardada · diferencia ' + nf(r.diferencia, 0) + ' L' : 'Carga guardada', 'ok');
       S.resumenVencido = true;
       edGasoil(fe, volver);
     } catch (e) {
