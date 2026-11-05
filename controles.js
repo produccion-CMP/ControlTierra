@@ -239,7 +239,8 @@ function controles(r, b) {
   add('g_medicion', A, 'combustible', 'Medición de la cisterna', 'Comparar el nivel medido con varilla contra el calculado.', () => {
     const todas = (r.mediciones || []).slice().sort((a, b) => (a.fecha + a.hora) < (b.fecha + b.hora) ? -1 : 1);
     const uAj = todas.filter(esAjusteCis).pop();
-    const med = todas.filter(x => !esAjusteCis(x) && (!uAj || (x.fecha + x.hora) > (uAj.fecha + uAj.hora)));
+    const fBase = cis && cis.fechaBase ? cis.fechaBase : '';
+    const med = todas.filter(x => !esAjusteCis(x) && (!uAj || (x.fecha + x.hora) > (uAj.fecha + uAj.hora)) && (!fBase || x.fecha > fBase));
     if (!med.length) return { sev: 'info', t: 'Sin mediciones de cisterna en el período', d: 'Medí la cisterna una vez por semana para detectar faltantes.', ruta: '#/cargar/gasoil' };
     const u = med[med.length - 1];
     const cap = cis && cis.capacidad ? cis.capacidad : 5000;

@@ -987,3 +987,46 @@ svg.plano .cel.ed.sel { stroke: #fff; stroke-width: 2; }
 .sect-it .sw { width: 14px; height: 14px; border-radius: 4px; flex: none; }
 .sect-it input { flex: 1; min-width: 0; }
 #dTab tr.sel td { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+.nodo .d .nl { display: block; line-height: 1.35; }
+.nodo .d .nl b { color: var(--text); font-weight: 800; font-variant-numeric: tabular-nums; }
+.nodo .d .nl.sec { font-size: .7rem; color: var(--muted); margin-top: 3px; }
+.nodo .d .nl.rojo { color: var(--bad); }
+.proy-dias > div.hoy { outline: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+.proy-dias > div.hoy::before { content: 'HOY'; display: block; font-size: .62rem; font-weight: 800; color: var(--accent); letter-spacing: .08em; }
+.tanque-cis { display: flex; gap: 22px; align-items: flex-end; justify-content: center; padding: 8px 0; }
+.tanque-cis .tq { position: relative; width: 110px; height: 200px; border: 4px solid var(--line-2); border-top: 0; border-radius: 0 0 14px 14px; background: var(--panel-2); overflow: hidden; }
+.tanque-cis .tq span { position: absolute; left: 0; right: 0; transition: height 1s var(--ease); }
+.tanque-cis .tq .m { bottom: 0; background: color-mix(in srgb, var(--bad) 75%, transparent); }
+.tanque-cis .tq .u { background: color-mix(in srgb, var(--ok) 75%, transparent); }
+.tanque-cis .tq-d { display: flex; flex-direction: column; gap: 6px; font-size: .82rem; }
+.tanque-cis .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+table.edit th.con-tip { cursor: help; }
+table.edit th .qi { display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; background: var(--panel-2); color: var(--muted); font-size: .62rem; margin-left: 2px; }
+table.edit tr.grp th { background: color-mix(in srgb, var(--accent) 9%, var(--panel)); color: var(--accent); text-align: center; border-left: 2px solid var(--panel); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; }
+table.matriz td:nth-child(n+5), table.matriz th:nth-child(n+5) { text-align: center; }
+table.matriz tbody tr:hover td { background: color-mix(in srgb, var(--accent) 5%, var(--panel)); }
+.inf-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.inf-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: var(--panel); }
+.inf-card h4 { margin: 0 0 4px; }
+.cal-form .niv { display: flex; flex-wrap: wrap; gap: 4px; }
+.cal-form .niv button { border: 1px solid var(--line-2); background: var(--panel); border-radius: 999px; padding: 5px 11px; font: inherit; font-size: .78rem; cursor: pointer; color: var(--text); }
+.cal-form .niv button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.cal-form .cont { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px dashed var(--line); font-size: .84rem; }
+#qTab tr.sel td { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+@media (min-width: 981px) { .cal-form { position: sticky; top: 84px; } }
+.cor-cards { display: grid; gap: 10px; }
+.cor-card { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--panel); }
+.cor-card.off { opacity: .55; }
+.cor-h { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.cor-h input { width: 180px; }
+.cor-h input.em { width: 280px; }
+.cor-h select { width: 90px; }
+.cor-h .btn { margin-left: auto; }
+.cor-g { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; flex-wrap: wrap; }
+.cor-g .eyebrow { min-width: 120px; }
+.cor-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cor-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line-2); border-radius: 999px; padding: 4px 11px; font-size: .8rem; cursor: pointer; user-select: none; background: var(--panel); }
+.cor-chip input { display: none; }
+.cor-chip.on { background: color-mix(in srgb, var(--ok) 14%, var(--panel)); border-color: color-mix(in srgb, var(--ok) 55%, transparent); color: var(--text); font-weight: 700; }
+.cor-chip.on::before { content: '✓'; color: var(--ok); }
+@media (max-width: 620px) { .cor-h input, .cor-h input.em { width: 100%; } }

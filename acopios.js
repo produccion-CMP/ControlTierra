@@ -66,7 +66,7 @@ async function vAcopios(tab) {
   if (esAdmin()) tabs.push(['sectores', 'Dibujar sectores']);
   const dn = E.densidad || 1.4;
   app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Playa de molienda</div><h1>Acopios</h1><p class="sub">Dónde se descarga cada tierra, cuánto queda en cada acopio y de dónde se está moliendo.</p></div><div id="segAc"></div></div>' +
-    E.avisos.map(a => '<div class="alert ' + a[0] + '">' + ICON.alerta + '<div>' + esc(a[1]) + '</div></div>').join('') + '<div id="acCont"></div></div>';
+    (S.ses ? E.avisos : []).map(a => '<div class="alert ' + a[0] + '">' + ICON.alerta + '<div>' + esc(a[1]) + '</div></div>').join('') + '<div id="acCont"></div></div>';
   segmento($('#segAc'), tabs, t, k => { location.hash = '#/acopios/' + k; }, true);
   const c = $('#acCont');
   if (t === 'plano') return pintarPlanoAcopios(c, E, dn);

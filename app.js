@@ -70,8 +70,23 @@ function menuSesion() {
   if (!S.ses) return login();
   modal(S.ses.nombre, '<div class="col"><span class="tag t-acc" style="align-self:flex-start">' + esc(rolTxt(S.ses.rol)) + '</span><p class="sub">La sesión vence a las ' +
     new Date(S.ses.vence).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + '.</p></div>', [
+    { txt: 'Cambiar PIN', fn: () => { setTimeout(cambiarPinUI, 50); } },
     { txt: 'Cerrar' },
     { txt: 'Salir', cls: 'dan', fn: () => { setSesion(null); location.hash = '#/inicio'; } }
+  ]);
+}
+
+function cambiarPinUI() {
+  modal('Cambiar mi PIN', '<div class="form"><label class="f">PIN actual<input id="pA" type="password" inputmode="numeric" maxlength="8"></label><label class="f">PIN nuevo (4 a 8 números)<input id="pN" type="password" inputmode="numeric" maxlength="8"></label><label class="f">Repetir PIN nuevo<input id="pR" type="password" inputmode="numeric" maxlength="8"></label></div><p class="sub">El administrador siempre puede cambiarlo desde Configuración → Usuarios.</p>', [
+    { txt: 'Cancelar' },
+    {
+      txt: 'Cambiar', cls: 'pri', fn: async mm => {
+        const n = $('#pN', mm).value;
+        if (!/^\d{4,8}$/.test(n)) { toast('El PIN nuevo debe tener entre 4 y 8 números', 'warn'); return false; }
+        if (n !== $('#pR', mm).value) { toast('Los PIN nuevos no coinciden', 'warn'); return false; }
+        try { await api('cambiarPin', { actual: $('#pA', mm).value, nuevo: n }); toast('PIN cambiado', 'ok'); return true; } catch (e) { toast(e.message, 'bad'); return false; }
+      }
+    }
   ]);
 }
 
@@ -252,6 +267,32 @@ function pintarLiq(modo) {
     [v => v.pagar ? 'SI' : 'NO', 'Pagar'], [v => v.jornadaCompleta ? 'SI' : 'NO', 'Jornada completa'], [v => v.pagar ? (tar[String(v.origen).toUpperCase()] || '') : '', 'Tarifa']], V);
 }
 
+const TIPS_CFG = {
+  nombre: 'Nombre que se muestra en la app y en los correos.',
+  email: 'Dirección de correo del destinatario.',
+  tipo: 'PARA: destinatario principal · CC: con copia · CCO: con copia oculta.',
+  activo: 'Si está apagado no se usa ni recibe nada.',
+  rJornada: 'Trabajos de cantera: se envía cada vez que se guarda la jornada (tramos, horómetros, paladas, camiones y paradas).',
+  rViajes: 'Viajes de camiones: viajes del día por chofer y cruce con la balanza.',
+  rBalanza: 'Balanza de ingreso: se envía al importar el PESAJE.XLS (toneladas, m³, camiones y cruce con viajes).',
+  rGasoil: 'Gasoil de cantera: cargas del día, nivel de la cisterna y autonomía.',
+  rCalidad: 'Calidad de tierra: muestras cargadas y rechazos.',
+  rMolienda: 'Molienda y silo: se envía al corregir un turno de molienda.',
+  rCubicacion: 'Ajuste de stock: se envía cuando se registra o autoriza un ajuste de playa o silo.',
+  rDiario: 'Resumen diario de tierra: todos los días a la hora configurada (playa, molienda, ingreso y silo). Solo si los datos están controlados.',
+  rPlaya: 'Estado de la playa de molienda: todos los días, con la variación de 7 días y la proyección con el pronóstico.',
+  rSemanal: 'Informe semanal: playa y molienda de los últimos 7 días.',
+  rMensual: 'Informe mensual: playa y molienda del mes anterior.',
+  rAlertas: 'Advertencias: informes retenidos por datos incompletos y ajustes que esperan autorización.',
+  rol: 'Administrador: todo · Abastecimiento: cantera, gasoil, viajes, balanza y calidad enviada · Molienda: molienda, silo, acopios, calidad recibida y ajustes de stock.',
+  pin: 'Escribí un PIN nuevo de 4 a 8 números para cambiarlo; vacío lo deja como está.',
+  paladas: 'Paladas que carga ese camión por viaje. Se usa para estimar m³ y toneladas enviadas y para completar el ingreso cuando falta la balanza.',
+  dominio: 'Patente del camión, igual que en la balanza.',
+  valor: 'Valor del parámetro.',
+  automatico: 'Si está encendido, el informe se envía solo cuando corresponde.',
+  pdf: 'Agrega el informe como PDF adjunto.'
+};
+
 const DEF_CONFIG = {
   Maquinas: { t: 'Máquinas', c: [['nombre', 'Nombre'], ['tipo', 'Tipo', 'sel', ['Pala', 'Topadora', 'Excavadora', 'Motoniveladora', 'Otro']], ['activo', 'Activa', 'bool']] },
   Operadores: { t: 'Operadores', c: [['nombre', 'Nombre'], ['pala', 'Pala', 'bool'], ['topadora', 'Topadora', 'bool'], ['mecanico', 'Mecánico', 'bool'], ['activo', 'Activo', 'bool']] },
@@ -262,7 +303,8 @@ const DEF_CONFIG = {
   TiposViaje: { t: 'Tipos de viaje', c: [['nombre', 'Nombre'], ['activo', 'Activo', 'bool']], orig: 'TIPO VIAJE' },
   Responsables: { t: 'Responsables', c: [['nombre', 'Nombre'], ['activo', 'Activo', 'bool']], orig: 'RESPONSABLE' },
   Usuarios: { t: 'Usuarios', c: [['nombre', 'Usuario'], ['rol', 'Rol', 'sel', ['abastecimiento', 'molienda', 'admin'], ROL_TXT], ['activo', 'Activo', 'bool'], ['pin', 'Nuevo PIN', 'pin']] },
-  Correos: { t: 'Correos', c: [['nombre', 'Nombre'], ['email', 'Email'], ['tipo', 'Tipo', 'sel', ['PARA', 'CC', 'CCO']], ['activo', 'Activo', 'bool'], ['rJornada', 'Cantera', 'bool'], ['rViajes', 'Viajes', 'bool'], ['rBalanza', 'Balanza', 'bool'],
+  Camiones: { t: 'Camiones', c: [['dominio', 'Dominio'], ['paladas', 'Paladas por viaje'], ['observaciones', 'Observaciones'], ['activo', 'Activo', 'bool']] },
+  Correos: { t: 'Correos', grupos: [['Destinatario', 4], ['Al cargar datos', 7], ['Programados', 4], ['Avisos', 1]], c: [['nombre', 'Nombre'], ['email', 'Email'], ['tipo', 'Tipo', 'sel', ['PARA', 'CC', 'CCO']], ['activo', 'Activo', 'bool'], ['rJornada', 'Cantera', 'bool'], ['rViajes', 'Viajes', 'bool'], ['rBalanza', 'Balanza', 'bool'],
     ['rGasoil', 'Gasoil', 'bool'], ['rCalidad', 'Calidad', 'bool'], ['rMolienda', 'Molienda', 'bool'], ['rCubicacion', 'Ajuste de stock', 'bool'], ['rDiario', 'Resumen diario', 'bool'], ['rPlaya', 'Estado de playa', 'bool'], ['rSemanal', 'Semanal', 'bool'], ['rMensual', 'Mensual', 'bool'], ['rAlertas', 'Advertencias', 'bool']] },
   Informes: { t: 'Informes', c: [['nombre', 'Informe', 'ro'], ['automatico', 'Envío automático', 'bool'], ['pdf', 'Adjuntar PDF', 'bool'], ['descripcion', 'Qué contiene', 'ro']], fijo: true },
   Parametros: { t: 'Parámetros', c: [['clave', 'Clave', 'ro'], ['valor', 'Valor'], ['descripcion', 'Descripción', 'ro']], fijo: true }
@@ -278,8 +320,21 @@ async function vConfig(hoja) {
   app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Configuración</div><h1>Catálogos y parámetros</h1></div><button class="btn" id="bIA">' + ICON.camara + 'Probar IA de fotos</button></div><div id="segCfg" style="margin-bottom:16px"></div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>' + def.t + ' <span class="sub">(' + filas.length + ')</span></h3>' + (def.orig ? '<div class="sub">Se guarda en la planilla original de viajes, hoja «' + def.orig + '»</div>' : '') + '</div><div class="row"><input id="cfgBus" placeholder="Buscar…" style="width:180px">' +
     (def.fijo ? '' : '<button class="btn" id="cfgAdd">+ Agregar</button>') + '<button class="btn pri" id="cfgSave">' + ICON.guardar + 'Guardar cambios</button></div></div>' +
-    '<div class="tw max" style="max-height:62vh"><table class="edit"><thead><tr>' + def.c.map(c => '<th>' + c[1] + '</th>').join('') + (def.fijo ? '' : '<th></th>') + '</tr></thead><tbody id="cfgB"></tbody></table></div></div></div>';
+    (hoja === 'Correos' ? '<p class="sub" style="margin:-4px 0 10px">Marcá qué recibe cada persona. Pasá el mouse por cada título para ver qué se envía.</p>' : '') +
+    (hoja === 'Camiones' ? '<div class="row" style="margin:-4px 0 10px"><button class="btn sm" id="cfgSug">' + ICON.balanza + 'Agregar los camiones de la balanza con las paladas sugeridas</button><span class="sub">Sugerido = neto habitual del camión ÷ ' + nf(num(par('T_POR_PALADA_CANTERA', 4.5)) || 4.5, 1) + ' t por palada</span></div>' : '') +
+    (hoja === 'Informes' ? '<div id="infCards" class="inf-cards"></div>' : hoja === 'Correos' ? '<div id="corCards" class="cor-cards"></div>' : '<div class="tw max" style="max-height:62vh"><table class="edit ' + (hoja === 'Correos' ? 'matriz' : '') + '"><thead>' +
+      (def.grupos ? '<tr class="grp">' + def.grupos.map(g => '<th colspan="' + g[1] + '">' + g[0] + '</th>').join('') + (def.fijo ? '' : '<th></th>') + '</tr>' : '') +
+      '<tr>' + def.c.map(c => { const tip = TIPS_CFG[c[0]] || ''; return '<th' + (tip ? ' title="' + esc(tip) + '" class="con-tip"' : '') + '>' + c[1] + (tip ? ' <span class="qi">?</span>' : '') + '</th>'; }).join('') + (def.fijo ? '' : '<th></th>') + '</tr></thead><tbody id="cfgB"></tbody></table></div>') + '</div></div>';
   $('#bIA').onclick = probarIAUI;
+  if ($('#cfgSug')) $('#cfgSug').onclick = async () => {
+    try {
+      const l = await api('camiones');
+      let n = 0;
+      l.forEach(x => { if (!filas.some(f => normDominio(f.dominio) === normDominio(x.dominio))) { filas.push({ dominio: x.dominio, paladas: x.sugerido || x.paladas, observaciones: x.sugerido ? 'sugerido: neto habitual ' + nf(x.netoMediano, 1) + ' t (' + x.pesajes + ' pesajes)' : '', activo: true }); n++; } });
+      toast(n ? n + ' camiones agregados: revisá y guardá' : 'No hay camiones nuevos en la balanza', n ? 'ok' : 'info');
+      pintar();
+    } catch (e) { toast(e.message, 'bad'); }
+  };
   segmento($('#segCfg'), Object.keys(DEF_CONFIG).map(k => [k, DEF_CONFIG[k].t]), hoja, k => { location.hash = '#/config/' + k; }, true);
   const celda = (c, v, i) => {
     const a = 'data-i="' + i + '" data-c="' + c[0] + '"';
@@ -291,6 +346,8 @@ async function vConfig(hoja) {
     return '<input ' + a + ' value="' + esc(v) + '">';
   };
   const pintar = () => {
+    if (hoja === 'Informes') return pintarInformesCfg(filas);
+    if (hoja === 'Correos') return pintarCorreosCfg(filas, def, pintar);
     const q = normTxt($('#cfgBus').value);
     $('#cfgB').innerHTML = filas.map((f, i) => (q && normTxt(JSON.stringify(f)).indexOf(q) < 0) ? '' : '<tr>' + def.c.map(c => '<td' + (c[0] === 'descripcion' ? ' class="wrap"' : '') + '>' + celda(c, f[c[0]], i) + '</td>').join('') +
       (def.fijo ? '' : '<td><button class="btn icon sm dan" data-x="' + i + '">' + ICON.borrar + '</button></td>') + '</tr>').join('');
@@ -298,16 +355,16 @@ async function vConfig(hoja) {
   pintar();
   $('#cfgBus').oninput = pintar;
   const upd = e => { const el = e.target; if (el.dataset.c) filas[Number(el.dataset.i)][el.dataset.c] = el.type === 'checkbox' ? el.checked : el.value; };
-  $('#cfgB').addEventListener('input', upd);
-  $('#cfgB').addEventListener('change', upd);
-  $('#cfgB').addEventListener('click', e => { const b = e.target.closest('button[data-x]'); if (b) { filas.splice(Number(b.dataset.x), 1); pintar(); } });
+  if ($('#cfgB')) $('#cfgB').addEventListener('input', upd);
+  if ($('#cfgB')) $('#cfgB').addEventListener('change', upd);
+  if ($('#cfgB')) $('#cfgB').addEventListener('click', e => { const b = e.target.closest('button[data-x]'); if (b) { filas.splice(Number(b.dataset.x), 1); pintar(); } });
   if ($('#cfgAdd')) $('#cfgAdd').onclick = () => {
     const o = {};
-    def.c.forEach(c => { o[c[0]] = c[2] === 'bool' ? true : (c[2] === 'sel' ? c[3][0] : ''); });
+    def.c.forEach(c => { o[c[0]] = c[2] === 'bool' ? (hoja !== 'Correos' || c[0] === 'activo') : (c[2] === 'sel' ? c[3][0] : ''); });
     filas.unshift(o);
     $('#cfgBus').value = '';
     pintar();
-    const p = $('#cfgB input');
+    const p = $('#cfgB input') || $('#corCards input');
     if (p) p.focus();
   };
   $('#cfgSave').onclick = async () => {
@@ -325,6 +382,32 @@ async function vConfig(hoja) {
       desbloquear();
     }
   };
+}
+
+function pintarCorreosCfg(filas, def, repintar) {
+  const q = normTxt($('#cfgBus').value);
+  let k = 0;
+  const grupos = def.grupos.slice(1).map(g => { const cols = def.c.slice(4 + k, 4 + k + g[1]); k += g[1]; return [g[0], cols]; });
+  $('#corCards').innerHTML = filas.map((f, i) => (q && normTxt(JSON.stringify(f)).indexOf(q) < 0) ? '' : '<div class="cor-card' + (f.activo ? '' : ' off') + '"><div class="cor-h">' +
+    '<input data-i="' + i + '" data-c="nombre" value="' + esc(f.nombre) + '" placeholder="Nombre" title="' + esc(TIPS_CFG.nombre) + '"><input data-i="' + i + '" data-c="email" value="' + esc(f.email) + '" placeholder="correo@empresa.com" title="' + esc(TIPS_CFG.email) + '" class="em">' +
+    '<select data-i="' + i + '" data-c="tipo" title="' + esc(TIPS_CFG.tipo) + '">' + ['PARA', 'CC', 'CCO'].map(o => '<option' + (f.tipo === o ? ' selected' : '') + '>' + o + '</option>').join('') + '</select>' +
+    '<label class="chk" title="' + esc(TIPS_CFG.activo) + '"><span class="switch"><input type="checkbox" data-i="' + i + '" data-c="activo"' + (f.activo ? ' checked' : '') + '><span></span></span>Activo</label><button class="btn icon sm dan" data-x="' + i + '" aria-label="Quitar">' + ICON.borrar + '</button></div>' +
+    grupos.map(g => '<div class="cor-g"><span class="eyebrow">' + esc(g[0]) + '</span><div class="cor-chips">' + g[1].map(c => '<label class="cor-chip' + (f[c[0]] ? ' on' : '') + '" title="' + esc(TIPS_CFG[c[0]] || '') + '"><input type="checkbox" data-i="' + i + '" data-c="' + c[0] + '"' + (f[c[0]] ? ' checked' : '') + '>' + esc(c[1]) + '</label>').join('') + '</div></div>').join('') + '</div>').join('');
+  const cc = $('#corCards');
+  const upd = e => { const el = e.target; if (!el.dataset.c) return; filas[Number(el.dataset.i)][el.dataset.c] = el.type === 'checkbox' ? el.checked : el.value; if (el.type === 'checkbox') { const l = el.closest('.cor-chip'); if (l) l.classList.toggle('on', el.checked); if (el.dataset.c === 'activo') el.closest('.cor-card').classList.toggle('off', !el.checked); } };
+  cc.oninput = upd;
+  cc.onchange = upd;
+  cc.onclick = e => { const b = e.target.closest('button[data-x]'); if (b) { filas.splice(Number(b.dataset.x), 1); repintar(); } };
+}
+
+function pintarInformesCfg(filas) {
+  const ayer = addDias(hoy(), -1);
+  $('#infCards').innerHTML = filas.map((f, i) => '<div class="inf-card"><div class="row" style="justify-content:space-between;align-items:flex-start;gap:12px"><div><h4>' + esc(f.nombre) + '</h4><p class="sub">' + esc(f.descripcion) + '</p></div>' +
+    '<button class="btn sm" data-prev="' + esc(f.clave) + '">' + ICON.correo + 'Vista previa</button></div><div class="row" style="gap:18px;margin-top:8px">' +
+    '<label class="chk" title="' + esc(TIPS_CFG.automatico) + '"><span class="switch"><input type="checkbox" data-i="' + i + '" data-c="automatico"' + (f.automatico ? ' checked' : '') + '><span></span></span>Envío automático</label>' +
+    '<label class="chk" title="' + esc(TIPS_CFG.pdf) + '"><span class="switch"><input type="checkbox" data-i="' + i + '" data-c="pdf"' + (f.pdf ? ' checked' : '') + '><span></span></span>Adjuntar PDF</label></div></div>').join('');
+  $('#infCards').onchange = e => { const el = e.target; if (el.dataset.c) filas[Number(el.dataset.i)][el.dataset.c] = el.checked; };
+  $('#infCards').onclick = e => { const b = e.target.closest('[data-prev]'); if (b) abrirInforme(b.dataset.prev, { fecha: ayer }); };
 }
 
 async function probarIAUI() {

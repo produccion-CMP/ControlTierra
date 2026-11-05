@@ -22,7 +22,7 @@ const PERMISOS = {
   gasoil: ['abastecimiento'],
   viajes: ['abastecimiento'],
   pesaje: ['abastecimiento'],
-  calidad: ['abastecimiento'],
+  calidad: ['abastecimiento', 'molienda'],
   liquidacion: ['abastecimiento'],
   molienda: ['molienda'],
   ajustes: ['molienda'],
@@ -34,10 +34,11 @@ const ROL_TXT = { admin: 'Administrador', abastecimiento: 'Responsable de abaste
 const ROL_LEGADO = { cantera: 'abastecimiento', balanza: 'abastecimiento', calidad: 'abastecimiento' };
 const rolN = r => ROL_LEGADO[String(r || '').toLowerCase()] || String(r || '').toLowerCase();
 const rolTxt = r => ROL_TXT[rolN(r)] || r;
+const normDominio = d => String(d || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const esAdmin = () => !!S.ses && rolN(S.ses.rol) === 'admin';
 const muertoCis = c => c && c.stockMuerto !== undefined ? c.stockMuerto : (num(par('CISTERNA_STOCK_MUERTO', 500)) || 0);
 const utilCis = c => Math.max(0, c.nivel - muertoCis(c));
-const esAjusteCis = m => m && (m.tipo === 'Ajuste' || (m.diferencia === null && m.litrosEstimados === null));
+const esAjusteCis = m => m && (m.tipo === 'Ajuste' || (m.diferencia === null && m.litrosEstimados === null) || /ajuste de nivel|inicio de control/i.test(m.observaciones || ''));
 
 const P = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
 const ICON = {
@@ -714,14 +715,14 @@ function calcBalance(desde, hasta) {
   const fechas = Array.from(new Set(D.map(d => d.fecha).concat(ajustes.map(a => a.fecha)))).sort();
   const g = f => mapD[f] || {};
   const consumoDe = f => (g(f).molT || 0) + ((g(f).molPal || 0) - (g(f).molPalConT || 0)) * fMolHist;
-  const ingresoDe = f => (g(f).ingresoT || 0) - (excl ? (g(f).rechT || 0) : 0);
+  const ingresoDe = f => (g(f).ingresoT || 0) + (g(f).ingresoEst || 0) - (excl ? (g(f).rechT || 0) : 0);
   const siloOutDe = f => (g(f).siloPal || 0) * fSilo;
   const P = stockValidado(fechas, ingresoDe, consumoDe, ajustes.filter(a => a.nodo === 'Playa'));
   const Si = stockValidado(fechas, consumoDe, siloOutDe, ajustes.filter(a => a.nodo === 'Silo'));
   const serie = fechas.map((f, i) => {
     const d = g(f);
     return {
-      fecha: f, ingreso: d.ingresoT || 0, rech: d.rechT || 0, ingresoPlaya: ingresoDe(f), tickets: d.tickets || 0, consumo: consumoDe(f), molPal: d.molPal || 0, siloOut: siloOutDe(f), siloPal: d.siloPal || 0,
+      fecha: f, ingreso: (d.ingresoT || 0) + (d.ingresoEst || 0), ingresoBal: d.ingresoT || 0, ingresoEst: d.ingresoEst || 0, rech: d.rechT || 0, ingresoPlaya: ingresoDe(f), tickets: d.tickets || 0, consumo: consumoDe(f), molPal: d.molPal || 0, siloOut: siloOutDe(f), siloPal: d.siloPal || 0,
       stockPlaya: P.v[i], estPlaya: P.est[i], stockSilo: Si.v[i], estSilo: Si.est[i],
       tCamion: d.tickets ? d.ingresoT / d.tickets : null, fMol: d.molPalConT > 0 ? d.molT / d.molPalConT : null, litros: d.litros || 0,
       estimado: (d.molPal || 0) > (d.molPalConT || 0)
@@ -749,7 +750,7 @@ function calcBalance(desde, hasta) {
     maxPlaya: maxP, maxSilo: maxS, capPlaya: capP, capSilo: capS,
     ingreso: sum(R, d => d.ingresoT), rechT: sum(R, d => d.rechT), ingresoPlaya: sum(enR, s => s.ingresoPlaya), tickets: sum(R, d => d.tickets), consumo: sum(enR, s => s.consumo),
     siloOut: sum(enR, s => s.siloOut), molPal: sum(R, d => d.molPal), siloPal: sum(R, d => d.siloPal), litros: sum(R, d => d.litros),
-    palCam: sum(R, d => d.palCam), viajes: sum(R, d => d.viajes), unid: sum(R, d => d.unid), internos: sum(R, d => d.internos),
+    palCam: sum(R, d => d.palCam), palAco: sum(R, d => d.palAco), palViajes: sum(R, d => d.palViajes), palPes: sum(R, d => d.palPes), ingresoEst: sum(R, d => d.ingresoEst), molT: sum(R, d => d.molT), molPalConT: sum(R, d => d.molPalConT), viajes: sum(R, d => d.viajes), unid: sum(R, d => d.unid), internos: sum(R, d => d.internos),
     consumoMedio: consumoMedio, siloMedio: siloMedio,
     diasPlaya: consumoMedio > 0 && stockPlaya !== null ? stockPlaya / consumoMedio : null, diasSilo: siloMedio > 0 && stockSilo !== null ? stockSilo / siloMedio : null,
     cubicaciones: cub,

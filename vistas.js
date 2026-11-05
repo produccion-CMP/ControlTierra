@@ -61,19 +61,64 @@ async function pintarProyeccion(cont, ok) {
     '<div class="kpis" style="margin-bottom:6px">' + kpi('Hoy', nf(pr.stock) + '<small>t</small>', '≈ ' + nf(pr.stock / dn) + ' m³', '') +
     kpi('Últimos 7 días', (v7 >= 0 ? '+' : '') + nf(v7) + '<small>t</small>', 'ingreso − molido', v7 < 0 ? 'warn' : 'ok') +
     kpi('En ' + pr.dias + ' días', '≈ ' + nf(fin.stock) + '<small>t</small>', nf(fin.stockMin) + ' a ' + nf(fin.stockMax) + ' t', pr.agota ? 'bad' : '') +
-    kpi('Se agota', pr.agota ? fMedia(pr.agota) : 'no', pr.agota ? 'en el escenario desfavorable' : 'en ' + pr.dias + ' días', pr.agota ? 'bad' : 'ok') + '</div>';
+    kpi('Días de stock', pr.diasStock !== null && pr.diasStock !== undefined ? '≈ ' + nf(pr.diasStock, 1) + '<small> días</small>' : '–', 'stock ÷ ' + nf(pr.consumoHabitual) + ' t/día de molienda habitual', pr.diasStock !== null && pr.diasStock < 5 ? 'warn' : 'ok') + '</div>';
   cont.innerHTML = '<div class="card proy-card"><div class="card-h"><div class="t"><h3>Playa de molienda: 7 días atrás y ' + pr.dias + ' adelante</h3><div class="sub">Proyección con el ingreso y consumo habitual de cada día de la semana y el pronóstico de lluvia</div></div>' +
     (S.ses ? botonInforme('playa', { fecha: pr.hasta }, 'Informe') : '') + '</div>' + res +
     (sinStock ? '' : '<div class="chart" style="height:220px"><canvas id="chProy"></canvas></div>') +
     '<div class="proy-dias">' + pr.proyeccion.map(x => '<div class="' + (x.lluvia ? 'llueve' : '') + '"><span>' + fCorta(x.fecha) + ' ' + (x.clima ? climaIco(x.clima.codigo) : '') + '</span><b>' + (x.ingreso - x.consumo >= 0 ? '+' : '') + nf(x.ingreso - x.consumo) + ' t</b><span class="sub">' + (x.clima ? nf(x.clima.mm, 0) + ' mm · ' + nf(x.clima.tmax) + '°' : '') + '</span></div>').join('') + '</div>' +
     '<div class="leyenda"><span>Δ por día = ingreso esperado − consumo esperado</span><span>Lluvia: se espera el ' + nf(pr.factorLluvia * 100) + ' % del ingreso (' + esc(pr.fuenteLluvia) + ')</span>' + (pr.errorClima ? '<span class="rojo">Sin pronóstico: ' + esc(pr.errorClima) + '</span>' : '') + '</div></div>';
   enlazarInformes(cont);
+  const iHoy = L.indexOf(fCorta(hoy()));
+  if (typeof Chart !== 'undefined' && !S.lineaHoyOk) {
+    S.lineaHoyOk = true;
+    Chart.register({ id: 'lineaHoy', afterDatasetsDraw: ch => {
+      const o = ch.options.plugins && ch.options.plugins.lineaHoy;
+      if (!o || o.i === undefined || o.i < 0) return;
+      const x = ch.scales.x.getPixelForValue(o.i);
+      const a = ch.chartArea;
+      const c2 = ch.ctx;
+      const col = cssVar('--accent') || '#d96b3a';
+      c2.save(); c2.strokeStyle = col; c2.lineWidth = 2; c2.setLineDash([4, 4]); c2.beginPath(); c2.moveTo(x, a.top); c2.lineTo(x, a.bottom); c2.stroke(); c2.setLineDash([]);
+      c2.fillStyle = col; c2.font = '800 12px ' + (cssVar('--font') || 'sans-serif'); c2.textAlign = 'center'; c2.fillText('HOY', x, a.top + 12); c2.restore();
+    } });
+  }
   if (!sinStock) grafico('chProy', 'line', L, [
     { label: 'Stock calculado t', data: pas, borderColor: color(1), backgroundColor: color(1), pointRadius: 3 },
     { label: 'Proyección t', data: unir('stock'), borderColor: color(1), backgroundColor: color(1), borderDash: [6, 4], pointRadius: 2 },
     { label: 'Escenario favorable', data: unir('stockMax'), borderColor: 'transparent', backgroundColor: 'rgba(217,107,58,.14)', fill: '+1', pointRadius: 0 },
     { label: 'Escenario desfavorable', data: unir('stockMin'), borderColor: 'rgba(217,107,58,.35)', backgroundColor: 'rgba(217,107,58,.14)', borderDash: [2, 3], pointRadius: 0 }
-  ], { scales: { y: { beginAtZero: true, min: 0 } }, plugins: { legend: { display: true, labels: { filter: it => it.text !== 'Escenario favorable' } } } });
+  ], { scales: { y: { beginAtZero: true, min: 0 } }, plugins: { lineaHoy: { i: iHoy }, legend: { display: true, labels: { filter: it => it.text !== 'Escenario favorable' } } } });
+  $$('.proy-dias > div', cont).forEach((d, i) => { if (pr.proyeccion[i] && pr.proyeccion[i].fecha === hoy()) d.classList.add('hoy'); });
+}
+
+async function vSolicitudes(cont) {
+  if (!cont || !S.ses || rolN(S.ses.rol) !== 'admin') return;
+  let l = [];
+  try { l = await api('solicitudes'); } catch (e) { return; }
+  if (!l.length) { cont.innerHTML = ''; return; }
+  const txt = r => r.tipo === 'ajusteCisterna' ? 'Nivel de la cisterna de gasoil: ' + nf(num(r.datos.litros)) + ' L el ' + fCorta(r.datos.fecha) + ' ' + esc(r.datos.hora || '') : 'Stock de ' + esc(String(r.datos.nodo || '').toLowerCase()) + ' (' + esc(TIPO_AJUSTE_TXT[r.datos.tipo] || r.datos.tipo) + '): ' + nf(num(r.datos.toneladas)) + ' t el ' + fCorta(r.datos.fecha);
+  cont.innerHTML = '<div class="card retenidos solicitudes"><div class="card-h"><div class="t"><h3>' + ICON.ajuste + ' Ajustes pendientes de autorización</h3><div class="sub">Solo cuentan cuando los autorizás.</div></div></div>' +
+    l.map(r => '<div class="ret"><div class="txt"><b>' + txt(r) + '</b><div class="mot">Pedido por ' + esc(r.usuario) + ': «' + esc(r.motivo) + '»</div></div><div class="row"><button class="btn sm pri" data-sa="' + r.id + '">Autorizar</button><button class="btn sm dan" data-sr="' + r.id + '">Rechazar</button></div></div>').join('') + '</div>';
+  const res = async (id, accion) => {
+    let nota = '';
+    if (accion === 'rechazar') {
+      nota = await new Promise(ok2 => { modal('Rechazar ajuste', '<label class="f">Motivo del rechazo<input id="nRech" placeholder="Opcional"></label>', [{ txt: 'Cancelar', fn: () => { ok2(null); } }, { txt: 'Rechazar', cls: 'dan', fn: mm => { ok2($('#nRech', mm).value); return true; } }]); });
+      if (nota === null) return;
+    }
+    bloquear(accion === 'aprobar' ? 'Aplicando el ajuste…' : 'Rechazando…');
+    try { await api('resolverSolicitud', { id: id, accion: accion, nota: nota }); invalidar(); await cargarResumen(true); toast(accion === 'aprobar' ? 'Ajuste autorizado y aplicado' : 'Ajuste rechazado', 'ok'); vSolicitudes(cont); } catch (e) { toast(e.message, 'bad', 8000); } finally { desbloquear(); }
+  };
+  $$('[data-sa]', cont).forEach(b => { b.onclick = () => res(b.dataset.sa, 'aprobar'); });
+  $$('[data-sr]', cont).forEach(b => { b.onclick = () => res(b.dataset.sr, 'rechazar'); });
+}
+
+async function misSolicitudes(cont, tipo) {
+  if (!cont || !S.ses || rolN(S.ses.rol) === 'admin') return;
+  let l = [];
+  try { l = (await api('solicitudes')).filter(r => !tipo || r.tipo === tipo); } catch (e) { return; }
+  cont.innerHTML = l.length ? '<div class="card"><div class="card-h"><div class="t"><h3>Mis pedidos de ajuste</h3><div class="sub">Los autoriza el administrador</div></div></div>' +
+    tabla([[r => fCorta(r.ts.slice(0, 10)), 'Pedido'], [r => r.tipo === 'ajusteCisterna' ? nf(num(r.datos.litros)) + ' L cisterna' : nf(num(r.datos.toneladas)) + ' t ' + esc(String(r.datos.nodo || '').toLowerCase()), 'Ajuste'], [r => esc(r.motivo), 'Motivo', 'wrap'],
+      [r => '<span class="tag ' + (r.estado === 'Aprobado' ? 't-ok' : r.estado === 'Rechazado' ? 't-bad' : 't-warn') + '">' + esc(r.estado) + '</span>' + (r.nota ? ' <span class="sub">' + esc(r.nota) + '</span>' : ''), 'Estado']], l) + '</div>' : '';
 }
 
 async function vRetenidos(cont) {
@@ -106,7 +151,7 @@ async function vInicio() {
     '<div class="card flujo-card"><div class="skel" style="height:150px"></div></div><div class="grid g-21"><div class="card"><div class="skel" style="height:220px"></div></div><div class="card"><div class="skel" style="height:220px"></div></div></div></div>';
   segmento($('#segDias'), opDias, dSel, selDias, true);
   const ok = vivo();
-  const p14 = api('rango', { desde: addDias(hoy(), -13), hasta: hoy() });
+  const p14 = S.ses ? api('rango', { desde: addDias(hoy(), -13), hasta: hoy() }) : Promise.resolve(null);
   p14.catch(() => null);
   await cargarResumen();
   if (!ok()) return;
@@ -130,25 +175,33 @@ async function vInicio() {
     ['cubicacion', 'Ajuste de stock de playa', 'ajuste', '#/cargar/ajustes', 'molienda']
   ];
   const sp = nodoStock(b, 'playa');
-  const uPes = (R.ultimo || {}).pesajes || '';
-  const sinBal = (R.diario || []).filter(d => d.fecha > uPes && d.fecha <= hasta && d.viajes > 0);
-  if (sinBal.length && b.stockPlaya !== null) sp.m3 += '<br><span class="rojo">faltan balanzas desde ' + fCorta(sinBal[0].fecha) + '</span>';
   const ss = nodoStock(b, 'silo');
+  const m3p = b.m3Palada;
+  const tPal = num(par('T_POR_PALADA_CANTERA', 4.5)) || 4.5;
+  const camT = b.unid + b.internos;
+  const palPlanta = camT ? b.palCam * b.unid / camT : 0;
+  const palAcop = b.palCam - palPlanta + (b.palAco || 0);
+  const m3Pes = (b.palPes || 0) * m3p;
+  const densBal = m3Pes ? b.ingreso / m3Pes : null;
+  const molT = b.molT || 0;
+  const ln = (a, c) => '<span class="nl"><b>' + a + '</b>' + (c ? ' ' + c : '') + '</span>';
   const per = ultimo ? 'Ayer: ' + fLarga(hasta) : 'Últimos ' + dias + ' días';
   app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">' + esc(fLarga(hoy())) + '</div><h1>Control de <span>tierra</span></h1>' +
     '<p class="sub">' + esc(per) + ' · de la cantera al silo.</p></div><div class="row">' + (S.ses ? botonInforme('diario', { fecha: addDias(hoy(), -1) }, 'Resumen diario') : '') + '<div id="segDias"></div></div></div>' +
-    '<div id="retenidos"></div>' +
-    (R.errorInforme && R.errorInforme !== 'Sin configurar' ? '<div class="alert warn">' + ICON.alerta + '<div><b>No se pudo leer el Informe de Producción (molienda/silo).</b> ' + esc(R.errorInforme) + '</div></div>' : '') +
-    (R.errorViajes ? '<div class="alert bad">' + ICON.alerta + '<div><b>No se pudo leer la planilla de viajes.</b> ' + esc(R.errorViajes) + '</div></div>' : '') +
+    '<div id="retenidos"></div><div id="solicitudes"></div>' +
+    (S.ses && R.errorInforme && R.errorInforme !== 'Sin configurar' ? '<div class="alert warn">' + ICON.alerta + '<div><b>No se pudo leer el Informe de Producción (molienda/silo).</b> ' + esc(R.errorInforme) + '</div></div>' : '') +
+    (S.ses && R.errorViajes ? '<div class="alert bad">' + ICON.alerta + '<div><b>No se pudo leer la planilla de viajes.</b> ' + esc(R.errorViajes) + '</div></div>' : '') +
     '<div class="card flujo-card"><div class="tramos-band"><span class="tb abastecimiento">' + ICON.camion + '<b>Abastecimiento</b> cantera → balanza</span><span class="tb molienda">' + ICON.molienda + '<b>Molienda</b> playa → silo</span></div><div class="flujo" id="flujo"><svg class="lineas" id="lineas"></svg>' +
-    nodo('cantera', 'cantera', 'Cantera', vn(b.unid + b.internos), 'camiones cargados<br>' + nf(b.palCam) + ' paladas · ≈ ' + nf(b.palCam * b.m3Palada) + ' m³', '#/tablero/cantera') +
-    nodo('viajes', 'camion', 'Viajes', vn(b.viajes), 'a planta registrados<br>' + nf(b.internos) + ' internos', '#/tablero/viajes') +
-    nodo('balanza', 'balanza', 'Balanza', vn(b.ingreso) + '<small> t</small>', '≈ ' + nf(b.ingreso / b.densidad) + ' m³ · ' + nf(b.tickets) + ' camiones' + (b.rechT ? '<br><span class="rojo">' + nf(b.rechT, 0) + ' t rechazadas</span>' : ''), '#/tablero/viajes') +
-    nodo('playa', 'playa', 'Playa', sp.v, sp.m3 + (b.diasPlaya !== null ? '<br>≈ ' + nf(b.diasPlaya, 1) + ' días de molienda' : ''), '#/tablero/balance', '<div class="tanque ' + (b.stockPlaya === null ? 'bad' : '') + '"><span data-w="' + pctP + '"></span></div>') +
-    nodo('molienda', 'molienda', 'Molienda', vn(b.consumo) + '<small> t</small>', '≈ ' + nf(b.consumo / b.densidad) + ' m³ · ' + nf(b.molPal) + ' paladas', '#/tablero/balance') +
-    nodo('silo', 'silo', 'Silo', ss.v, ss.m3 + '<br>' + nf(b.siloOut, 0) + ' t extraídas', '#/tablero/balance', '<div class="tanque ' + (b.stockSilo === null ? 'warn' : '') + '"><span data-w="' + pctS + '"></span></div>') +
-    '</div>' + tiraEquivalencias(b) + '</div>' + '<div id="proyPlaya"></div>' +
-    '<div class="grid g-21" style="align-items:start"><div class="card"><div class="card-h"><div class="t"><h3>Para revisar</h3><div class="sub">Controles cruzados de los últimos 14 días</div></div><a class="btn sm" href="#/tablero/controles">Ver todos</a></div><div class="alertas" id="alertas"><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div></div></div>' +
+    nodo('cantera', 'cantera', 'Cantera', '≈ ' + vn(palPlanta * tPal) + '<small> t</small>', ln('≈ ' + nf(palPlanta * m3p) + ' m³', 'a planta') + ln(nf(palPlanta) + ' paladas', '· ' + nf(b.unid) + ' camiones') +
+      '<span class="nl sec">Acopiado en cantera: ' + nf(palAcop) + ' pal. ≈ ' + nf(palAcop * m3p) + ' m³' + (b.internos ? ' (' + nf(b.internos) + ' viajes internos)' : '') + '</span>', '#/tablero/cantera') +
+    nodo('viajes', 'camion', 'Viajes a CEVIL', '≈ ' + vn(b.palViajes * tPal) + '<small> t</small>', ln('≈ ' + nf(b.palViajes * m3p) + ' m³') + ln(nf(b.palViajes) + ' paladas', '· ' + nf(b.viajes) + ' viajes') + '<span class="nl sec">paladas según cada camión × ' + nf(tPal, 1) + ' t</span>', '#/tablero/viajes') +
+    nodo('balanza', 'balanza', 'Balanza', vn(b.ingreso) + '<small> t</small>', ln('≈ ' + nf(m3Pes) + ' m³', '· ' + nf(b.tickets) + ' camiones') + ln(densBal ? nf(densBal, 2) + ' t/m³' : '–', 'densidad') +
+      (b.ingresoEst ? '<span class="nl sec">+ ≈ ' + nf(b.ingresoEst) + ' t de viajes sin ticket</span>' : '') + (S.ses && b.rechT ? '<span class="nl rojo">' + nf(b.rechT, 0) + ' t rechazadas</span>' : ''), '#/tablero/viajes') +
+    nodo('playa', 'playa', 'Playa', sp.v, ln(sp.m3) + (b.stockPlaya !== null ? ln('≈ ' + nf(b.stockPlaya / b.densidad / m3p) + ' paladas') : '') + (b.diasPlaya !== null ? '<span class="nl sec">≈ ' + nf(b.diasPlaya, 1) + ' días de molienda</span>' : ''), '#/tablero/balance', '<div class="tanque ' + (b.stockPlaya === null ? 'bad' : '') + '"><span data-w="' + pctP + '"></span></div>') +
+    nodo('molienda', 'molienda', 'Molienda', vn(b.consumo) + '<small> t</small>', ln('≈ ' + nf(b.molPal * m3p) + ' m³') + ln(nf(b.molPal) + ' paladas', 'al cajón') + '<span class="nl sec">' + nf(b.fMol, 2) + ' t/palada · ' + nf(molT) + ' t por balanza</span>', '#/tablero/balance') +
+    nodo('silo', 'silo', 'Silo', ss.v, ln(ss.m3) + ln('+ ' + nf(molT) + ' t', 'entró') + ln('− ' + nf(b.siloOut, 0) + ' t', '(' + nf(b.siloPal) + ' pal.) salió'), '#/tablero/balance', '<div class="tanque ' + (b.stockSilo === null ? 'warn' : '') + '"><span data-w="' + pctS + '"></span></div>') +
+    '</div></div>' + '<div id="proyPlaya"></div>' +
+    '<div class="grid ' + (S.ses ? 'g-21' : 'g2') + '" style="align-items:start">' + (S.ses ? '<div class="card"><div class="card-h"><div class="t"><h3>Para revisar</h3><div class="sub">Controles cruzados de los últimos 14 días</div></div><a class="btn sm" href="#/tablero/controles">Ver todos</a></div><div class="alertas" id="alertas"><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div></div></div>' : '') +
     '<div class="col" style="gap:16px"><div class="card"><div class="card-h"><div class="t"><h3>Estado de la carga</h3><div class="sub">Último día con datos por fuente</div></div></div><div class="estado">' +
     fuentes.map(f => {
       const sm = semaforoDias((R.ultimo || {})[f[0]]);
@@ -166,6 +219,7 @@ async function vInicio() {
   $$('.nodo').forEach(n => { n.onclick = () => { location.hash = n.dataset.ir; }; });
   enlazarInformes(app());
   vRetenidos($('#retenidos'));
+  vSolicitudes($('#solicitudes'));
   pintarProyeccion($('#proyPlaya'), ok);
   requestAnimationFrame(() => {
     $$('.tanque span').forEach(s => { s.style.width = s.dataset.w + '%'; });
@@ -259,7 +313,7 @@ function enlazarFiltros(fn) {
   $('#fAct').onclick = () => { invalidar(); S.resumen = null; fn(); };
 }
 
-const TABS = [
+const TABS_T = [
   ['balance', 'Balance', ICON.playa],
   ['controles', 'Controles', ICON.alerta],
   ['viajes', 'Viajes y balanza', ICON.camion],
@@ -269,6 +323,7 @@ const TABS = [
 ];
 
 async function vTablero(tab) {
+  const TABS = TABS_T.filter(t => S.ses || t[0] !== 'controles');
   if (!TABS.some(t => t[0] === tab)) tab = 'balance';
   app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Tablero</div><h1>Análisis del período</h1><p class="sub">' + fMedia(S.desde) + ' al ' + fMedia(S.hasta) + '</p></div></div>' +
     barraFiltros() + '<div id="tabsT" style="margin-bottom:16px"></div><div id="tabC"><div class="kpis">' + '<div class="skel" style="height:96px"></div>'.repeat(5) + '</div><div class="card mt"><div class="skel" style="height:260px"></div></div></div></div>';
@@ -580,6 +635,52 @@ function tabCombustible(c) {
   ]);
   grafico('chCons', 'bar', fd.map(fCorta), maqs.slice(0, 8).map((m, i) => ({ label: m, data: fd.map(f => sum(porDia[f].filter(x => x.maquina === m), x => x.litros)), backgroundColor: color(i + 1) })), { scales: { x: { stacked: true }, y: { stacked: true } } });
   grafico('chLh', 'bar', conL.map(x => x.n), [{ label: 'L/h', data: conL.map(x => x.lH), backgroundColor: color(4) }]);
+  extrasCombustible(c, cis, comb);
+}
+
+function tanqueCisterna(cis) {
+  const cap = cis.capacidad || Math.max(cis.nivel, 1);
+  const muerto = muertoCis(cis);
+  const util = utilCis(cis);
+  const pM = Math.max(0, Math.min(100, Math.min(cis.nivel, muerto) / cap * 100));
+  const pU = Math.max(0, Math.min(100 - pM, util / cap * 100));
+  return '<div class="tanque-cis"><div class="tq"><span class="u" style="height:' + pU + '%;bottom:' + pM + '%"></span><span class="m" style="height:' + pM + '%"></span></div>' +
+    '<div class="tq-d"><b>Máx. ' + nf(cap) + ' L</b><span><i class="sw" style="background:var(--ok)"></i>Consumible <b>' + nf(util) + ' L</b></span><span><i class="sw" style="background:var(--bad)"></i>Stock muerto <b>' + nf(muerto) + ' L</b></span><span class="sub">Físico total ' + nf(cis.nivel) + ' L</span></div></div>';
+}
+
+function extrasCombustible(c, cis, comb) {
+  const maq = comb.filter(x => !x.cisterna);
+  const est = {};
+  maq.forEach(x => { const e = est[x.maquina] || (est[x.maquina] = { t: 0, d: new Set() }); e.t += x.litros; e.d.add(x.fecha); });
+  const nombresM = Object.keys(est).sort();
+  c.insertAdjacentHTML('beforeend', '<div class="grid g-21" style="align-items:start"><div class="card"><div class="card-h"><div class="t"><h3>Cisterna</h3><div class="sub">Consumible y stock muerto</div></div></div>' + tanqueCisterna(cis) + '</div>' +
+    caja('chProm', 'Consumo promedio por día activo', 'Litros ÷ días con carga de cada máquina') + '</div>' +
+    '<div class="card"><div class="card-h"><div class="t"><h3>Evolución del consumo</h3></div><div class="row"><select id="evAg"><option value="dia">Por día</option><option value="mes">Por mes</option><option value="anio">Por año</option></select><select id="evMq"><option value="">Todas las máquinas</option>' + nombresM.map(m => '<option>' + esc(m) + '</option>').join('') + '</select></div></div><div class="chart"><canvas id="chEvo"></canvas></div></div>' +
+    '<div class="card"><div class="card-h"><div class="t"><h3>Registro de cargas</h3><div class="sub">Tocá un encabezado para ordenar</div></div><input id="evBus" placeholder="Buscar fecha, máquina o valor…" style="width:240px"></div><div id="evTab"></div></div>');
+  grafico('chProm', 'bar', nombresM, [{ label: 'L por día activo', data: nombresM.map(m => est[m].t / est[m].d.size), backgroundColor: color(2) }]);
+  const evo = () => {
+    const ag = $('#evAg').value;
+    const mq = $('#evMq').value;
+    const ser = {};
+    maq.filter(x => !mq || x.maquina === mq).forEach(x => { const k = ag === 'dia' ? x.fecha : ag === 'mes' ? x.fecha.slice(0, 7) : x.fecha.slice(0, 4); ser[k] = (ser[k] || 0) + x.litros; });
+    const L = Object.keys(ser).sort();
+    grafico('chEvo', 'line', L.map(k => ag === 'dia' ? fCorta(k) : k), [{ label: 'Litros', data: L.map(k => ser[k]), borderColor: color(1), backgroundColor: 'rgba(217,107,58,.12)', fill: true }], { scales: { y: { beginAtZero: true } } });
+  };
+  let orden = ['fh', -1];
+  const tab = () => {
+    const q = normTxt($('#evBus').value);
+    const val = { fh: x => x.fecha + ' ' + x.hora, maquina: x => x.maquina, litros: x => x.litros, horometro: x => x.horometro || 0 };
+    const l = comb.filter(x => !q || normTxt(x.fecha + ' ' + x.hora + ' ' + x.maquina + ' ' + x.litros + ' ' + (x.horometro || '')).indexOf(q) >= 0)
+      .sort((a, b2) => { const va = val[orden[0]](a); const vb = val[orden[0]](b2); return (va < vb ? -1 : va > vb ? 1 : 0) * orden[1]; });
+    $('#evTab').innerHTML = '<div class="tw max"><table><thead><tr>' + [['fh', 'Fecha y hora'], ['maquina', 'Máquina'], ['litros', 'Litros'], ['horometro', 'Horómetro']].map(h => '<th class="click' + (h[0] === 'litros' || h[0] === 'horometro' ? ' n' : '') + '" data-o="' + h[0] + '">' + h[1] + (orden[0] === h[0] ? (orden[1] > 0 ? ' ▲' : ' ▼') : '') + '</th>').join('') + '</tr></thead><tbody>' +
+      l.map(x => '<tr><td>' + fCorta(x.fecha) + ' ' + esc(x.hora) + '</td><td' + (x.cisterna ? ' style="color:var(--ok)"' : '') + '>' + esc(x.maquina) + '</td><td class="n"><b>' + nf(x.litros) + '</b></td><td class="n">' + (x.cisterna || !x.horometro ? '–' : nf(x.horometro, 1)) + '</td></tr>').join('') + '</tbody></table></div><div class="sub mt">' + l.length + ' registros · ' + nf(sum(l.filter(x => !x.cisterna), x => x.litros)) + ' L a máquinas</div>';
+    $$('#evTab th[data-o]').forEach(th => { th.onclick = () => { orden = [th.dataset.o, orden[0] === th.dataset.o ? -orden[1] : 1]; tab(); }; });
+  };
+  $('#evAg').onchange = evo;
+  $('#evMq').onchange = evo;
+  $('#evBus').oninput = tab;
+  evo();
+  tab();
 }
 
 const COLOR_DIA = { prod: '--ok', parada: '--bad', clima: '--info', falta: '--warn' };

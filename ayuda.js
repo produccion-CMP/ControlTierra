@@ -136,6 +136,7 @@ function claveAyuda() {
 }
 
 function sugerenciasAyuda(def) {
+  if (!S.ses) return [];
   const out = (S.ayudaSug || []).map(t => ({ sev: 'info', t: t }));
   const lista = S.ultControles || [];
   if (def && def.controles && lista.length) {
