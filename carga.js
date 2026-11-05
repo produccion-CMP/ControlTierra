@@ -641,7 +641,7 @@ function parseNum(v) {
 function edPesaje(volver) {
   S.imp = null;
   app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos</div><h1>Balanza de ingreso</h1><p class="sub">Exportá el pesaje desde el software de la balanza (PESAJE.XLS, .xlsx o .csv) y soltalo acá. Los tickets ya importados se actualizan, no se duplican.</p></div></div></div>' +
-    '<div class="card"><div class="drop" id="drop">' + ICON.archivo + '<b>Arrastrá el archivo o tocá para elegirlo</b><span class="sub">PESAJE.XLS · .xlsx · .csv</span><input type="file" id="fileP" accept=".xls,.xlsx,.csv" class="hide"></div><div id="impC"></div></div></div>';
+    '<div class="row" style="justify-content:flex-end;margin-bottom:10px"><a class="btn" href="#/acopios/descargas">' + ICON.playa + 'Asignar descargas a acopios</a></div><div class="card"><div class="drop" id="drop">' + ICON.archivo + '<b>Arrastrá el archivo o tocá para elegirlo</b><span class="sub">PESAJE.XLS · .xlsx · .csv</span><input type="file" id="fileP" accept=".xls,.xlsx,.csv" class="hide"></div><div id="impC"></div></div></div>';
   const drop = $('#drop');
   const fi = $('#fileP');
   drop.onclick = () => fi.click();
@@ -1266,11 +1266,11 @@ async function edGasoil(f, volver) {
     } else if (modo === 'cisterna') {
       $('#gForm').innerHTML = '<div class="form">' + base + '<label class="f">Litros recibidos<input id="gL" type="number" min="0" step="1" inputmode="decimal"></label><label class="f full">Se registra como «' + esc(nomCis) + '» en la planilla de combustible.</label></div>';
     } else if (modo === 'nivel') {
-      $('#gForm').innerHTML = '<div class="form">' + base + '<label class="f">Litros que hay ahora en la cisterna<input id="gMed" type="number" min="0" step="1" inputmode="decimal"' + (cis ? ' placeholder="calculado ' + nf(cis.nivel, 0) + ' L"' : '') + '></label><label class="f full">Observaciones<input id="gO" placeholder="Opcional"></label>' +
-        '<p class="f full sub">Fija el nivel de la cisterna en este valor a esa hora. Desde ahí se suman los llenados y se restan las cargas a máquinas.</p></div>';
+      $('#gForm').innerHTML = '<div class="form">' + base + '<label class="f">Litros totales que hay ahora en la cisterna<input id="gMed" type="number" min="0" step="1" inputmode="decimal"' + (cis ? ' placeholder="calculado ' + nf(cis.nivel, 0) + ' L"' : '') + '></label><label class="f full">Observaciones<input id="gO" placeholder="Opcional"></label>' +
+        '<p class="f full sub">Inicio de control: fija el nivel total (incluidos los ' + nf(muertoCis(cis), 0) + ' L de stock muerto) a esa hora. Desde ahí se suman los llenados y se restan las cargas. No se registra como diferencia.</p></div>';
     } else {
       $('#gForm').innerHTML = '<div class="form">' + base + '<label class="f">Litros medidos (varilla)<input id="gMed" type="number" min="0" step="1" inputmode="decimal"></label><label class="f full">Observaciones<input id="gO" placeholder="Ej: medición con varilla, tabla de conversión"></label>' +
-        '<label class="chk full"><input type="checkbox" id="gBase" checked> Corregir el nivel de la cisterna con esta medición</label></div>';
+        (esAdmin() ? '<label class="chk full"><input type="checkbox" id="gBase"> Usar esta medición como inicio de control (fija el nivel, sin marcar diferencia)</label>' : '<p class="f full sub">La medición se compara con el nivel calculado. Para fijar el nivel avisá al administrador.</p>') + '</div>';
     }
     $('#gForm').oninput = chequear;
     $('#gForm').onchange = chequear;
@@ -1279,9 +1279,9 @@ async function edGasoil(f, volver) {
     if (pr) pr.focus();
   };
   const nivelMal = cis && (cis.nivel < 0 || (cis.capacidad && cis.nivel > cis.capacidad * 1.05));
-  if (nivelMal) modo = 'nivel';
-  segmento($('#gModo'), [['maquina', 'Carga a máquina'], ['cisterna', 'Llenado cisterna'], ['medicion', 'Medición'], ['nivel', 'Ajustar nivel']], modo, k => { modo = k; pintarForm(); }, true);
-  if (nivelMal) $('#gChk').insertAdjacentHTML('beforebegin', '<div class="alert warn mt">' + ICON.alerta + '<div>El nivel calculado de la cisterna (' + nf(cis.nivel, 0) + ' L) no es posible' + (cis.capacidad ? ' para ' + nf(cis.capacidad, 0) + ' L de capacidad' : '') + '. Cargá cuánto hay ahora para corregirlo.</div></div>');
+  if (nivelMal && esAdmin()) modo = 'nivel';
+  segmento($('#gModo'), [['maquina', 'Carga a máquina'], ['cisterna', 'Llenado cisterna'], ['medicion', 'Medición']].concat(esAdmin() ? [['nivel', 'Inicio de control']] : []), modo, k => { modo = k; pintarForm(); }, true);
+  if (nivelMal) $('#gChk').insertAdjacentHTML('beforebegin', '<div class="alert warn mt">' + ICON.alerta + '<div>El nivel calculado de la cisterna (' + nf(cis.nivel, 0) + ' L) no es posible' + (cis.capacidad ? ' para ' + nf(cis.capacidad, 0) + ' L de capacidad' : '') + '. ' + (esAdmin() ? 'Cargá cuánto hay ahora para iniciar el control desde ese valor.' : 'Avisá al administrador para que fije el nivel real.') + '</div></div>');
   enlazarInformes(app());
   pintarForm();
   pintarTabla();
@@ -1297,7 +1297,8 @@ async function edGasoil(f, volver) {
       if (d.litros === '') return toast('Cargá los litros que hay en la cisterna', 'bad');
     } else if (modo === 'medicion') {
       accion = 'medirCisterna';
-      d = { fecha: fe, hora: h, litros: $('#gMed').value, observaciones: $('#gO').value, actualizarBase: $('#gBase').checked };
+      d = { fecha: fe, hora: h, litros: $('#gMed').value, observaciones: $('#gO').value, actualizarBase: false };
+      if (esAdmin() && $('#gBase') && $('#gBase').checked) { accion = 'ajustarCisterna'; d.actualizarBase = true; }
       if (d.litros === '') return toast('Litros medidos requeridos', 'bad');
     } else {
       accion = 'guardarGasoil';
@@ -1315,7 +1316,7 @@ async function edGasoil(f, volver) {
       const r = await escribir(accion, d, (modo === 'medicion' || modo === 'nivel' ? 'Cisterna ' : 'Gasoil ') + (d.maquina || '') + ' ' + fe);
       avisarInforme(r);
       desbloquear();
-      if (!r.encolado) toast(modo === 'nivel' ? 'Nivel de la cisterna ajustado a ' + nf(r.litrosMedidos, 0) + ' L' : modo === 'medicion' ? 'Medición guardada · diferencia ' + nf(r.diferencia, 0) + ' L' : 'Carga guardada', 'ok');
+      if (!r.encolado) toast(modo === 'nivel' || accion === 'ajustarCisterna' ? 'Control de la cisterna iniciado en ' + nf(r.litrosMedidos, 0) + ' L' : modo === 'medicion' ? 'Medición guardada · diferencia ' + nf(r.diferencia, 0) + ' L' : 'Carga guardada', 'ok');
       S.resumenVencido = true;
       edGasoil(fe, volver);
     } catch (e) {

@@ -964,3 +964,26 @@ details.calc-pilas summary { cursor: pointer; color: var(--accent); }
 .proy-dias > div.llueve { background: color-mix(in srgb, var(--info) 14%, var(--panel)); }
 @media (max-width: 760px) { .clima-chip .det { display: none; } .clima-chip { padding: 4px 9px 4px 6px; } .clima-ahora { grid-template-columns: auto 1fr; } .clima-dat { grid-column: 1 / -1; justify-content: flex-start; } .proy-dias { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 440px) { .top .brand > div { display: none; } .top-right { gap: 4px; } }
+@media (max-width: 620px) { .cal .c .ev i span { display: none; } .cal .c .ev i { font-size: .7rem; padding: 0 2px; background: transparent !important; } }
+.estado-red { white-space: nowrap; } @media (max-width: 1280px) { .estado-red span { display: none; } }
+svg.plano { width: 100%; height: auto; display: block; border-radius: 12px; background: var(--panel-2); }
+svg.plano .sec { cursor: pointer; }
+svg.plano .sec rect { fill-opacity: .45; stroke: rgba(255,255,255,.35); stroke-width: .6; transition: fill-opacity .2s; }
+svg.plano .sec:hover rect { fill-opacity: .7; }
+svg.plano .lbl { font: 800 22px var(--font); fill: #fff; paint-order: stroke; stroke: rgba(0,0,0,.65); stroke-width: 4px; pointer-events: none; }
+svg.plano .lbl2 { font: 700 17px var(--font); fill: #fff; paint-order: stroke; stroke: rgba(0,0,0,.6); stroke-width: 3.5px; pointer-events: none; }
+svg.plano .cel.ed { stroke: rgba(255,255,255,.6); stroke-width: 1; cursor: pointer; }
+svg.plano .cel.ed:hover { fill: #fff !important; fill-opacity: .35 !important; }
+svg.plano .cel.ed.sel { stroke: #fff; stroke-width: 2; }
+.plano-card .leg { margin-top: 10px; }
+.sector-card { transition: box-shadow .3s, border-color .3s; }
+.sector-card.flash { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+.ac-stock { margin-top: 10px; }
+.ac-stock b { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.ac-stock .barra { height: 8px; border-radius: 6px; background: var(--panel-2); overflow: hidden; margin: 6px 0; }
+.ac-stock .barra span { display: block; height: 100%; background: var(--accent); border-radius: 6px; }
+.sect-it { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); cursor: pointer; }
+.sect-it.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+.sect-it .sw { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+.sect-it input { flex: 1; min-width: 0; }
+#dTab tr.sel td { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }

@@ -25,13 +25,19 @@ const PERMISOS = {
   calidad: ['abastecimiento'],
   liquidacion: ['abastecimiento'],
   molienda: ['molienda'],
-  ajustes: ['molienda']
+  ajustes: ['molienda'],
+  acopios: ['abastecimiento', 'molienda'],
+  acopiosConsumo: ['molienda']
 };
 
 const ROL_TXT = { admin: 'Administrador', abastecimiento: 'Responsable de abastecimiento', molienda: 'Responsable de molienda' };
 const ROL_LEGADO = { cantera: 'abastecimiento', balanza: 'abastecimiento', calidad: 'abastecimiento' };
 const rolN = r => ROL_LEGADO[String(r || '').toLowerCase()] || String(r || '').toLowerCase();
 const rolTxt = r => ROL_TXT[rolN(r)] || r;
+const esAdmin = () => !!S.ses && rolN(S.ses.rol) === 'admin';
+const muertoCis = c => c && c.stockMuerto !== undefined ? c.stockMuerto : (num(par('CISTERNA_STOCK_MUERTO', 500)) || 0);
+const utilCis = c => Math.max(0, c.nivel - muertoCis(c));
+const esAjusteCis = m => m && (m.tipo === 'Ajuste' || (m.diferencia === null && m.litrosEstimados === null));
 
 const P = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
 const ICON = {

@@ -1,9 +1,7 @@
 'use strict';
 
 function ultimoDiaDatos() {
-  const u = (S.resumen && S.resumen.ultimo) || {};
-  const f = ['viajes', 'jornada', 'pesajes', 'molienda'].map(k => u[k]).filter(x => x && x <= hoy()).sort().pop();
-  return f || hoy();
+  return addDias(hoy(), -1);
 }
 
 function tM3(t, b, exacto) {
@@ -136,7 +134,7 @@ async function vInicio() {
   const sinBal = (R.diario || []).filter(d => d.fecha > uPes && d.fecha <= hasta && d.viajes > 0);
   if (sinBal.length && b.stockPlaya !== null) sp.m3 += '<br><span class="rojo">faltan balanzas desde ' + fCorta(sinBal[0].fecha) + '</span>';
   const ss = nodoStock(b, 'silo');
-  const per = ultimo ? 'Último día con datos: ' + fLarga(hasta) : 'Últimos ' + dias + ' días';
+  const per = ultimo ? 'Ayer: ' + fLarga(hasta) : 'Últimos ' + dias + ' días';
   app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">' + esc(fLarga(hoy())) + '</div><h1>Control de <span>tierra</span></h1>' +
     '<p class="sub">' + esc(per) + ' · de la cantera al silo.</p></div><div class="row">' + (S.ses ? botonInforme('diario', { fecha: addDias(hoy(), -1) }, 'Resumen diario') : '') + '<div id="segDias"></div></div></div>' +
     '<div id="retenidos"></div>' +
@@ -208,17 +206,19 @@ function dibujarFlujo() {
 }
 
 function gaugeCisterna(c) {
-  const cap = c.capacidad || Math.max(c.nivel, 1);
-  const pct = Math.max(0, Math.min(1, c.nivel / cap));
+  const muerto = muertoCis(c);
+  const util = utilCis(c);
+  const cap = Math.max(1, (c.capacidad || Math.max(c.nivel, 1)) - muerto);
+  const pct = Math.max(0, Math.min(1, util / cap));
   const largo = 2 * Math.PI * 52 * 0.75;
   const off = largo * (1 - pct);
-  const auton = c.consumoMedio > 0 ? c.nivel / c.consumoMedio : null;
+  const auton = c.consumoMedio > 0 ? util / c.consumoMedio : null;
   const cls = pct < 0.15 || (auton !== null && auton < 2) ? 'bad' : pct < 0.3 ? 'warn' : '';
   return '<a class="card hover" href="#/tablero/combustible" style="color:inherit"><div class="card-h"><div class="t"><h3>' + esc(c.nombre || 'Cisterna') + '</h3><div class="sub">Gasoil de cantera, estimado con cargas y consumos</div></div></div>' +
     '<div class="gauge"><svg viewBox="0 0 130 130"><circle class="arco-bg" cx="65" cy="65" r="52" stroke-dasharray="' + largo + ' 999" transform="rotate(135 65 65)"/>' +
     '<circle class="arco ' + cls + '" cx="65" cy="65" r="52" stroke-dasharray="' + largo + ' 999" stroke-dashoffset="' + largo + '" data-off="' + off + '" transform="rotate(135 65 65)"/>' +
-    '<text x="65" y="68" text-anchor="middle" font-size="24">' + Math.round(pct * 100) + '%</text><text x="65" y="88" text-anchor="middle" font-size="10" style="fill:var(--muted)">de ' + nf(cap) + ' L</text></svg>' +
-    '<div class="info"><b>' + nf(c.nivel) + ' L</b><span class="sub">Consumo medio ' + nf(c.consumoMedio) + ' L/día</span>' +
+    '<text x="65" y="68" text-anchor="middle" font-size="24">' + Math.round(pct * 100) + '%</text><text x="65" y="88" text-anchor="middle" font-size="10" style="fill:var(--muted)">de ' + nf(cap) + ' L útiles</text></svg>' +
+    '<div class="info"><b>' + nf(util) + ' L utilizables</b><span class="sub">Total ' + nf(c.nivel) + ' L · ' + nf(muerto) + ' L de stock muerto</span><span class="sub">Consumo medio ' + nf(c.consumoMedio) + ' L/día</span>' +
     (auton !== null ? '<span class="tag ' + (cls === 'bad' ? 't-bad' : cls === 'warn' ? 't-warn' : 't-ok') + '">' + ICON.reloj.replace('<svg', '<svg width="13" height="13"') + ' ≈ ' + nf(auton, 1) + ' días de autonomía</span>' : '') + '</div></div></a>';
 }
 
@@ -548,7 +548,9 @@ function tabCombustible(c) {
   const conL = st.maqs.filter(x => x.lH !== null && x.litros > 0);
   c.innerHTML = guia([
     ['Nivel de cisterna', 'ajuste inicial de la hoja Configuración + cargas de "Cisterna Principal" − cargas a las máquinas.'],
-    ['Autonomía', 'nivel actual / consumo medio de los últimos 14 días con cargas.'],
+    ['Stock muerto', nf(muertoCis(cis)) + ' L que quedan en el fondo y no se pueden bombear (parámetro CISTERNA_STOCK_MUERTO).'],
+    ['Autonomía', '(nivel − stock muerto) / consumo medio de los últimos 14 días con cargas.'],
+    ['Inicio de control', 'el administrador fija el nivel real de la cisterna; desde ahí se suman llenados y se restan cargas. No cuenta como diferencia.'],
     ['L/h', 'litros cargados en el período / horas de horómetro de la máquina.'],
     ['L/h por carga', 'litros de cada carga ÷ horas del horómetro desde la carga anterior de esa máquina. Detecta cargas mal anotadas o consumos anormales.'],
     ['L por tonelada', 'gasoil de cantera ÷ toneladas ingresadas por balanza: cuánto gasoil cuesta cada tonelada de tierra.'],
@@ -557,7 +559,7 @@ function tabCombustible(c) {
     kpi('Gasoil a máquinas', vn(litros) + '<small>L</small>', comb.length + ' cargas', 'kacc') +
     kpi('L por tonelada', vn(b.ingreso ? litros / b.ingreso : null, 2) + '<small>L/t</small>', 'gasoil ÷ ingreso de balanza', '', 'Costo en gasoil de cada tonelada que entró.') +
     kpi('L por camión', vn(camiones ? litros / camiones : null, 1) + '<small>L</small>', nf(camiones) + ' camiones cargados', '', 'Gasoil ÷ camiones cargados por las palas (a planta + internos).') +
-    kpi('Nivel cisterna', vn(cis.nivel) + '<small>L</small>', cis.consumoMedio ? '≈ ' + nf(cis.nivel / cis.consumoMedio, 1) + ' días' : '', cis.nivel < 0 || (cis.capacidad && cis.nivel > cis.capacidad * 1.05) ? 'bad' : '') +
+    kpi('Gasoil utilizable', vn(utilCis(cis)) + '<small>L</small>', 'total ' + nf(cis.nivel) + ' L − ' + nf(muertoCis(cis)) + ' L muertos' + (cis.consumoMedio ? ' · ≈ ' + nf(utilCis(cis) / cis.consumoMedio, 1) + ' días' : ''), cis.nivel < 0 || (cis.capacidad && cis.nivel > cis.capacidad * 1.05) ? 'bad' : '') +
     '</div><div class="grid g-21"><div>' + caja('chNivel', 'Nivel de la cisterna', 'Litros al cierre de cada día', 'lg') + '</div>' + gaugeCisterna(cis) + '</div>' +
     '<div class="grid g2">' + caja('chMov', 'Entradas y salidas de la cisterna', 'Litros por día', '') + caja('chCons', 'Consumo diario por máquina', 'Litros cargados', '') + '</div>' +
     '<div class="grid g2">' + caja('chLh', 'Litros por hora de horómetro', 'Período seleccionado') +
@@ -568,7 +570,7 @@ function tabCombustible(c) {
       [x => '<span class="tag ' + (x.horas <= 0 || (x.mediana && x.lh > x.mediana * 1.5) ? 't-bad' : 't-mut') + '">' + nf(x.lh, 1) + '</span>', 'L/h', 'n']], rg.slice().reverse(), { max: true, vacio: 'Cargá el horómetro en cada carga de gasoil.' }) + '</div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Mediciones de cisterna</h3><div class="sub">Medido con varilla vs calculado</div></div></div>' +
     tabla([[x => fCorta(x.fecha), 'Fecha'], ['hora', 'Hora'], [x => nf(x.litrosMedidos), 'Medido L', 'n'], [x => nf(x.litrosEstimados), 'Calculado L', 'n'],
-      [x => '<span class="tag ' + (Math.abs(x.diferencia) > (cis.capacidad || 5000) * 0.03 ? 't-bad' : 't-ok') + '">' + nf(x.diferencia) + '</span>', 'Diferencia', 'n']], med, { vacio: 'Sin mediciones en el período.' }) + '</div></div>';
+      [x => esAjusteCis(x) ? '<span class="tag t-info">Inicio de control</span>' : '<span class="tag ' + (Math.abs(x.diferencia) > (cis.capacidad || 5000) * 0.03 ? 't-bad' : 't-ok') + '">' + nf(x.diferencia) + '</span>', 'Diferencia', 'n']], med, { vacio: 'Sin mediciones en el período.' }) + '</div></div>';
   requestAnimationFrame(() => $$('.gauge .arco').forEach(a => { a.style.strokeDashoffset = a.dataset.off; }));
   const L = serie.map(d => fCorta(d.fecha));
   grafico('chNivel', 'line', L, [{ label: 'Nivel L', data: serie.map(d => d.nivel), borderColor: color(1), backgroundColor: color(1), fill: false }], { scales: { y: { beginAtZero: true, suggestedMax: cis.capacidad || undefined } } });
@@ -646,11 +648,11 @@ async function vCalendario(mes, dir) {
       tot.m += molDia(x);
       tot.mp += x.molPal || 0;
       tot.p += (x.palCam || 0) + (x.palAco || 0);
-      if (x.prod) ev += '<i class="t-ok">PROD</i>';
+      if (x.prod) ev += '<i class="t-ok">⛏️<span> PROD</span></i>';
       Array.from(new Set(x.paradas.map(p => /clim/i.test(p) ? 'CLIMA' : /ausencia|sin operario/i.test(p) ? 'FALTA' : 'PARADA'))).forEach(k => {
-        ev += '<i class="' + (k === 'CLIMA' ? 't-info' : k === 'FALTA' ? 't-warn' : 't-bad') + '">' + k + '</i>';
+        ev += '<i class="' + (k === 'CLIMA' ? 't-info' : k === 'FALTA' ? 't-warn' : 't-bad') + '">' + { CLIMA: '🌧️', FALTA: '👷', PARADA: '🔧' }[k] + '<span> ' + k + '</span></i>';
       });
-      if (x.rechazos) ev += '<i class="t-bad">RECH ' + x.rechazos + '</i>';
+      if (x.rechazos) ev += '<i class="t-bad">⛔<span> RECH</span> ' + x.rechazos + '</i>';
       const cv = celda(x);
       if (cv) lin = '<div class="mv">' + cv.v + '</div>' + (cv.s ? '<div class="ms">' + cv.s + '</div>' : '');
       tip += ' · ' + x.viajes + ' viajes · ' + nf(x.ingresoT, 0) + ' t ingresadas · ' + nf((x.palCam || 0) + (x.palAco || 0)) + ' paladas en cantera · ' + nf(x.molPal) + ' paladas a molienda' + (x.paradas.length ? ' · Paradas: ' + x.paradas.join(', ') : '');
@@ -658,11 +660,11 @@ async function vCalendario(mes, dir) {
     const fondo = fondoDia(x);
     h += '<a class="c ' + (f === hoy() ? 'hoy ' : '') + (new Date(y, mo, d).getDay() === 0 ? 'domingo ' : '') + (fondo ? 'pintado' : '') + '" href="#/dia/' + f + '" style="--i:' + d + (fondo ? ';--fondo:' + fondo : '') + '" data-tip="' + esc(tip) + '"><b>' + d + '</b>' + lin + '<div class="ev">' + ev + '</div></a>';
   }
-  const nombres = { viajes: 'viajes a planta', ingreso: 'toneladas pesadas en la balanza de ingreso', paladas: 'paladas cargadas en cantera (camiones y acopio)', molienda: 'toneladas molidas (balanza dinámica)' };
-  app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Calendario</div><h1>Actividad diaria</h1><p class="sub">El color muestra qué pasó en la cantera: si hubo dos cosas (por ejemplo producción y clima) el día se parte en dos colores. El número de cada día son las ' + nombres[metrica] + '.</p></div><div id="segMet"></div></div>' +
+  const nombres = { viajes: 'los viajes a planta', ingreso: 'las toneladas pesadas en la balanza de ingreso', paladas: 'las paladas cargadas en cantera (camiones y acopio)', molienda: 'las toneladas molidas (balanza dinámica)' };
+  app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Calendario</div><h1>Actividad diaria</h1><p class="sub">El color muestra qué pasó en la cantera: si hubo dos cosas (por ejemplo producción y clima) el día se parte en dos colores. El número de cada día muestra ' + nombres[metrica] + '.</p></div><div id="segMet"></div></div>' +
     '<div class="card"><div class="cal-h"><a class="btn icon" href="#/calendario/' + ant + '" data-dir="der" aria-label="Mes anterior">' + ICON.izq + '</a><h2>' + tit + '</h2><a class="btn icon" href="#/calendario/' + sig + '" data-dir="izq" aria-label="Mes siguiente">' + ICON.der + '</a></div>' +
     '<div class="cal met-' + metrica + ' ' + (dir ? 'anim-' + dir : '') + '">' + ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => '<div class="dn">' + d + '</div>').join('') + h + '</div>' +
-    '<div class="leg"><span class="sw" style="--c:var(--ok)"></span>Producción<span class="sw" style="--c:var(--bad)"></span>Parada (avería / mantenimiento)<span class="sw" style="--c:var(--info)"></span>Clima<span class="sw" style="--c:var(--warn)"></span>Falta de operario<span class="sw mezcla"></span>Dos cosas en el día</div></div>' +
+    '<div class="leg"><span class="sw" style="--c:var(--ok)"></span>⛏️ PROD producción<span class="sw" style="--c:var(--bad)"></span>🔧 PARADA avería / mantenimiento<span class="sw" style="--c:var(--info)"></span>🌧️ CLIMA<span class="sw" style="--c:var(--warn)"></span>👷 FALTA de operario<span class="sw mezcla"></span>Dos cosas en el día<span>⛔ RECH camiones rechazados</span></div></div>' +
     '<div class="kpis mt stagger">' + kpi('Viajes a planta', vn(tot.v), nf(tot.i) + ' internos') + kpi('Ingreso balanza', vn(tot.t) + '<small>t</small>', '≈ ' + nf(tot.t / dens) + ' m³') +
     kpi('Paladas en cantera', vn(tot.p), '≈ ' + nf(tot.p * m3p) + ' m³') + kpi('Molienda', vn(tot.m) + '<small>t</small>', '≈ ' + nf(tot.m / dens) + ' m³ · ' + nf(tot.mp) + ' paladas') + '</div></div>';
   segmento($('#segMet'), [['viajes', 'Viajes'], ['ingreso', 'Ingreso (t)'], ['paladas', 'Paladas'], ['molienda', 'Molienda (t)']], metrica, k => { lsSet('tierra_cal_metrica', k); vCalendario(ym); }, true);

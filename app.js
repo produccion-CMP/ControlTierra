@@ -76,7 +76,7 @@ function menuSesion() {
 }
 
 function itemsNav() {
-  const it = [['inicio', 'Inicio', 'inicio'], ['tablero', 'Tablero', 'tablero'], ['calendario', 'Calendario', 'calendario']];
+  const it = [['inicio', 'Inicio', 'inicio'], ['tablero', 'Tablero', 'tablero'], ['calendario', 'Calendario', 'calendario'], ['acopios', 'Acopios', 'playa']];
   if (S.ses) it.push(['cargar', 'Cargar', 'cargar']);
   if (puede('liquidacion')) it.push(['liquidacion', 'Liquidación', 'dinero']);
   if (S.ses && rolN(S.ses.rol) === 'admin') it.push(['config', 'Configuración', 'config']);
@@ -144,6 +144,7 @@ async function render() {
     else if (v === 'tablero') await vTablero(p[1] || 'balance');
     else if (v === 'calendario') { const d = S.calDir; S.calDir = ''; await vCalendario(p[1], d); }
     else if (v === 'dia') await vDia(p[1] || hoy());
+    else if (v === 'acopios') await vAcopios(p[1]);
     else if (v === 'ingresar') { history.replaceState(null, '', '#/inicio'); await vInicio(); login('#/cargar'); }
     else if (v === 'mas') { history.replaceState(null, '', '#/inicio'); pintarNav(); await vInicio(); menuMas(); }
     else if (v === 'cargar') {
@@ -274,10 +275,11 @@ async function vConfig(hoja) {
   if (!ok()) return;
   const def = DEF_CONFIG[hoja];
   const filas = (S.cfg[hoja] || []).map(x => Object.assign({}, x));
-  app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Configuración</div><h1>Catálogos y parámetros</h1></div></div><div id="segCfg" style="margin-bottom:16px"></div>' +
+  app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Configuración</div><h1>Catálogos y parámetros</h1></div><button class="btn" id="bIA">' + ICON.camara + 'Probar IA de fotos</button></div><div id="segCfg" style="margin-bottom:16px"></div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>' + def.t + ' <span class="sub">(' + filas.length + ')</span></h3>' + (def.orig ? '<div class="sub">Se guarda en la planilla original de viajes, hoja «' + def.orig + '»</div>' : '') + '</div><div class="row"><input id="cfgBus" placeholder="Buscar…" style="width:180px">' +
     (def.fijo ? '' : '<button class="btn" id="cfgAdd">+ Agregar</button>') + '<button class="btn pri" id="cfgSave">' + ICON.guardar + 'Guardar cambios</button></div></div>' +
     '<div class="tw max" style="max-height:62vh"><table class="edit"><thead><tr>' + def.c.map(c => '<th>' + c[1] + '</th>').join('') + (def.fijo ? '' : '<th></th>') + '</tr></thead><tbody id="cfgB"></tbody></table></div></div></div>';
+  $('#bIA').onclick = probarIAUI;
   segmento($('#segCfg'), Object.keys(DEF_CONFIG).map(k => [k, DEF_CONFIG[k].t]), hoja, k => { location.hash = '#/config/' + k; }, true);
   const celda = (c, v, i) => {
     const a = 'data-i="' + i + '" data-c="' + c[0] + '"';
@@ -323,6 +325,18 @@ async function vConfig(hoja) {
       desbloquear();
     }
   };
+}
+
+async function probarIAUI() {
+  bloquear('Probando la IA con los modelos disponibles…');
+  let r;
+  try { r = await api('diagnosticoIA'); } catch (e) { desbloquear(); return toast(e.message, 'bad', 9000); }
+  desbloquear();
+  modal(r.ok ? 'La IA de fotos funciona' : 'La IA de fotos no funciona', '<div class="alert ' + (r.ok ? 'ok' : 'bad') + '">' + (r.ok ? ICON.ok : ICON.alerta) + '<div>' + esc(r.mensaje) + '</div></div>' +
+    (r.fallidos && r.fallidos.length ? '<p class="sub">Modelos que fallaron antes: ' + esc(r.fallidos.join(' | ')) + '</p>' : '') +
+    (r.disponibles && r.disponibles.length ? '<p class="sub">Modelos disponibles para la clave: ' + esc(r.disponibles.join(', ')) + '</p>' : '') +
+    (r.errorLista ? '<p class="sub">No se pudo listar modelos: ' + esc(r.errorLista) + '</p>' : '') +
+    (r.ok ? '' : '<p class="sub">Revisá en Apps Script → Configuración del proyecto → Propiedades del script que exista GEMINI_API_KEY (creada en aistudio.google.com/apikey, sin restricciones de sitio web) y que la implementación sea una versión nueva.</p>'), [{ txt: 'Cerrar' }]);
 }
 
 function iniciar() {

@@ -104,6 +104,11 @@ const AYUDA = {
     calc: [['Lo que hay ahora / Stock inicial', 'fijan el stock en ese valor al inicio del día.'], ['Sumar / restar', 'suma o resta toneladas (negativo para restar).'], ['t ↔ m³', 'densidad = t por palada de molienda ÷ m³ del balde (M3_POR_PALADA).'], ['Diferencia', 'medido − calculado. Si se repite en el mismo sentido, revisá el t/palada o los ingresos.'], ['Sin dato', 'si el stock calculado da negativo, la app no lo muestra hasta el próximo ajuste.']],
     controles: ['m_cubicacion', 'm_inventario', 'm_stock']
   },
+  acopios: {
+    t: 'Acopios de la playa', sector: 'molienda', que: 'Cada sector del plano es un lugar fijo de descarga. En él se arma un acopio con un origen y una calidad; se llena con los camiones que descargan ahí y se vacía con lo que se muele. Cuando se termina se marca como agotado y el sector queda libre para el próximo.',
+    pasos: ['Admin: dibujá los sectores en «Dibujar sectores».', 'Armá el acopio del sector con su origen y calidad.', 'En «Descargas» elegí los tickets de balanza (Shift para varios) y asignales el acopio.', 'En «Consumos» indicá desde qué turno se muele cada acopio (y en qué % si se muelen dos a la vez). Las paladas salen del Informe de Producción; si las sabés, cargalas para corregir.', 'Para una mezcla usá «Armar mezcla»: elegí los acopios y las proporciones y la app calcula las paladas de cada uno.', 'Cuando se termina, «Agotado».'],
+    calc: [['Stock del acopio', 'cantidad medida al cerrar (si se cargó) o toneladas de los camiones asignados + traslados − paladas consumidas × t por palada.'], ['Calidad', 'la que se carga al armarlo; si no, el promedio de las muestras de calidad de sus camiones. En una mezcla, el promedio ponderado por las proporciones.'], ['Turnos sin acopio', 'turnos de molienda del Informe en los que los consumos asignados no suman 100 %.']]
+  },
   liquidacion: { t: 'Liquidación a choferes', sector: 'abastecimiento', que: 'Viajes con «PAGAR = SI» por chofer y período, con la tarifa por origen.', calc: [['Tarifa', 'parámetro TARIFAS_VIAJE (ORIGEN=importe; …).'], ['Media jornada', 'si algún viaje del día tiene «Jornada completa = NO».']] },
   config: {
     t: 'Configuración', que: 'Catálogos, usuarios, correos, informes y parámetros. Solo administradores.',
@@ -126,7 +131,7 @@ function claveAyuda() {
   const v = p[0] || 'inicio';
   if (v === 'tablero') return 'tablero/' + (S.ayudaTab || p[1] || 'balance');
   if (v === 'cargar') return p[1] ? 'cargar/' + p[1] : 'cargar';
-  if (v === 'config' || v === 'calendario' || v === 'dia' || v === 'liquidacion') return v;
+  if (v === 'config' || v === 'calendario' || v === 'dia' || v === 'liquidacion' || v === 'acopios') return v;
   return 'inicio';
 }
 

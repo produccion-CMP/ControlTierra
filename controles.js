@@ -199,10 +199,14 @@ function controles(r, b) {
   const comb = r.combustible || [];
   add('g_cisterna', A, 'combustible', 'Nivel de la cisterna', 'Que la cisterna tenga gasoil y que el nivel calculado sea posible.', () => {
     if (!cis) return { sev: 'info', t: 'Cisterna sin configurar', d: 'Revisá COMBUSTIBLE_ID en Parámetros.' };
-    if (cis.nivel < 0 || (cis.capacidad && cis.nivel > cis.capacidad * 1.05)) return { sev: 'bad', t: 'Nivel imposible: ' + nf(cis.nivel) + ' L', d: cis.nivel < 0 ? 'Salió más gasoil del que entró: falta registrar un llenado o hay una carga mal tipeada.' : 'Supera la capacidad: falta registrar consumos o el ajuste inicial es incorrecto. Medí la cisterna.', ruta: '#/cargar/gasoil' };
-    const auton = cis.consumoMedio > 0 ? cis.nivel / cis.consumoMedio : null;
-    if (cis.capacidad && cis.nivel / cis.capacidad < 0.25) return { sev: 'bad', t: 'Cisterna baja: ' + nf(cis.nivel) + ' L', d: 'Queda ' + nf(cis.nivel / cis.capacidad * 100) + ' %' + (auton ? ', ≈ ' + nf(auton, 1) + ' días.' : '.'), ruta: '#/tablero/combustible' };
-    return { sev: 'ok', t: 'Cisterna con ' + nf(cis.nivel) + ' L', d: auton ? '≈ ' + nf(auton, 1) + ' días de autonomía.' : 'Nivel normal.' };
+    if (cis.nivel < 0 || (cis.capacidad && cis.nivel > cis.capacidad * 1.05)) return { sev: 'bad', t: 'Nivel imposible: ' + nf(cis.nivel) + ' L', d: cis.nivel < 0 ? 'Salió más gasoil del que entró: falta registrar un llenado o hay una carga mal tipeada.' : 'Supera la capacidad: falta registrar consumos o el nivel de inicio es incorrecto. Avisá al administrador para ajustar la cisterna.', ruta: '#/cargar/gasoil' };
+    const muerto = muertoCis(cis);
+    const util = utilCis(cis);
+    const capU = cis.capacidad ? cis.capacidad - muerto : 0;
+    const auton = cis.consumoMedio > 0 ? util / cis.consumoMedio : null;
+    if (cis.nivel < muerto) return { sev: 'warn', t: 'Cisterna por debajo del stock muerto', d: 'Calculado ' + nf(cis.nivel) + ' L y no se pueden bombear los últimos ' + nf(muerto) + ' L: falta registrar un llenado o hay una carga mal anotada.', ruta: '#/cargar/gasoil' };
+    if (capU && util / capU < 0.25) return { sev: 'bad', t: 'Cisterna baja: ' + nf(util) + ' L utilizables', d: 'Queda ' + nf(util / capU * 100) + ' % de lo utilizable' + (auton ? ', ≈ ' + nf(auton, 1) + ' días.' : '.'), ruta: '#/tablero/combustible' };
+    return { sev: 'ok', t: 'Cisterna con ' + nf(util) + ' L utilizables', d: (auton ? '≈ ' + nf(auton, 1) + ' días de autonomía' : 'Nivel normal') + ' · ' + nf(muerto) + ' L de stock muerto.' };
   });
 
   add('g_lh', A, 'combustible', 'Consumo por hora', 'Litros cargados ÷ horas de horómetro desde la carga anterior de la misma máquina.', () => {
@@ -233,7 +237,9 @@ function controles(r, b) {
   });
 
   add('g_medicion', A, 'combustible', 'Medición de la cisterna', 'Comparar el nivel medido con varilla contra el calculado.', () => {
-    const med = (r.mediciones || []).slice().sort((a, b) => (a.fecha + a.hora) < (b.fecha + b.hora) ? -1 : 1);
+    const todas = (r.mediciones || []).slice().sort((a, b) => (a.fecha + a.hora) < (b.fecha + b.hora) ? -1 : 1);
+    const uAj = todas.filter(esAjusteCis).pop();
+    const med = todas.filter(x => !esAjusteCis(x) && (!uAj || (x.fecha + x.hora) > (uAj.fecha + uAj.hora)));
     if (!med.length) return { sev: 'info', t: 'Sin mediciones de cisterna en el período', d: 'Medí la cisterna una vez por semana para detectar faltantes.', ruta: '#/cargar/gasoil' };
     const u = med[med.length - 1];
     const cap = cis && cis.capacidad ? cis.capacidad : 5000;
