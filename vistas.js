@@ -201,7 +201,7 @@ async function vInicio() {
     nodo('molienda', 'molienda', 'Molienda', vn(b.consumo) + '<small> t</small>', ln('≈ ' + nf(b.molPal * m3p) + ' m³') + ln(nf(b.molPal) + ' paladas', 'al cajón') + '<span class="nl sec">' + nf(b.fMol, 2) + ' t/palada · ' + nf(molT) + ' t por balanza</span>', '#/tablero/balance') +
     nodo('silo', 'silo', 'Silo', ss.v, ln(ss.m3) + ln('+ ' + nf(molT) + ' t', 'entró') + ln('− ' + nf(b.siloOut, 0) + ' t', '(' + nf(b.siloPal) + ' pal.) salió'), '#/tablero/balance', '<div class="tanque ' + (b.stockSilo === null ? 'warn' : '') + '"><span data-w="' + pctS + '"></span></div>') +
     '</div></div>' + '<div id="proyPlaya"></div>' +
-    '<div class="grid ' + (S.ses ? 'g-21' : 'g2') + '" style="align-items:start">' + (S.ses ? '<div class="card"><div class="card-h"><div class="t"><h3>Para revisar</h3><div class="sub">Controles cruzados de los últimos 14 días</div></div><a class="btn sm" href="#/tablero/controles">Ver todos</a></div><div class="alertas" id="alertas"><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div></div></div>' : '') +
+    '<div class="grid ' + (S.ses ? 'g-21' : 'g2') + '" style="align-items:start">' + (S.ses ? '<div class="card"><div class="card-h"><div class="t"><h3>Para revisar</h3><div class="sub">Controles cruzados de los últimos 14 días</div></div><a class="btn sm" href="#/revision/controles">Ver todos</a></div><div class="alertas" id="alertas"><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div></div></div>' : '') +
     '<div class="col" style="gap:16px"><div class="card"><div class="card-h"><div class="t"><h3>Estado de la carga</h3><div class="sub">Último día con datos por fuente</div></div></div><div class="estado">' +
     fuentes.map(f => {
       const sm = semaforoDias((R.ultimo || {})[f[0]]);
@@ -283,8 +283,8 @@ function pintarAlertas(r) {
   const prob = lista.filter(a => a.sev !== 'ok').sort((a, c) => (SEV_ORDEN[a.sev] - SEV_ORDEN[c.sev]) || ((c.sector === mio) - (a.sector === mio)));
   const oks = lista.length - prob.length;
   const vis = prob.slice(0, 7);
-  $('#alertas').innerHTML = (vis.length ? vis.map((a, i) => htmlAlerta(a, i, true)).join('') : htmlAlerta({ sev: 'ok', ic: 'ok', t: 'Todo en orden', d: lista.length + ' controles sin observaciones en los últimos 14 días.', ruta: '#/tablero/controles', sector: 'abastecimiento' }, 0, false)) +
-    '<a class="mas-controles" href="#/tablero/controles">' + (prob.length > vis.length ? '+' + (prob.length - vis.length) + ' observaciones más · ' : '') + oks + ' controles en orden ' + ICON.der.replace('<svg', '<svg width="14" height="14"') + '</a>';
+  $('#alertas').innerHTML = (vis.length ? vis.map((a, i) => htmlAlerta(a, i, true)).join('') : htmlAlerta({ sev: 'ok', ic: 'ok', t: 'Todo en orden', d: lista.length + ' controles sin observaciones en los últimos 14 días.', ruta: '#/revision/controles', sector: 'abastecimiento' }, 0, false)) +
+    '<a class="mas-controles" href="#/revision/controles">' + (prob.length > vis.length ? '+' + (prob.length - vis.length) + ' observaciones más · ' : '') + oks + ' controles en orden ' + ICON.der.replace('<svg', '<svg width="14" height="14"') + '</a>';
   $$('#alertas .alerta').forEach(a => { a.onclick = () => { location.hash = a.dataset.ir; }; });
   if (window.refrescarAyuda) refrescarAyuda();
 }
@@ -323,7 +323,7 @@ const TABS_T = [
 ];
 
 async function vTablero(tab) {
-  const TABS = TABS_T.filter(t => S.ses || t[0] !== 'controles');
+  const TABS = TABS_T.filter(t => t[0] !== 'controles');
   if (!TABS.some(t => t[0] === tab)) tab = 'balance';
   app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Tablero</div><h1>Análisis del período</h1><p class="sub">' + fMedia(S.desde) + ' al ' + fMedia(S.hasta) + '</p></div></div>' +
     barraFiltros() + '<div id="tabsT" style="margin-bottom:16px"></div><div id="tabC"><div class="kpis">' + '<div class="skel" style="height:96px"></div>'.repeat(5) + '</div><div class="card mt"><div class="skel" style="height:260px"></div></div></div></div>';

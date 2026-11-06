@@ -1030,3 +1030,8 @@ table.matriz tbody tr:hover td { background: color-mix(in srgb, var(--accent) 5%
 .cor-chip.on { background: color-mix(in srgb, var(--ok) 14%, var(--panel)); border-color: color-mix(in srgb, var(--ok) 55%, transparent); color: var(--text); font-weight: 700; }
 .cor-chip.on::before { content: '✓'; color: var(--ok); }
 @media (max-width: 620px) { .cor-h input, .cor-h input.em { width: 100%; } }
+.rev-it { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr); gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+.rev-ops { display: flex; flex-direction: column; gap: 6px; }
+.rev-op { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--panel-2); border-radius: 10px; padding: 8px 10px; font-size: .84rem; }
+@media (max-width: 760px) { .rev-it { grid-template-columns: 1fr; } }
+@media (max-width: 1560px) { #nav a:not(.on) .lb { display: none; } #nav a { padding-left: 10px; padding-right: 10px; } .top .brand > div > span, .top .brand small { display: none; } }

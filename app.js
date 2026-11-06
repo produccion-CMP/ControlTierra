@@ -92,7 +92,7 @@ function cambiarPinUI() {
 
 function itemsNav() {
   const it = [['inicio', 'Inicio', 'inicio'], ['tablero', 'Tablero', 'tablero'], ['calendario', 'Calendario', 'calendario'], ['acopios', 'Acopios', 'playa']];
-  if (S.ses) it.push(['cargar', 'Cargar', 'cargar']);
+  if (S.ses) it.push(['cargar', 'Cargar', 'cargar'], ['revision', 'Revisión', 'alerta']);
   if (puede('liquidacion')) it.push(['liquidacion', 'Liquidación', 'dinero']);
   if (S.ses && rolN(S.ses.rol) === 'admin') it.push(['config', 'Configuración', 'config']);
   return it;
@@ -106,7 +106,7 @@ function rutaActual() {
 function pintarNav() {
   const r = rutaActual();
   const it = itemsNav();
-  $('#nav').innerHTML = '<span class="pill"></span>' + it.map(i => '<a href="#/' + i[0] + '" class="' + (r === i[0] ? 'on' : '') + '">' + ICON[i[2]] + i[1] + '</a>').join('');
+  $('#nav').innerHTML = '<span class="pill"></span>' + it.map(i => '<a href="#/' + i[0] + '" title="' + i[1] + '" class="' + (r === i[0] ? 'on' : '') + '">' + ICON[i[2]] + '<span class="lb">' + i[1] + '</span></a>').join('');
   const on = $('#nav a.on');
   const pill = $('#nav .pill');
   if (on) { pill.style.left = on.offsetLeft + 'px'; pill.style.width = on.offsetWidth + 'px'; pill.style.opacity = 1; } else pill.style.opacity = 0;
@@ -160,6 +160,7 @@ async function render() {
     else if (v === 'calendario') { const d = S.calDir; S.calDir = ''; await vCalendario(p[1], d); }
     else if (v === 'dia') await vDia(p[1] || hoy());
     else if (v === 'acopios') await vAcopios(p[1]);
+    else if (v === 'revision') await vRevision(p[1]);
     else if (v === 'ingresar') { history.replaceState(null, '', '#/inicio'); await vInicio(); login('#/cargar'); }
     else if (v === 'mas') { history.replaceState(null, '', '#/inicio'); pintarNav(); await vInicio(); menuMas(); }
     else if (v === 'cargar') {

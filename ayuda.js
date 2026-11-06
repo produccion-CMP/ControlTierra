@@ -104,6 +104,11 @@ const AYUDA = {
     calc: [['Lo que hay ahora / Stock inicial', 'fijan el stock en ese valor al inicio del día.'], ['Sumar / restar', 'suma o resta toneladas (negativo para restar).'], ['t ↔ m³', 'densidad = t por palada de molienda ÷ m³ del balde (M3_POR_PALADA).'], ['Diferencia', 'medido − calculado. Si se repite en el mismo sentido, revisá el t/palada o los ingresos.'], ['Sin dato', 'si el stock calculado da negativo, la app no lo muestra hasta el próximo ajuste.']],
     controles: ['m_cubicacion', 'm_inventario', 'm_stock']
   },
+  revision: {
+    t: 'Revisión de datos', sector: 'abastecimiento', que: 'Lista las inconsistencias del período y ofrece cómo resolverlas. En «Viajes ↔ balanza» cada viaje sin ticket muestra los pesajes que podrían ser suyos y por qué; las decisiones quedan registradas y se pueden deshacer.',
+    pasos: ['Elegí el período.', 'Si falta importar la balanza, primero importá el PESAJE.XLS actualizado.', 'Para cada viaje sin ticket: «Asociar» con el pesaje sugerido, «No pasó por la balanza» o «Corregir el viaje».', 'Para cada ticket sin viaje: «Cargar viaje» o «No corresponde a un viaje».', '«Todos los controles» muestra el resto de las observaciones con el enlace para corregir.'],
+    calc: [['Cruce automático', 'mismo dominio y diferencia entre la descarga del viaje y la entrada a la balanza menor que VENTANA_MATCH_MIN; empareja primero los más cercanos.'], ['Sugerencias', 'mismo camión fuera de la ventana (hasta 8 h), patente parecida (1–2 caracteres distintos), viaje sin patente cerca en el tiempo o mismo horario con otra patente.'], ['Después del último pesaje', 'viajes posteriores al último ticket importado de ese día: no son errores, falta importar la balanza.']]
+  },
   acopios: {
     t: 'Acopios de la playa', sector: 'molienda', que: 'Cada sector del plano es un lugar fijo de descarga. En él se arma un acopio con un origen y una calidad; se llena con los camiones que descargan ahí y se vacía con lo que se muele. Cuando se termina se marca como agotado y el sector queda libre para el próximo.',
     pasos: ['Admin: dibujá los sectores en «Dibujar sectores».', 'Armá el acopio del sector con su origen y calidad.', 'En «Descargas» elegí los tickets de balanza (Shift para varios) y asignales el acopio.', 'En «Consumos» indicá desde qué turno se muele cada acopio (y en qué % si se muelen dos a la vez). Las paladas salen del Informe de Producción; si las sabés, cargalas para corregir.', 'Para una mezcla usá «Armar mezcla»: elegí los acopios y las proporciones y la app calcula las paladas de cada uno.', 'Cuando se termina, «Agotado».'],
@@ -131,7 +136,7 @@ function claveAyuda() {
   const v = p[0] || 'inicio';
   if (v === 'tablero') return 'tablero/' + (S.ayudaTab || p[1] || 'balance');
   if (v === 'cargar') return p[1] ? 'cargar/' + p[1] : 'cargar';
-  if (v === 'config' || v === 'calendario' || v === 'dia' || v === 'liquidacion' || v === 'acopios') return v;
+  if (v === 'config' || v === 'calendario' || v === 'dia' || v === 'liquidacion' || v === 'acopios' || v === 'revision') return v;
   return 'inicio';
 }
 

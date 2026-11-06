@@ -59,7 +59,7 @@ function controles(r, b) {
       console.warn(id, e);
       o = { sev: 'info', t: nombre + ': no se pudo calcular', d: esc(e.message) };
     }
-    res.push(Object.assign({ id: id, sector: sector, ic: ic, nombre: nombre, que: que, t: nombre, d: '', ruta: '#/tablero/controles', filas: [], cols: null }, o));
+    res.push(Object.assign({ id: id, sector: sector, ic: ic, nombre: nombre, que: que, t: nombre, d: '', ruta: '#/revision/controles', filas: [], cols: null }, o));
   };
   const atraso = (fuente, nombre, ruta) => () => {
     const sm = semaforoDias(ult[fuente]);

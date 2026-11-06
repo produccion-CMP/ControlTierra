@@ -695,13 +695,21 @@ function pintarImportBalanza() {
     kpi('Toneladas netas', nf(sum(val, x => x.neto), 1), nf(val.length ? sum(val, x => x.neto) / val.length : null, 1) + ' t/camión') +
     kpi('Camiones con entrada sin salida', nf(b.resumen.abiertas - val.length > 0 ? b.resumen.abiertas - val.length : 0), 'quedan para la próxima importación') +
     kpi('Otros materiales', nf(b.resumen.otros), 'filas que no son tierra (no se importan)') + '</div>' +
-    '<div class="grid g2 mt"><div>' + tabla([[r => fMedia(r), 'Fecha'], [r => porDia[r].length, 'Camiones', 'n'], [r => nf(sum(porDia[r], x => x.neto), 1), 't', 'n'], [r => nf(sum(porDia[r], x => x.neto) / porDia[r].length, 1), 't/camión', 'n'],
-      [r => porDia[r].map(x => x.hora).sort().pop(), 'Último pesaje']], Object.keys(porDia).sort()) + '</div><div>' +
+    '<div class="grid g2 mt"><div id="impDias">' + tabla([[r => fMedia(r), 'Fecha'], [r => porDia[r].length, 'Camiones', 'n'], [r => nf(sum(porDia[r], x => x.neto), 1), 't', 'n'], [r => nf(sum(porDia[r], x => x.neto) / porDia[r].length, 1), 't/camión', 'n'],
+      [r => porDia[r].map(x => x.hora).sort().pop(), 'Último pesaje'], [r => '<span class="sub">…</span>', 'Ya en la base', 'n'], [r => '<span class="sub">…</span>', 'Nuevos', 'n']], Object.keys(porDia).sort()) + '</div><div>' +
     tabla([[r => r, 'Dominio'], [r => porDom[r].length, 'Pesajes', 'n'], [r => nf(sum(porDom[r], x => x.neto) / porDom[r].length, 1), 'Neto medio t', 'n'], [r => nf(quant(porDom[r].map(x => x.tara).sort((a, c) => a - c), 0.5), 2), 'Tara habitual t', 'n']], Object.keys(porDom).sort()) + '</div></div>' +
     '<h3 class="mt2">Vista previa</h3><div class="mt">' + tabla([['ticket', 'Ticket'], [r => fCorta(r.fecha), 'Fecha'], ['hora', 'Entrada'], ['dominio', 'Dominio'], [r => nf(r.bruto, 2), 'Bruto t', 'n'], [r => nf(r.tara, 2), 'Tara t', 'n'], [r => nf(r.neto, 2), 'Neto t', 'n'], ['origen', 'Transportista']], val.slice(0, 12)) + '</div>' +
     '<div class="row mt"><button class="btn pri" id="iImp"' + (val.length ? '' : ' disabled') + '>' + ICON.descargar + 'Importar ' + nf(val.length) + ' pesajes</button></div></div>';
   stagger($('#impC'));
   $('#iImp').onclick = () => importarPesajesUI(val);
+  if (fechas.length) api('pesajesClaves', { desde: fechas[0], hasta: fechas[fechas.length - 1] }).then(cl => {
+    const ya = new Set(cl);
+    const dias = Object.keys(porDia).sort();
+    const nuevosTot = val.filter(x => !ya.has(clavePesaje(x))).length;
+    $('#impDias').innerHTML = tabla([[r => fMedia(r), 'Fecha'], [r => porDia[r].length, 'Camiones', 'n'], [r => nf(sum(porDia[r], x => x.neto), 1), 't', 'n'], [r => porDia[r].map(x => x.hora).sort().pop(), 'Último pesaje'],
+      [r => porDia[r].filter(x => ya.has(clavePesaje(x))).length, 'Ya en la base', 'n'], [r => { const n = porDia[r].filter(x => !ya.has(clavePesaje(x))).length; return n ? '<b class="verde">+' + n + '</b>' : '0'; }, 'Nuevos', 'n']], dias);
+    $('#iImp').innerHTML = ICON.descargar + 'Importar ' + nf(val.length) + ' pesajes (' + nf(nuevosTot) + ' nuevos)';
+  }).catch(e => console.warn(e));
 }
 
 async function importarPesajesUI(val) {
@@ -711,9 +719,12 @@ async function importarPesajesUI(val) {
     if (!r.encolado) {
       avisarInforme(r);
       const fs = val.map(x => x.fecha).sort();
-      $('#impC').innerHTML = '<div class="alert ok mt">' + ICON.ok + '<div><b>Importación completa.</b> ' + r.nuevos + ' nuevos · ' + r.actualizados + ' actualizados · ' + r.total + ' pesajes en la base.</div></div>' +
+      $('#impC').innerHTML = '<div class="alert ok mt">' + ICON.ok + '<div><b>Importación completa.</b> ' + r.nuevos + ' nuevos · ' + (r.actualizados || 0) + ' corregidos · ' + (r.iguales || 0) + ' ya estaban iguales · ' + r.total + ' pesajes en la base.</div></div>' +
+        (r.porFecha ? tabla([[f => fMedia(f), 'Fecha'], [f => nf(val.filter(x => x.fecha === f).length), 'En el archivo', 'n'], [f => r.porFecha[f].nuevos, 'Nuevos', 'n'], [f => r.porFecha[f].actualizados, 'Corregidos', 'n'], [f => r.porFecha[f].iguales, 'Ya estaban', 'n'], [f => (r.enBase || {})[f] || 0, 'Total en la base', 'n']], Object.keys(r.porFecha).sort()) : '') +
         '<div class="row"><a class="btn pri" href="#/tablero/viajes">' + ICON.tablero + 'Ver cruce viajes ↔ balanza</a>' + botonInforme('balanza', { desde: fs[0], hasta: fs[fs.length - 1] }, 'Informe de balanza') + '</div>';
       enlazarInformes($('#impC'));
+    } else {
+      $('#impC').innerHTML = '<div class="alert warn mt">' + ICON.alerta + '<div><b>La importación quedó en cola</b> porque no hubo conexión con el servidor. Se envía sola al volver la conexión (arriba, junto a «En línea», se ve la cola). Hasta entonces esos pesajes no están en la base.</div></div>';
     }
   } catch (e) {
     toast(e.message, 'bad', 8000);

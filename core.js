@@ -779,6 +779,19 @@ function conciliar(datos) {
   const uV = new Set();
   const uP = new Set();
   const pares = [];
+  const ignV = [];
+  const ignP = [];
+  const iV = {};
+  const iP = {};
+  viajes.forEach((v, i) => { iV[claveViaje(v)] = i; });
+  pes.forEach((q, i) => { iP[clavePesaje(q)] = i; });
+  (datos.asociaciones || []).forEach(a => {
+    const vi = iV[a.claveViaje];
+    const pi = iP[a.clavePesaje];
+    if (a.tipo === 'par' && vi !== undefined && pi !== undefined && !uV.has(vi) && !uP.has(pi)) { uV.add(vi); uP.add(pi); pares.push({ v: viajes[vi], p: pes[pi], dt: null, manual: a }); }
+    else if (a.tipo === 'sinPesaje' && vi !== undefined && !uV.has(vi)) { uV.add(vi); ignV.push({ v: viajes[vi], a: a }); }
+    else if (a.tipo === 'sinViaje' && pi !== undefined && !uP.has(pi)) { uP.add(pi); ignP.push({ p: pes[pi], a: a }); }
+  });
   cand.forEach(c => {
     if (uV.has(c.vi) || uP.has(c.pi)) return;
     uV.add(c.vi);
@@ -817,8 +830,16 @@ function conciliar(datos) {
   return {
     viajesTot: viajesTot, viajes: viajes, pes: pes, pares: pares, ciclos: ciclos, ultPes: ultPes,
     sinTicket: sinT.filter(v => !despues(v)), sinTicketFuera: sinT.filter(despues), sinViaje: pes.filter((_, i) => !uP.has(i)),
-    atipicos: atipicos, diario: Object.keys(dias).sort().map(k => dias[k])
+    atipicos: atipicos, diario: Object.keys(dias).sort().map(k => dias[k]), ignoradosV: ignV, ignoradosP: ignP
   };
+}
+
+function claveViaje(v) {
+  return [v.fecha, String(v.comprobante || '').trim(), parseHora(v.horaCarga) || '', normDom(v.dominio)].join('|');
+}
+
+function clavePesaje(q) {
+  return q.ticket ? 'T|' + q.ticket : 'X|' + q.fecha + '|' + q.hora + '|' + q.dominio + '|' + q.neto;
 }
 
 function statsCantera(R) {
