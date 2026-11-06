@@ -966,15 +966,37 @@ details.calc-pilas summary { cursor: pointer; color: var(--accent); }
 @media (max-width: 440px) { .top .brand > div { display: none; } .top-right { gap: 4px; } }
 @media (max-width: 620px) { .cal .c .ev i span { display: none; } .cal .c .ev i { font-size: .7rem; padding: 0 2px; background: transparent !important; } }
 .estado-red { white-space: nowrap; } @media (max-width: 1280px) { .estado-red span { display: none; } }
-svg.plano { width: 100%; height: auto; display: block; border-radius: 12px; background: var(--panel-2); }
+svg.plano { --pl-fondo: #f4f1ec; --pl-predio: #8a7f70; --pl-calle: #e2ded7; --pl-galpon: #c9d2da; --pl-galpon-b: #5c6b78; --pl-prod: #efe1d6; --pl-pila: #c98d6e; --pl-playa: #ead7b5; --pl-playa-b: #8b5a2b; --pl-txt: #3b3a37; --pl-txt2: #6b675f; --pl-grilla: rgba(139,90,43,.28);
+  width: 100%; height: auto; display: block; border-radius: 12px; background: var(--pl-fondo); }
+:root[data-theme="dark"] svg.plano { --pl-fondo: #1b1d21; --pl-predio: #6f6a62; --pl-calle: #2a2c30; --pl-galpon: #3a434d; --pl-galpon-b: #8a9aa8; --pl-prod: #2e2723; --pl-pila: #7c4a35; --pl-playa: #3d3224; --pl-playa-b: #c08850; --pl-txt: #e7e3dc; --pl-txt2: #a8a29a; --pl-grilla: rgba(192,136,80,.3); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) svg.plano { --pl-fondo: #1b1d21; --pl-predio: #6f6a62; --pl-calle: #2a2c30; --pl-galpon: #3a434d; --pl-galpon-b: #8a9aa8; --pl-prod: #2e2723; --pl-pila: #7c4a35; --pl-playa: #3d3224; --pl-playa-b: #c08850; --pl-txt: #e7e3dc; --pl-txt2: #a8a29a; --pl-grilla: rgba(192,136,80,.3); } }
+svg.plano.foto .pl-calle, svg.plano.foto .pl-prod, svg.plano.foto .pl-pila, svg.plano.foto .pl-galpon, svg.plano.foto .pl-playa { fill-opacity: .35; }
+svg.plano .pl-predio { fill: none; stroke: var(--pl-predio); stroke-width: 2; stroke-dasharray: 8 5; }
+svg.plano .pl-calle { fill: var(--pl-calle); }
+svg.plano .pl-prod { fill: var(--pl-prod); }
+svg.plano .pl-pila { fill: var(--pl-pila); opacity: .75; }
+svg.plano .pl-galpon { fill: var(--pl-galpon); stroke: var(--pl-galpon-b); stroke-width: 2; }
+svg.plano .pl-playa { fill: var(--pl-playa); }
+svg.plano .pl-playa-b { fill: none; stroke: var(--pl-playa-b); stroke-width: 3; stroke-linejoin: round; }
+svg.plano text { font-family: var(--font); fill: var(--pl-txt); pointer-events: none; }
+svg.plano .pl-lbl { font-size: 14px; font-weight: 800; letter-spacing: .06em; }
+svg.plano .pl-lbl3 { font-size: 11px; font-weight: 600; fill: var(--pl-txt2); }
+svg.plano .pl-ref { font-size: 9px; font-weight: 700; fill: var(--pl-playa-b); }
+svg.plano .pl-norte circle { fill: var(--panel); stroke: var(--pl-predio); stroke-width: 1.5; }
+svg.plano .pl-norte path { fill: #c0261d; }
+svg.plano .pl-norte text { font-size: 11px; font-weight: 800; }
+svg.plano .grilla rect { fill: none; stroke: var(--pl-grilla); stroke-width: .7; }
 svg.plano .sec { cursor: pointer; }
-svg.plano .sec rect { fill-opacity: .45; stroke: rgba(255,255,255,.35); stroke-width: .6; transition: fill-opacity .2s; }
-svg.plano .sec:hover rect { fill-opacity: .7; }
-svg.plano .lbl { font: 800 22px var(--font); fill: #fff; paint-order: stroke; stroke: rgba(0,0,0,.65); stroke-width: 4px; pointer-events: none; }
-svg.plano .lbl2 { font: 700 17px var(--font); fill: #fff; paint-order: stroke; stroke: rgba(0,0,0,.6); stroke-width: 3.5px; pointer-events: none; }
-svg.plano .cel.ed { stroke: rgba(255,255,255,.6); stroke-width: 1; cursor: pointer; }
-svg.plano .cel.ed:hover { fill: #fff !important; fill-opacity: .35 !important; }
-svg.plano .cel.ed.sel { stroke: #fff; stroke-width: 2; }
+svg.plano .sec rect { fill-opacity: .55; transition: fill-opacity .2s; }
+svg.plano .sec:hover rect, svg.plano .sec.sel rect { fill-opacity: .8; }
+svg.plano .borde { fill: none; stroke-width: 2.4; stroke-linecap: square; pointer-events: none; }
+svg.plano .lbl { font-size: 10.5px; font-weight: 800; fill: #fff; paint-order: stroke; stroke: rgba(0,0,0,.7); stroke-width: 3px; }
+svg.plano .lbl2 { font-size: 9px; font-weight: 700; fill: #fff; paint-order: stroke; stroke: rgba(0,0,0,.65); stroke-width: 2.6px; }
+svg.plano.ed { max-width: 520px; max-height: 76vh; margin: 0 auto; }
+svg.plano.ed .lbl { font-size: 9px; }
+svg.plano .cel.ed { stroke: var(--pl-grilla); stroke-width: .8; cursor: pointer; }
+svg.plano .cel.ed:hover { fill: var(--pl-playa-b) !important; fill-opacity: .35 !important; }
+svg.plano .cel.ed.sel { stroke: #fff; stroke-width: 1.2; }
 .plano-card .leg { margin-top: 10px; }
 .sector-card { transition: box-shadow .3s, border-color .3s; }
 .sector-card.flash { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }

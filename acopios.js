@@ -1,13 +1,16 @@
 'use strict';
 
-const PLANO = { w: 825, h: 965, cols: 16, filas: 20, img: 'img/playa-acopios.jpg' };
-const CELDAS_ACOPIO = 'C2,D1,D2,D3,D4,E1,E2,E3,E4,E5,F1,F2,F3,F4,F5,F6,G1,G2,G3,G4,G5,G6,G7,H1,H2,H3,H4,H5,H6,H7,H8,I1,I2,I3,I4,I5,I6,I7,I8,I9,J1,J2,J3,J4,J5,J6,J7,J8,J9,J10,J11,K1,K2,K3,K4,K5,K6,K7,K8,K9,K10,K11,K12,L1,L2,L3,L4,L5,L6,L7,L8,L9,L10,L11,L12,L13,M1,M2,M3,M4,M5,M6,M7,M8,M9,M10,M11,M12,M13,M14,N1,N2,N3,N4,N5,N6,N7,N8,N9,N10,N11,N12,N13,O1,O2,O3,O4,O5,O6,O7,O8,O9,O10,O11,O12,P1,P2,P3,P4,P5,P6,P7,P8,P9,P10,P11,Q9,Q10,Q11,R9,R10,S9'.split(',');
 const COLOR_ESTADO_ACOPIO = { Cargando: '#2a78d6', 'En consumo': '#1f8a4c', Agotado: '#9ca3af', '': '#d96b3a' };
 const COLORES_SECTOR = ['#d96b3a', '#2a78d6', '#1f8a4c', '#b56a00', '#7c3aed', '#c0261d', '#0e7490', '#a16207', '#be185d', '#4d7c0f'];
 const CALIDADES_ACOPIO = ['Arcillosa', 'Limosa', 'Arenosa', 'Balanceada', 'Con piedras', 'Mezcla', 'Otra'];
 
-const celdaXY = c => { const r = c.charCodeAt(0) - 65; const k = Number(c.slice(1)) - 1; return { x: k * PLANO.w / PLANO.cols, y: r * PLANO.h / PLANO.filas, w: PLANO.w / PLANO.cols, h: PLANO.h / PLANO.filas }; };
-const celdasDe = s => String(s.celdas || '').split(';').filter(Boolean);
+const CELDA_PLAYA = {};
+PLANO_PLAYA.celdas.forEach(c => { CELDA_PLAYA[c[0]] = { x: c[1], y: c[2], w: PLANO_PLAYA.c, h: PLANO_PLAYA.c }; });
+const celdaXY = c => CELDA_PLAYA[c];
+const nomCelda = c => String(c).replace('-', '');
+const celdasDe = s => String(s.celdas || '').split(';').filter(c => CELDA_PLAYA[c]);
+const celdasViejas = s => String(s.celdas || '').split(';').filter(c => c && !CELDA_PLAYA[c]);
+const fotoPlano = () => { try { return localStorage.getItem('planoFoto') === '1'; } catch (e) { return false; } };
 
 function acopioDeSector(E, sid) {
   return E.acopios.filter(a => a.sector === sid).sort((a, b) => (a.estado === 'Agotado') - (b.estado === 'Agotado') || (String(b.ts) > String(a.ts) ? 1 : -1))[0] || null;
@@ -17,28 +20,67 @@ function acopioActivo(E, sid) {
   return E.acopios.find(a => a.sector === sid && a.estado !== 'Agotado') || null;
 }
 
+function bordeCeldas(cs) {
+  const set = new Set(cs);
+  const C = PLANO_PLAYA.c;
+  let d = '';
+  cs.forEach(k => {
+    const q = celdaXY(k);
+    const f = k.split('-')[0];
+    const n = Number(k.split('-')[1]);
+    const vec = (df, dn) => String.fromCharCode(f.charCodeAt(0) + df) + '-' + (n + dn);
+    if (!set.has(vec(-1, 0))) d += 'M' + q.x + ' ' + q.y + 'h' + C;
+    if (!set.has(vec(1, 0))) d += 'M' + q.x + ' ' + (q.y + C) + 'h' + C;
+    if (!set.has(vec(0, -1))) d += 'M' + q.x + ' ' + q.y + 'v' + C;
+    if (!set.has(vec(0, 1))) d += 'M' + (q.x + C) + ' ' + q.y + 'v' + C;
+  });
+  return d;
+}
+
 function planoSVG(E, op) {
   const o = op || {};
-  const centro = cs => { const p = cs.map(celdaXY); return { x: sum(p, q => q.x + q.w / 2) / p.length, y: sum(p, q => q.y + q.h / 2) / p.length }; };
-  let h = '<svg class="plano" viewBox="0 0 ' + PLANO.w + ' ' + PLANO.h + '" role="img" aria-label="Plano de acopios"><image href="' + PLANO.img + '" x="0" y="0" width="' + PLANO.w + '" height="' + PLANO.h + '" preserveAspectRatio="none"/>';
+  const P = PLANO_PLAYA;
+  const C = P.c;
+  const centro = cs => { const p = cs.map(celdaXY); return { x: sum(p, q => q.x + C / 2) / p.length, y: sum(p, q => q.y + C / 2) / p.length }; };
+  const vb = (o.editor ? P.vbEd : P.vb).join(' ');
+  const foto = fotoPlano();
+  let h = '<svg class="plano ' + (o.editor ? 'ed' : '') + (foto ? ' foto' : '') + '" viewBox="' + vb + '" role="img" aria-label="Plano de la playa de molienda">' +
+    (foto ? '<image href="' + P.img + '" x="0" y="0" width="' + P.vb[2] + '" height="' + P.vb[3] + '" opacity=".55"/>' : '') + P.base;
+  const color = (s, i) => s.color || COLORES_SECTOR[i % COLORES_SECTOR.length];
+  const dueño = {};
+  E.sectores.forEach((s, i) => celdasDe(s).forEach(c => { dueño[c] = i; }));
   if (o.editor) {
-    const dueño = {};
-    E.sectores.forEach((s, i) => celdasDe(s).forEach(c => { dueño[c] = i; }));
-    h += CELDAS_ACOPIO.map(c => { const q = celdaXY(c); const i = dueño[c]; const s = i === undefined ? null : E.sectores[i]; return '<rect class="cel ed ' + (s && i === o.sel ? 'sel' : '') + '" data-cel="' + c + '" x="' + q.x + '" y="' + q.y + '" width="' + q.w + '" height="' + q.h + '" style="fill:' + (s ? (s.color || COLORES_SECTOR[i % COLORES_SECTOR.length]) : 'transparent') + ';fill-opacity:' + (s ? (i === o.sel ? 0.7 : 0.4) : 0) + '"><title>' + c + (s ? ' · ' + esc(s.nombre) : '') + '</title></rect>'; }).join('');
-    h += E.sectores.map((s, i) => { const cs = celdasDe(s); if (!cs.length) return ''; const p = centro(cs); return '<text class="lbl" x="' + p.x + '" y="' + p.y + '" text-anchor="middle">' + esc(s.nombre) + '</text>'; }).join('');
+    h += P.celdas.map(c => { const k = c[0]; const i = dueño[k]; const s = i === undefined ? null : E.sectores[i]; return '<rect class="cel ed ' + (s && i === o.sel ? 'sel' : '') + '" data-cel="' + k + '" x="' + c[1] + '" y="' + c[2] + '" width="' + C + '" height="' + C + '" style="fill:' + (s ? color(s, i) : 'transparent') + ';fill-opacity:' + (s ? (i === o.sel ? 0.75 : 0.45) : 0) + '"><title>' + nomCelda(k) + (s ? ' · ' + esc(s.nombre) : '') + '</title></rect>'; }).join('');
+    h += E.sectores.map((s, i) => { const cs = celdasDe(s); return cs.length ? '<path class="borde" d="' + bordeCeldas(cs) + '" style="stroke:' + color(s, i) + '"/>' : ''; }).join('');
+    h += E.sectores.map(s => { const cs = celdasDe(s); if (!cs.length) return ''; const p = centro(cs); return '<text class="lbl" x="' + p.x + '" y="' + (p.y + 4) + '" text-anchor="middle">' + esc(s.nombre) + '</text>'; }).join('');
     return h + '</svg>';
   }
+  h += '<g class="grilla">' + P.celdas.map(c => dueño[c[0]] === undefined ? '<rect x="' + c[1] + '" y="' + c[2] + '" width="' + C + '" height="' + C + '"/>' : '').join('') + '</g>';
   E.sectores.forEach((s, i) => {
     const cs = celdasDe(s);
     if (!cs.length) return;
     const a = acopioActivo(E, s.id);
-    const col = a ? COLOR_ESTADO_ACOPIO[a.estado] || COLOR_ESTADO_ACOPIO[''] : '#e5e7eb';
-    h += '<g class="sec ' + (o.sel === s.id ? 'sel' : '') + '" data-sec="' + s.id + '">' + cs.map(c => { const q = celdaXY(c); return '<rect x="' + q.x + '" y="' + q.y + '" width="' + (q.w + 0.6) + '" height="' + (q.h + 0.6) + '" style="fill:' + col + '"/>'; }).join('');
+    const col = a ? COLOR_ESTADO_ACOPIO[a.estado] || COLOR_ESTADO_ACOPIO[''] : '#cbd5e1';
+    h += '<g class="sec ' + (o.sel === s.id ? 'sel' : '') + '" data-sec="' + s.id + '">' + cs.map(c => { const q = celdaXY(c); return '<rect x="' + q.x + '" y="' + q.y + '" width="' + (C + 0.4) + '" height="' + (C + 0.4) + '" style="fill:' + col + '"/>'; }).join('');
+    h += '<path class="borde" d="' + bordeCeldas(cs) + '" style="stroke:' + color(s, i) + '"/>';
     const p = centro(cs);
-    h += '<text class="lbl" x="' + p.x + '" y="' + (p.y - 6) + '" text-anchor="middle">' + esc(s.nombre) + '</text><text class="lbl2" x="' + p.x + '" y="' + (p.y + 16) + '" text-anchor="middle">' + (a ? nf(a.stock) + ' t' : 'libre') + '</text>';
-    h += '<title>' + esc(s.nombre) + (a ? ' · ' + esc(a.nombre) + ' · ' + nf(a.stock) + ' t · ' + a.estado : ' · sin acopio') + '</title></g>';
+    h += '<text class="lbl" x="' + p.x + '" y="' + (p.y - 1) + '" text-anchor="middle">' + esc(s.nombre) + '</text><text class="lbl2" x="' + p.x + '" y="' + (p.y + 11) + '" text-anchor="middle">' + (a ? nf(a.stock) + ' t' : 'libre') + '</text>';
+    h += '<title>' + esc(s.nombre) + ' (' + cs.map(nomCelda).join(', ') + ')' + (a ? ' · ' + esc(a.nombre) + ' · ' + nf(a.stock) + ' t · ' + a.estado : ' · sin acopio') + '</title></g>';
   });
   return h + '</svg>';
+}
+
+function avisoViejos(E) {
+  const v = E.sectores.filter(s => celdasViejas(s).length);
+  return v.length ? '<div class="alert warn">' + ICON.alerta + '<div>El plano cambió: ' + v.map(s => '«' + esc(s.nombre) + '»').join(', ') + ' ' + (v.length > 1 ? 'tienen' : 'tiene') + ' celdas del plano anterior. ' + (esAdmin() ? '<a href="#/acopios/sectores">Redibujalos</a> en el plano nuevo.' : 'El administrador tiene que redibujarlos.') + '</div></div>' : '';
+}
+
+function botonFoto() {
+  return '<label class="chk sm" title="Muestra la foto satelital debajo del dibujo"><input type="checkbox" class="tgFoto"' + (fotoPlano() ? ' checked' : '') + '> Foto</label>';
+}
+
+function enlazarFoto(c, repintar) {
+  $$('.tgFoto', c).forEach(x => { x.onchange = () => { try { localStorage.setItem('planoFoto', x.checked ? '1' : '0'); } catch (e) { } repintar(); }; });
 }
 
 function calidadTxt(a) {
@@ -82,15 +124,16 @@ function pintarPlanoAcopios(c, E, dn) {
     kpi('Stock de playa calculado', E.stockPlaya === null ? 'sin dato' : vn(E.stockPlaya) + '<small>t</small>', 'balance de ingreso y molienda') +
     kpi('t por palada', vn(E.fMol, 2), nf(E.m3Palada) + ' m³ de balde · ' + nf(dn, 2) + ' t/m³') +
     kpi('Turnos sin acopio', vn(E.sinAsignar.length), 'molienda sin asignar', E.sinAsignar.length ? 'warn' : 'ok') + '</div>' +
-    (sinSect ? '<div class="alert info">' + ICON.infoI + '<div>Todavía no hay sectores dibujados. ' + (esAdmin() ? '<a href="#/acopios/sectores">Dibujalos en el plano</a>.' : 'El administrador tiene que dibujarlos.') + '</div></div>' : '') +
-    '<div class="grid g-21" style="align-items:start"><div class="card plano-card"><div class="card-h"><div class="t"><h3>Plano</h3><div class="sub">Tocá un sector para ver su acopio</div></div>' +
-    (puede('acopiosConsumo') ? '<button class="btn sm" id="bMezcla">' + ICON.ajuste + 'Armar mezcla</button>' : '') + '</div>' + planoSVG(E, {}) +
-    '<div class="leg">' + Object.keys(COLOR_ESTADO_ACOPIO).filter(Boolean).map(k => '<span class="sw" style="--c:' + COLOR_ESTADO_ACOPIO[k] + '"></span>' + k).join('') + '<span class="sw" style="--c:#e5e7eb"></span>Libre</div></div>' +
+    avisoViejos(E) + (sinSect ? '<div class="alert info">' + ICON.infoI + '<div>Todavía no hay sectores dibujados. ' + (esAdmin() ? '<a href="#/acopios/sectores">Dibujalos en el plano</a>.' : 'El administrador tiene que dibujarlos.') + '</div></div>' : '') +
+    '<div class="grid g-21" style="align-items:start"><div class="card plano-card"><div class="card-h"><div class="t"><h3>Plano</h3><div class="sub">Vista recta de la playa · tocá un sector para ver su acopio</div></div><div class="row" style="gap:8px">' + botonFoto() +
+    (puede('acopiosConsumo') ? '<button class="btn sm" id="bMezcla">' + ICON.ajuste + 'Armar mezcla</button>' : '') + '</div></div>' + planoSVG(E, {}) +
+    '<div class="leg">' + Object.keys(COLOR_ESTADO_ACOPIO).filter(Boolean).map(k => '<span class="sw" style="--c:' + COLOR_ESTADO_ACOPIO[k] + '"></span>' + k).join('') + '<span class="sw" style="--c:#cbd5e1"></span>Libre</div></div>' +
     '<div class="col" id="acLista" style="gap:12px">' + E.sectores.map(s => tarjetaSector(E, s, dn)).join('') + '</div></div>';
   stagger(c);
   contar(c);
   $$('.plano .sec', c).forEach(g => { g.onclick = () => { const el = $('#sec-' + g.dataset.sec); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1200); } }; });
   if ($('#bMezcla')) $('#bMezcla').onclick = () => formMezcla(E);
+  enlazarFoto(c, () => pintarPlanoAcopios(c, E, dn));
   c.onclick = async e => {
     const b = e.target.closest('button[data-acc]');
     if (!b) return;
@@ -304,7 +347,7 @@ function pintarSectores(c, E) {
   let sel = sect.length ? 0 : -1;
   const pintar = () => {
     const ED = { sectores: sect };
-    c.innerHTML = '<div class="grid g-21" style="align-items:start"><div class="card plano-card"><div class="card-h"><div class="t"><h3>Dibujar sectores</h3><div class="sub">Elegí un sector a la derecha y tocá las celdas del plano para sumarlas o quitarlas.</div></div></div>' + planoSVG(ED, { editor: true, sel: sel }) + '</div>' +
+    c.innerHTML = '<div class="grid g-21" style="align-items:start"><div class="card plano-card"><div class="card-h"><div class="t"><h3>Dibujar sectores</h3><div class="sub">Elegí un sector a la derecha y tocá las celdas de la playa para sumarlas o quitarlas. Las referencias (filas A–Y, columnas 1–14) están en el borde de la playa.</div></div>' + botonFoto() + '</div>' + avisoViejos(ED) + planoSVG(ED, { editor: true, sel: sel }) + '</div>' +
       '<div class="card"><div class="card-h"><div class="t"><h3>Sectores</h3><div class="sub">Lugares fijos de descarga</div></div><button class="btn sm" id="sAdd">+ Sector</button></div>' +
       '<div class="col" style="gap:6px">' + sect.map((s, i) => '<div class="sect-it ' + (i === sel ? 'on' : '') + '" data-i="' + i + '"><span class="sw" style="background:' + (s.color || COLORES_SECTOR[i % COLORES_SECTOR.length]) + '"></span><input data-i="' + i + '" value="' + esc(s.nombre) + '"><span class="sub">' + celdasDe(s).length + ' celdas</span><button class="btn icon sm dan" data-x="' + i + '">' + ICON.borrar + '</button></div>').join('') + '</div>' +
       '<div class="row mt"><button class="btn pri" id="sG">' + ICON.guardar + 'Guardar sectores</button></div></div></div>';
@@ -312,12 +355,13 @@ function pintarSectores(c, E) {
       r.onclick = () => {
         if (sel < 0) return toast('Primero creá o elegí un sector', 'warn');
         const k = r.dataset.cel;
-        sect.forEach((s, i) => { if (i !== sel) s.celdas = celdasDe(s).filter(x => x !== k).join(';'); });
+        sect.forEach((s, i) => { s.celdas = celdasDe(s).filter(x => i === sel || x !== k).join(';'); });
         const cs = celdasDe(sect[sel]);
         sect[sel].celdas = (cs.indexOf(k) >= 0 ? cs.filter(x => x !== k) : cs.concat([k])).join(';');
         pintar();
       };
     });
+    enlazarFoto(c, pintar);
     $$('.sect-it', c).forEach(d => { d.onclick = e => { if (e.target.tagName === 'INPUT' || e.target.closest('button')) return; sel = Number(d.dataset.i); pintar(); }; });
     $$('.sect-it input', c).forEach(inp => { inp.oninput = () => { sect[Number(inp.dataset.i)].nombre = inp.value; }; inp.onfocus = () => { sel = Number(inp.dataset.i); $$('.sect-it', c).forEach(x => x.classList.toggle('on', Number(x.dataset.i) === sel)); }; });
     $$('.sect-it [data-x]', c).forEach(b => {
