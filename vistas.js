@@ -164,7 +164,13 @@ async function vInicio() {
   const cis = R.cisterna && !R.cisterna.error ? R.cisterna : null;
   const pctP = b.stockPlaya === null ? 0 : Math.max(0, Math.min(100, b.stockPlaya / (b.maxPlaya || 1) * 100));
   const pctS = b.stockSilo === null ? 0 : Math.max(0, Math.min(100, b.stockSilo / (b.maxSilo || 1) * 100));
-  const nodo = (k, ic, l, v, d, ruta, extra) => '<div class="nodo ' + (extra ? 'stock' : '') + '" data-ir="' + ruta + '" data-k="' + k + '"><div class="ic">' + ICON[ic] + '</div><div class="l">' + l + '</div><div class="v">' + v + '</div><div class="d">' + d + '</div>' + (extra || '') + '</div>';
+  const alF = fCorta(hasta);
+  const nodo = (k, ic, l, v, d, ruta, extra) => extra ? '<div class="nodo stock" data-ir="' + ruta + '" data-k="' + k + '"><span class="nbadge st">' + ICON.reloj.replace('<svg', '<svg width="11" height="11"') + 'Stock al ' + alF + '</span>' + extra + '<div class="l">' + l + '</div><div class="v">' + v + '</div><div class="d">' + d + '</div></div>' :
+    '<div class="nodo mov" data-ir="' + ruta + '" data-k="' + k + '"><span class="nbadge mv">Movimiento</span><div class="ic">' + ICON[ic] + '</div><div class="l">' + l + '</div><div class="v">' + v + '</div><div class="d">' + d + '</div></div>';
+  const bPrev = calcBalance('2000-01-01', addDias(desde, -1));
+  const dP = b.stockPlaya !== null && bPrev.stockPlaya !== null ? b.stockPlaya - bPrev.stockPlaya : null;
+  const dS = b.stockSilo !== null && bPrev.stockSilo !== null ? b.stockSilo - bPrev.stockSilo : null;
+  const delta = (x, txt) => x === null ? '' : '<span class="nl delta ' + (x > 0.5 ? 'sube' : x < -0.5 ? 'baja' : '') + '">' + (x > 0.5 ? '▲ +' : x < -0.5 ? '▼ −' : '= ') + nf(Math.abs(x)) + ' t ' + txt + '</span>';
   const fuentes = [
     ['jornada', 'Jornada de cantera', 'pala', '#/cargar/jornada', 'abastecimiento'],
     ['gasoil', 'Gasoil de cantera', 'combustible', '#/cargar/gasoil', 'abastecimiento'],
@@ -197,10 +203,11 @@ async function vInicio() {
     nodo('viajes', 'camion', 'Viajes a CEVIL', '≈ ' + vn(b.palViajes * tPal) + '<small> t</small>', ln('≈ ' + nf(b.palViajes * m3p) + ' m³') + ln(nf(b.palViajes) + ' paladas', '· ' + nf(b.viajes) + ' viajes') + '<span class="nl sec">paladas según cada camión × ' + nf(tPal, 1) + ' t</span>', '#/tablero/viajes') +
     nodo('balanza', 'balanza', 'Balanza', vn(b.ingreso) + '<small> t</small>', ln('≈ ' + nf(m3Pes) + ' m³', '· ' + nf(b.tickets) + ' camiones') + ln(densBal ? nf(densBal, 2) + ' t/m³' : '–', 'densidad') +
       (b.ingresoEst ? '<span class="nl sec">+ ≈ ' + nf(b.ingresoEst) + ' t de viajes sin ticket</span>' : '') + (S.ses && b.rechT ? '<span class="nl rojo">' + nf(b.rechT, 0) + ' t rechazadas</span>' : ''), '#/tablero/viajes') +
-    nodo('playa', 'playa', 'Playa', sp.v, ln(sp.m3) + (b.stockPlaya !== null ? ln('≈ ' + nf(b.stockPlaya / b.densidad / m3p) + ' paladas') : '') + (b.diasPlaya !== null ? '<span class="nl sec">≈ ' + nf(b.diasPlaya, 1) + ' días de molienda</span>' : ''), '#/tablero/balance', '<div class="tanque ' + (b.stockPlaya === null ? 'bad' : '') + '"><span data-w="' + pctP + '"></span></div>') +
+    nodo('playa', 'playa', 'Playa', sp.v, ln(sp.m3) + (b.stockPlaya !== null ? ln('≈ ' + nf(b.stockPlaya / b.densidad / m3p) + ' paladas') : '') + delta(dP, ultimo ? 'en el día' : 'en ' + dias + ' días') +
+      '<span class="nl io"><i class="in">+ ' + nf(b.ingresoPlaya) + ' t entró</i><i class="out">− ' + nf(b.consumo) + ' t salió</i></span>' + (b.diasPlaya !== null ? '<span class="nl sec">≈ ' + nf(b.diasPlaya, 1) + ' días de molienda</span>' : ''), '#/tablero/balance', ilusStock('playa', pctP, b.stockPlaya === null)) +
     nodo('molienda', 'molienda', 'Molienda', vn(b.consumo) + '<small> t</small>', ln('≈ ' + nf(b.molPal * m3p) + ' m³') + ln(nf(b.molPal) + ' paladas', 'al cajón') + '<span class="nl sec">' + nf(b.fMol, 2) + ' t/palada · ' + nf(molT) + ' t por balanza</span>', '#/tablero/balance') +
-    nodo('silo', 'silo', 'Silo', ss.v, ln(ss.m3) + ln('+ ' + nf(molT) + ' t', 'entró') + ln('− ' + nf(b.siloOut, 0) + ' t', '(' + nf(b.siloPal) + ' pal.) salió'), '#/tablero/balance', '<div class="tanque ' + (b.stockSilo === null ? 'warn' : '') + '"><span data-w="' + pctS + '"></span></div>') +
-    '</div></div>' + '<div id="proyPlaya"></div>' +
+    nodo('silo', 'silo', 'Silo', ss.v, ln(ss.m3) + delta(dS, ultimo ? 'en el día' : 'en ' + dias + ' días') + '<span class="nl io"><i class="in">+ ' + nf(b.consumo) + ' t entró</i><i class="out">− ' + nf(b.siloOut, 0) + ' t salió</i></span><span class="nl sec">' + nf(molT) + ' t por balanza dinámica · ' + nf(b.siloPal) + ' pal. a producción</span>', '#/tablero/balance', ilusStock('silo', pctS, b.stockSilo === null)) +
+    '</div><div class="flujo-leg"><span class="nbadge mv">Movimiento</span><span>tierra que pasó por esa etapa en el período (se suma)</span><span class="nbadge st">Stock</span><span>tierra que hay al ' + alF + ' (es una foto, no se suma)</span><span class="pt"></span><span>sentido del flujo</span></div></div>' + '<div id="proyPlaya"></div>' +
     '<div class="grid ' + (S.ses ? 'g-21' : 'g2') + '" style="align-items:start">' + (S.ses ? '<div class="card"><div class="card-h"><div class="t"><h3>Para revisar</h3><div class="sub">Controles cruzados de los últimos 14 días</div></div><a class="btn sm" href="#/revision/controles">Ver todos</a></div><div class="alertas" id="alertas"><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div></div></div>' : '') +
     '<div class="col" style="gap:16px"><div class="card"><div class="card-h"><div class="t"><h3>Estado de la carga</h3><div class="sub">Último día con datos por fuente</div></div></div><div class="estado">' +
     fuentes.map(f => {
@@ -223,6 +230,7 @@ async function vInicio() {
   pintarProyeccion($('#proyPlaya'), ok);
   requestAnimationFrame(() => {
     $$('.tanque span').forEach(s => { s.style.width = s.dataset.w + '%'; });
+    $$('.ilus[data-p]').forEach(s => { s.style.setProperty('--p', s.dataset.p); });
     $$('.gauge .arco').forEach(a => { a.style.strokeDashoffset = a.dataset.off; });
     dibujarFlujo();
   });
@@ -242,21 +250,39 @@ async function vInicio() {
   }
 }
 
+function ilusStock(tipo, pct, mal) {
+  const p = Math.max(0, Math.min(100, pct || 0)) / 100;
+  const forma = tipo === 'playa' ? 'M4 58 C18 40 30 12 52 9 C60 8 66 10 74 14 C92 24 104 42 116 58 Z' : 'M38 4 H82 V38 L60 56 L38 38 Z';
+  const id = 'il' + tipo;
+  const ola = 'M-120 0 q15 -5 30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 V80 H-120 Z';
+  return '<div class="ilus ' + tipo + (mal ? ' mal' : '') + '" data-p="' + p.toFixed(3) + '"><svg viewBox="0 0 120 62" aria-hidden="true"><defs><clipPath id="' + id + '"><path d="' + forma + '"/></clipPath></defs>' +
+    '<path class="fondo" d="' + forma + '"/><g clip-path="url(#' + id + ')"><g class="nivel"><path class="ola" d="' + ola + '"/></g></g><path class="borde" d="' + forma + '"/>' +
+    (tipo === 'silo' ? '<path class="pata" d="M44 43 L40 60 M76 43 L80 60"/>' : '<path class="base" d="M0 59 H120"/>') + '</svg><span class="pct">' + (mal ? 's/d' : Math.round(p * 100) + '%') + '</span></div>';
+}
+
 function dibujarFlujo() {
   const cont = $('#flujo');
   const svg = $('#lineas');
   if (!cont || !svg || getComputedStyle(svg).display === 'none') return;
   const rc = cont.getBoundingClientRect();
-  const nodos = $$('.nodo', cont).map(n => n.getBoundingClientRect());
+  const nodos = $$('.nodo', cont);
   let d = '';
+  let pts = '';
+  const quieto = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   for (let i = 0; i < nodos.length - 1; i++) {
-    const a = nodos[i];
-    const b = nodos[i + 1];
-    const y = a.top + 36 - rc.top;
-    d += 'M' + (a.right - rc.left - 6) + ' ' + y + ' L' + (b.left - rc.left + 6) + ' ' + y + ' ';
+    const a = nodos[i].getBoundingClientRect();
+    const b = nodos[i + 1].getBoundingClientRect();
+    const y = a.top + 52 - rc.top;
+    const x1 = a.right - rc.left - 4;
+    const x2 = b.left - rc.left + 4;
+    const seg = 'M' + x1 + ' ' + y + ' L' + x2 + ' ' + y;
+    d += seg + ' ';
+    const cls = nodos[i + 1].classList.contains('stock') ? 'in' : nodos[i].classList.contains('stock') ? 'out' : '';
+    if (!quieto) for (let k = 0; k < 3; k++) pts += '<circle class="pt ' + cls + '" r="3.2"><animateMotion dur="1.5s" begin="' + (k * 0.5 + i * 0.12).toFixed(2) + 's" repeatCount="indefinite" path="' + seg + '"/></circle>';
   }
   svg.setAttribute('viewBox', '0 0 ' + rc.width + ' ' + rc.height);
-  svg.innerHTML = '<path d="' + d + '"/><path class="mov" d="' + d + '"/>';
+  svg.innerHTML = '<defs><marker id="flecha" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="punta"/></marker></defs>' +
+    d.trim().split(' M').map((x, i) => '<path class="eje" marker-end="url(#flecha)" d="' + (i ? 'M' : '') + x + '"/>').join('') + pts;
 }
 
 function gaugeCisterna(c) {
@@ -463,7 +489,7 @@ function tabViajes(c) {
     kpi('Tickets de balanza', vn(k.pes.length), nf(netoT, 0) + ' t netas') +
     kpi('Viajes con ticket', pctMatch === null ? '–' : vn(pctMatch) + '<small>%</small>', nf(k.pares.length) + ' cruzados', pctMatch !== null && pctMatch < 90 ? 'bad' : 'ok', 'Porcentaje de viajes a planta que se encontraron en la balanza.') +
     kpi('Ciclo mediano', vn(cicMed) + '<small>min</small>', 'carga → descarga') +
-    '</div>' + caja('chConc', 'Conciliación diaria', 'Camiones declarados en cantera · viajes cargados · tickets de balanza. Tocá un día para el detalle.', 'lg') +
+    '</div>' + seccionDominios(R, k) + caja('chConc', 'Conciliación diaria', 'Camiones declarados en cantera · viajes cargados · tickets de balanza. Tocá un día para el detalle.', 'lg') +
     '<div class="grid g2">' + caja('chChof', 'Viajes por chofer', 'Período seleccionado') + caja('chOri', 'Viajes por origen', 'Incluye todos los destinos') + '</div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Choferes</h3><div class="sub">Viajes a planta, toneladas cruzadas con balanza y ciclo mediano</div></div></div>' +
     tabla([['n', 'Chofer'], ['viajes', 'Viajes', 'n'], ['dias', 'Días', 'n'], [r => nf(r.viajes / (r.dias || 1), 1), 'Viajes/día', 'n'], [r => nf(r.t, 1), 't (con ticket)', 'n'], [r => nf(r.prom, 1), 't/viaje', 'n'], [r => nf(r.ciclo, 0), 'Ciclo min', 'n'],
@@ -488,9 +514,64 @@ function tabViajes(c) {
   const ch = chof.slice(0, 15);
   grafico('chChof', 'bar', ch.map(x => x.n), [{ label: 'Viajes', data: ch.map(x => x.viajes), backgroundColor: color(1) }], { indexAxis: 'y', scales: { x: { beginAtZero: true }, y: { ticks: { autoSkip: false } } } });
   grafico('chOri', 'doughnut', origenes, [{ data: origenes.map(o => porOrigen[o].length), backgroundColor: origenes.map((_, i) => color(i % 8 + 1)), borderColor: cssVar('--chart-surface'), borderWidth: 2 }]);
+  if ($('#csvDom')) $('#csvDom').onclick = () => csv('dominios_' + S.desde + '_' + S.hasta, [['dom', 'Dominio'], ['chofer', 'Chofer principal'], ['viajes', 'Viajes'], ['dias', 'Dias'], ['tickets', 'Tickets'], ['tTot', 't pesadas'], ['netoMed', 't por viaje mediana'], ['netoMin', 'Min'], ['netoMax', 'Max'], ['ciclo', 'Ciclo min'], ['paladas', 'Paladas'], ['dens', 't/m3'], ['pctTk', '% con ticket'], ['sinT', 'Sin ticket'], ['atip', 'Atipicos'], ['sinSalida', 'Sin salida'], ['manual', 'Manual'], ['rech', 'Rechazos'], ['conH', 'Con horometro'], ['conTk', 'Con ticket salida']], statsDominios(R, k));
   $('#csvConc').onclick = () => csv('conciliacion_' + S.desde + '_' + S.hasta, [['fecha', 'Fecha'], ['unid', 'Declarados en cantera'], ['internos', 'Internos'], ['viajesTot', 'Viajes totales'], ['viajes', 'Viajes planta'], ['tickets', 'Tickets'], ['pares', 'Cruzados'], ['neto', 't netas']], k.diario);
   $('#csvST').onclick = () => csv('viajes_sin_ticket', [['fecha', 'Fecha'], ['comprobante', 'Comprobante'], ['nroViaje', 'N viaje'], ['horaCarga', 'Hora carga'], ['horaDescarga', 'Hora descarga'], ['chofer', 'Chofer'], ['dominio', 'Dominio'], ['origen', 'Origen'], ['destino', 'Destino']], k.sinTicket);
   $('#csvSV').onclick = () => csv('tickets_sin_viaje', [['fecha', 'Fecha'], ['hora', 'Hora'], ['ticket', 'Ticket'], ['dominio', 'Dominio'], ['neto', 'Neto t'], ['producto', 'Producto']], k.sinViaje);
+}
+
+function statsDominios(R, k) {
+  const m3p = calcBalance(S.desde, S.hasta).m3Palada;
+  const pd = R.palDom || {};
+  const ppc = num(par('PALADAS_POR_CAMION', 7)) || 7;
+  const D = {};
+  const d = dom => { const n = normDom(dom) || '(sin dominio)'; return D[n] || (D[n] = { dom: n, viajes: 0, fechas: new Set(), choferes: {}, pares: 0, tPar: 0, tickets: 0, netos: [], ciclos: [], sinT: 0, fuera: 0, atip: 0, manual: 0, sinSalida: 0, cal: 0, rech: 0, conH: 0, conTk: 0 }); };
+  k.viajes.forEach(v => { const x = d(v.dominio); x.viajes++; x.fechas.add(v.fecha); x.choferes[v.chofer] = (x.choferes[v.chofer] || 0) + 1; if (v.horometro !== null && v.horometro !== undefined) x.conH++; if (tkNorm(v.ticketSalida)) x.conTk++; });
+  k.pares.forEach(p => { const x = d(p.v.dominio); x.pares++; x.tPar += p.p.neto || 0; });
+  k.pes.forEach(p => { const x = d(p.dominio); x.tickets++; if (p.neto > 0) x.netos.push(p.neto); if (p.manual) x.manual++; if (p.sinSalida) x.sinSalida++; });
+  k.ciclos.forEach(c => { if (c.min > 0 && c.min < 480) d(c.v.dominio).ciclos.push(c.min); });
+  k.sinTicket.forEach(v => { d(v.dominio).sinT++; });
+  (k.sinTicketFuera || []).forEach(v => { d(v.dominio).fuera++; });
+  k.atipicos.forEach(p => { d(p.dominio).atip++; });
+  (R.calidad || []).forEach(c => { const x = d(c.dominio); x.cal++; if (c.estado === 'Rechazado') x.rech++; });
+  return Object.keys(D).map(n => {
+    const x = D[n];
+    const a = x.netos.slice().sort((p, q) => p - q);
+    const cc = x.ciclos.slice().sort((p, q) => p - q);
+    const pal = pd[n] || null;
+    const med = a.length ? quant(a, 0.5) : null;
+    const ch = Object.keys(x.choferes).sort((p, q) => x.choferes[q] - x.choferes[p]);
+    return Object.assign(x, {
+      dias: x.fechas.size, chofer: ch[0] || '', nChoferes: ch.length, tTot: sum(a, v => v), netoMed: med, netoMin: a.length ? a[0] : null, netoMax: a.length ? a[a.length - 1] : null,
+      cv: a.length > 2 && med ? Math.sqrt(sum(a, v => (v - sum(a, w => w) / a.length) ** 2) / a.length) / (sum(a, v => v) / a.length) * 100 : null,
+      ciclo: cc.length ? quant(cc, 0.5) : null, paladas: pal || ppc, palManual: !!pal, dens: med && (pal || ppc) ? med / ((pal || ppc) * m3p) : null,
+      pctTk: x.viajes - x.fuera > 0 ? x.pares / (x.viajes - x.fuera) * 100 : null, flota: !!pal
+    });
+  }).filter(x => x.viajes || x.tickets).sort((p, q) => (q.viajes + q.tickets) - (p.viajes + p.tickets));
+}
+
+function seccionDominios(R, k) {
+  const L = statsDominios(R, k);
+  if (!L.length) return '';
+  const medG = medianaDe(L.map(x => x.netoMed).filter(x => x !== null));
+  const tile = x => {
+    const al = [];
+    if (x.sinT) al.push(['warn', x.sinT + ' sin ticket']);
+    if (x.atip) al.push(['warn', x.atip + ' neto atípico']);
+    if (x.sinSalida) al.push(['bad', x.sinSalida + ' sin salida']);
+    if (x.manual) al.push(['warn', x.manual + ' manual']);
+    if (x.rech) al.push(['bad', x.rech + ' rechazo' + (x.rech > 1 ? 's' : '')]);
+    const pctTk = x.pctTk === null ? null : Math.round(x.pctTk);
+    return '<div class="dom-card' + (al.some(a => a[0] === 'bad') ? ' bad' : al.length ? ' warn' : '') + '"><div class="dom-h"><span class="patente">' + esc(x.dom) + '</span><span class="sub" title="' + esc(x.chofer) + '">' + esc(x.chofer.split(' ')[0] || '—') + (x.nChoferes > 1 ? ' +' + (x.nChoferes - 1) : '') + '</span></div>' +
+      '<div class="dom-v"><b>' + nf(x.viajes) + '</b><span>viajes · ' + nf(x.dias) + ' días · ' + nf(x.dias ? x.viajes / x.dias : 0, 1) + '/día</span></div>' +
+      '<div class="dom-g"><div><small>total t</small><b>' + nf(x.tTot, 0) + '</b></div><div><small>t/viaje</small><b>' + (x.netoMed === null ? '–' : nf(x.netoMed, 1)) + '</b></div>' +
+      '<div><small>ciclo</small><b>' + (x.ciclo === null ? '–' : nf(x.ciclo, 0) + "'") + '</b></div><div><small>t/m³</small><b title="t/viaje ÷ (' + x.paladas + ' paladas × m³ de balde)">' + (x.dens === null ? '–' : nf(x.dens, 2)) + '</b></div></div>' +
+      (x.netoMed !== null && x.netoMin !== null ? '<div class="dom-rango" title="mín ' + nf(x.netoMin, 1) + ' · mediana ' + nf(x.netoMed, 1) + ' · máx ' + nf(x.netoMax, 1) + ' t"><span style="left:' + (x.netoMin / (x.netoMax || 1) * 100) + '%;right:0"></span><i style="left:' + (x.netoMed / (x.netoMax || 1) * 100) + '%"></i></div>' : '') +
+      '<div class="dom-pie">' + (pctTk === null ? '' : '<span class="tag ' + (pctTk >= 95 ? 't-ok' : pctTk >= 80 ? 't-warn' : 't-bad') + '" title="Viajes cruzados con un pesaje, sobre los viajes de días con balanza importada">' + pctTk + ' % con ticket</span>') + al.map(a => '<span class="tag t-' + a[0] + '">' + a[1] + '</span>').join('') +
+      (x.viajes && (x.conH || x.conTk) ? '<span class="tag t-mut" title="Remitos con horómetro de pala / ticket de salida">⛏ ' + x.conH + ' · 🎫 ' + x.conTk + '</span>' : '') + '</div></div>';
+  };
+  return '<div class="card"><div class="card-h"><div class="t"><h3>Indicadores por camión</h3><div class="sub">Cada dominio en el período: viajes a planta, toneladas de balanza, carga típica, ciclo, densidad estimada y alertas. Mediana general ' + nf(medG, 1) + ' t/viaje.</div></div><button class="btn sm" id="csvDom">' + ICON.descargar + 'CSV</button></div>' +
+    '<div class="dom-grid stagger">' + L.map(tile).join('') + '</div></div>';
 }
 
 function tabCantera(c) {
@@ -525,7 +606,7 @@ function tabCantera(c) {
       [r => nf(r.disp, 0) + '%', 'Disp.', 'n'], [r => nf(r.utiliz, 0) + '%', 'Utiliz.', 'n'], ['unid', 'A planta', 'n'], ['internos', 'Internos', 'n'], ['palAco', 'Pal. acopio', 'n'],
       [r => nf(r.camH, 1), 'Cam/h', 'n'], [r => nf(r.litros, 0), 'Litros', 'n'], [r => nf(r.lH, 1), 'L/h', 'n']], st.maqs) + '</div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Operadores</h3></div></div>' +
-    tabla([['n', 'Operador'], ['maqs', 'Máquinas'], ['dias', 'Días', 'n'], [r => nf(r.hHor, 1), 'h horóm.', 'n'], ['cam', 'Camiones', 'n'], [r => nf(r.camDia, 1), 'Cam/día', 'n'], ['pal', 'Paladas', 'n'], [r => nf(r.palH, 1), 'Pal/h', 'n']], st.ops) + '</div>';
+    tabla([['n', 'Operador'], ['maqs', 'Máquinas'], ['dias', 'Días', 'n'], [r => nf(r.hHor, 1), 'h horóm.', 'n'], ['cam', 'Camiones', 'n'], [r => nf(r.camDia, 1), 'Cam/día', 'n'], ['pal', 'Paladas', 'n'], [r => nf(r.palH, 1), 'Pal/h', 'n']], st.ops) + '</div>' + cardPala(R);
   grafico('chCam', 'bar', fechas.map(fCorta), [
     { label: 'A planta', data: fechas.map(f => sum(porDia[f], t => t.unidadesCargadas)), backgroundColor: color(1) },
     { label: 'Internos', data: fechas.map(f => sum(porDia[f], t => t.viajesInternos)), backgroundColor: color(2) }
@@ -539,7 +620,23 @@ function tabCantera(c) {
   const ck = Object.keys(st.causas);
   if (ck.length) grafico('chCaus', 'doughnut', ck, [{ data: ck.map(k => st.causas[k]), backgroundColor: ck.map((_, i) => color(i % 8 + 1)), borderColor: cssVar('--chart-surface'), borderWidth: 2 }], { plugins: { legend: { position: 'right' } } });
   else $('#chCaus').parentElement.innerHTML = vacio('Sin paradas en el período.');
+  if ($('#csvPala')) $('#csvPala').onclick = () => csv('pala_remitos_' + S.desde + '_' + S.hasta, [['fecha', 'Fecha'], ['hora', 'Hora carga'], ['h', 'Horometro'], ['maquina', 'Pala'], ['dominio', 'Dominio'], ['chofer', 'Chofer'], ['motivo', 'Observacion']], analizarPala(R).cargas);
   $('#csvMaq').onclick = () => csv('cantera_maquinas_' + S.desde + '_' + S.hasta, [['n', 'Maquina'], ['tipo', 'Tipo'], ['hHor', 'h horometro'], ['hProd', 'h prog produccion'], ['hPar', 'h parada'], ['unid', 'Camiones planta'], ['internos', 'Internos'], ['palCam', 'Paladas camion'], ['palAco', 'Paladas acopio'], ['litros', 'Litros']], st.maqs);
+}
+
+function cardPala(R) {
+  const P = analizarPala(R);
+  const pct = n => P.viajes.length ? nf(n / P.viajes.length * 100, 0) + ' %' : '–';
+  const est = x => x.motivo ? '<span class="tag t-warn" title="' + esc(x.motivo) + '">revisar</span>' : '<span class="tag t-ok">ok</span>';
+  return '<div class="card"><div class="card-h"><div class="t"><h3>Pala cargadora en los remitos</h3><div class="sub">Horómetro y ticket de salida anotados en cada viaje (campos opcionales en implementación)</div></div>' + (P.cargas.length ? '<button class="btn sm" id="csvPala">' + ICON.descargar + 'CSV</button>' : '') + '</div>' +
+    '<div class="kpis">' + kpi('Con horómetro', vn(P.conH), pct(P.conH) + ' de ' + nf(P.viajes.length) + ' viajes a planta', P.viajes.length && P.conH < P.viajes.length * 0.9 ? 'warn' : '') +
+    kpi('Con ticket de salida', vn(P.conTk), pct(P.conTk), P.viajes.length && P.conTk < P.viajes.length * 0.9 ? 'warn' : '') +
+    kpi('Pala entre camiones', P.minPorCamion === null ? '–' : vn(P.minPorCamion) + '<small>min</small>', 'mediana de horómetro entre cargas seguidas') +
+    kpi('Lecturas a revisar', vn(P.malas.length), 'retroceden, saltan o no coinciden con la hora', P.malas.length ? 'warn' : 'ok') + '</div>' +
+    (P.maqs.length ? tabla([['n', 'Pala'], ['dias', 'Días', 'n'], ['cargas', 'Camiones', 'n'], [x => nf(x.horas, 1), 'h entre 1.ª y última carga', 'n'], [x => nf(x.camH, 1), 'Cam/h', 'n']], P.maqs) : '') +
+    (P.cargas.length ? '<details class="mt"><summary>Detalle de cargas (' + P.cargas.length + ')</summary>' + tabla([[x => '<a href="#/dia/' + x.fecha + '">' + fCorta(x.fecha) + '</a>', 'Fecha'], ['hora', 'Carga'], [x => nf(x.h, 1), 'Horóm.', 'n'], [x => esc(x.maquina || '—'), 'Pala'], [x => esc(x.dominio), 'Dominio'], [x => esc(x.chofer), 'Chofer'],
+      [x => x.dh === null ? '' : nf(x.dh * 60, 0), 'Δ horóm. min', 'n'], [x => x.dr === null ? '' : nf(x.dr * 60, 0), 'Δ reloj min', 'n'], [x => esc(x.v.ticketSalida || ''), 'Ticket'], [est, 'Estado']], P.cargas.slice().sort((a, b) => (a.fecha + a.hora) < (b.fecha + b.hora) ? 1 : -1), { max: true }) + '</details>' :
+      vacio('Todavía no hay remitos con horómetro de pala. Se cargan en Viajes, columna «Horóm. pala».')) + '</div>';
 }
 
 function tabCalidad(c) {
@@ -707,13 +804,41 @@ function fondoDia(x) {
   return 'linear-gradient(90deg, ' + cats.map((k, i) => tinte(k) + ' ' + (i * paso).toFixed(2) + '% ' + ((i + 1) * paso).toFixed(2) + '%').join(', ') + ')';
 }
 
+const CAL_GRUPOS = {
+  ingreso: { t: 'Ingreso', ic: 'camion', subs: [['cantera', 'Trabajo en cantera'], ['viajes', 'Viajes de camiones'], ['pesajes', 'Pesajes']] },
+  playa: { t: 'Stock de playa', ic: 'playa', subs: [] },
+  consumo: { t: 'Consumo', ic: 'molienda', subs: [['playa', 'Consumo de playa'], ['aSilo', 'Molienda → silo'], ['salidaSilo', 'Silo → producción']] },
+  silo: { t: 'Stock de silo', ic: 'silo', subs: [] }
+};
+
+function calGrupo() {
+  let g = lsGet('tierra_cal_grupo', '');
+  if (!CAL_GRUPOS[g]) {
+    const m = lsGet('tierra_cal_metrica', 'viajes');
+    g = m === 'molienda' ? 'consumo' : 'ingreso';
+    if (m === 'molienda') lsSet('tierra_cal_sub_consumo', 'aSilo');
+    else lsSet('tierra_cal_sub_ingreso', { viajes: 'viajes', ingreso: 'pesajes', paladas: 'cantera', palas: 'cantera' }[m] || 'viajes');
+  }
+  const subs = CAL_GRUPOS[g].subs.map(x => x[0]);
+  let sub = lsGet('tierra_cal_sub_' + g, subs[0] || '');
+  if (subs.length && subs.indexOf(sub) < 0) sub = subs[0];
+  return { g: g, sub: sub };
+}
+
+function stockDiario(hasta) {
+  const b = calcBalance('2000-01-01', hasta);
+  const m = {};
+  b.serie.forEach(x => { m[x.fecha] = x; });
+  return { b: b, m: m, fechas: b.serie.map(x => x.fecha) };
+}
+
 async function vCalendario(mes, dir) {
   const ok = vivo();
   await cargarResumen();
   if (!ok()) return;
   const ym = mes && /^\d{4}-\d{2}$/.test(mes) ? mes : hoy().slice(0, 7);
-  let metrica = lsGet('tierra_cal_metrica', 'viajes');
-  if (metrica === 'palas') metrica = 'paladas';
+  const sel = calGrupo();
+  const G = CAL_GRUPOS[sel.g];
   const y = Number(ym.slice(0, 4));
   const mo = Number(ym.slice(5, 7)) - 1;
   const D = {};
@@ -723,52 +848,105 @@ async function vCalendario(mes, dir) {
   const ant = iso(new Date(y, mo - 1, 1)).slice(0, 7);
   const sig = iso(new Date(y, mo + 1, 1)).slice(0, 7);
   const tit = new Date(y, mo, 1).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
-  const b = calcBalance(ym + '-01', ym + '-' + pad(dias));
+  const fin = ym + '-' + pad(dias);
+  const b = calcBalance(ym + '-01', fin);
   const dens = b.densidad;
   const m3p = b.m3Palada;
-  const molDia = x => (x.molT || 0) + ((x.molPal || 0) - (x.molPalConT || 0)) * b.fMol;
-  const celda = x => {
-    if (metrica === 'ingreso') return x.ingresoT ? { v: nf(x.ingresoT, 0) + ' t', s: '≈ ' + nf(x.ingresoT / dens, 0) + ' m³' } : null;
-    if (metrica === 'paladas') return (x.palCam + x.palAco) ? { v: nf(x.palCam + x.palAco) + ' pal.', s: '≈ ' + nf((x.palCam + x.palAco) * m3p, 0) + ' m³' } : null;
-    if (metrica === 'molienda') return x.molPal ? { v: (x.molPal > x.molPalConT ? '≈ ' : '') + nf(molDia(x), 0) + ' t', s: '≈ ' + nf(molDia(x) / dens, 0) + ' m³ · ' + nf(x.molPal) + ' pal.' } : null;
-    return x.viajes || x.internos ? { v: nf(x.viajes) + ' viajes', s: x.internos ? nf(x.internos) + ' internos' : '' } : null;
+  const esStock = sel.g === 'playa' || sel.g === 'silo';
+  const SD = esStock ? stockDiario(fin < hoy() ? fin : hoy()) : null;
+  const campo = sel.g === 'playa' ? 'stockPlaya' : 'stockSilo';
+  const maxS = esStock ? (sel.g === 'playa' ? SD.b.maxPlaya : SD.b.maxSilo) || 1 : 1;
+  const stockEn = f => {
+    if (!SD || f > hoy()) return null;
+    let k = -1;
+    for (let i = 0; i < SD.fechas.length && SD.fechas[i] <= f; i++) k = i;
+    return k < 0 ? null : SD.m[SD.fechas[k]][campo];
+  };
+  const molDia = x => (x.molT || 0) + ((x.molPal || 0) - (x.molPalConT || 0)) * b.fMolHist;
+  const siloOut = x => (x.siloPal || 0) * b.fSilo;
+  const celda = (x, f) => {
+    if (esStock) {
+      const v = stockEn(f);
+      if (v === null || v === undefined) return null;
+      const prev = stockEn(addDias(f, -1));
+      const dv = prev === null || prev === undefined ? null : v - prev;
+      return { v: nf(v, 0) + ' t', s: (dv === null ? '≈ ' + nf(v / dens, 0) + ' m³' : (dv > 0.5 ? '▲ +' : dv < -0.5 ? '▼ −' : '= ') + nf(Math.abs(dv), 0) + ' t'), cls: dv > 0.5 ? 'sube' : dv < -0.5 ? 'baja' : '', lvl: Math.max(0, Math.min(100, v / maxS * 100)) };
+    }
+    if (!x) return null;
+    if (sel.g === 'ingreso') {
+      if (sel.sub === 'cantera') return (x.palCam + x.palAco) ? { v: nf(x.palCam + x.palAco) + ' pal.', s: '≈ ' + nf((x.palCam + x.palAco) * m3p, 0) + ' m³' + (x.unid ? ' · ' + nf(x.unid) + ' cam.' : '') } : null;
+      if (sel.sub === 'pesajes') return x.ingresoT ? { v: nf(x.ingresoT, 0) + ' t', s: nf(x.tickets) + ' tickets · ≈ ' + nf(x.ingresoT / dens, 0) + ' m³' } : null;
+      return x.viajes || x.internos ? { v: nf(x.viajes) + ' viajes', s: x.internos ? nf(x.internos) + ' internos' : '' } : null;
+    }
+    if (sel.sub === 'aSilo') return x.molT ? { v: nf(x.molT, 0) + ' t', s: 'bal. dinámica · ' + nf(x.molPalConT) + ' pal.' } : null;
+    if (sel.sub === 'salidaSilo') return x.siloPal ? { v: '≈ ' + nf(siloOut(x), 0) + ' t', s: nf(x.siloPal) + ' pal. del silo' } : null;
+    return x.molPal ? { v: (x.molPal > x.molPalConT ? '≈ ' : '') + nf(molDia(x), 0) + ' t', s: nf(x.molPal) + ' pal. · ≈ ' + nf(molDia(x) / dens, 0) + ' m³' } : null;
   };
   let h = '';
   for (let i = 0; i < prim; i++) h += '<div class="c vacio"></div>';
-  const tot = { v: 0, t: 0, m: 0, p: 0, mp: 0, i: 0 };
+  const vals = [];
   for (let d = 1; d <= dias; d++) {
     const f = ym + '-' + pad(d);
     const x = D[f];
     let ev = '';
     let lin = '';
     let tip = fLarga(f);
+    let lvl = '';
     if (x) {
-      tot.v += x.viajes;
-      tot.i += x.internos || 0;
-      tot.t += x.ingresoT;
-      tot.m += molDia(x);
-      tot.mp += x.molPal || 0;
-      tot.p += (x.palCam || 0) + (x.palAco || 0);
       if (x.prod) ev += '<i class="t-ok">⛏️<span> PROD</span></i>';
       Array.from(new Set(x.paradas.map(p => /clim/i.test(p) ? 'CLIMA' : /ausencia|sin operario/i.test(p) ? 'FALTA' : 'PARADA'))).forEach(k => {
         ev += '<i class="' + (k === 'CLIMA' ? 't-info' : k === 'FALTA' ? 't-warn' : 't-bad') + '">' + { CLIMA: '🌧️', FALTA: '👷', PARADA: '🔧' }[k] + '<span> ' + k + '</span></i>';
       });
       if (x.rechazos) ev += '<i class="t-bad">⛔<span> RECH</span> ' + x.rechazos + '</i>';
-      const cv = celda(x);
-      if (cv) lin = '<div class="mv">' + cv.v + '</div>' + (cv.s ? '<div class="ms">' + cv.s + '</div>' : '');
       tip += ' · ' + x.viajes + ' viajes · ' + nf(x.ingresoT, 0) + ' t ingresadas · ' + nf((x.palCam || 0) + (x.palAco || 0)) + ' paladas en cantera · ' + nf(x.molPal) + ' paladas a molienda' + (x.paradas.length ? ' · Paradas: ' + x.paradas.join(', ') : '');
     }
-    const fondo = fondoDia(x);
-    h += '<a class="c ' + (f === hoy() ? 'hoy ' : '') + (new Date(y, mo, d).getDay() === 0 ? 'domingo ' : '') + (fondo ? 'pintado' : '') + '" href="#/dia/' + f + '" style="--i:' + d + (fondo ? ';--fondo:' + fondo : '') + '" data-tip="' + esc(tip) + '"><b>' + d + '</b>' + lin + '<div class="ev">' + ev + '</div></a>';
+    const cv = celda(x, f);
+    if (cv) {
+      lin = '<div class="mv">' + cv.v + '</div>' + (cv.s ? '<div class="ms ' + (cv.cls || '') + '">' + cv.s + '</div>' : '');
+      if (cv.lvl !== undefined) { lvl = '<span class="lvl ' + sel.g + '" style="--h:' + cv.lvl.toFixed(1) + '%"></span>'; tip += ' · stock ' + cv.v; }
+      vals.push({ f: f, cv: cv });
+    }
+    const fondo = esStock ? '' : fondoDia(x);
+    h += '<a class="c ' + (f === hoy() ? 'hoy ' : '') + (new Date(y, mo, d).getDay() === 0 ? 'domingo ' : '') + (fondo ? 'pintado' : '') + '" href="#/dia/' + f + '" style="--i:' + d + (fondo ? ';--fondo:' + fondo : '') + '" data-tip="' + esc(tip) + '">' + lvl + '<b>' + d + '</b>' + lin + '<div class="ev">' + ev + '</div></a>';
   }
-  const nombres = { viajes: 'los viajes a planta', ingreso: 'las toneladas pesadas en la balanza de ingreso', paladas: 'las paladas cargadas en cantera (camiones y acopio)', molienda: 'las toneladas molidas (balanza dinámica)' };
-  app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Calendario</div><h1>Actividad diaria</h1><p class="sub">El color muestra qué pasó en la cantera: si hubo dos cosas (por ejemplo producción y clima) el día se parte en dos colores. El número de cada día muestra ' + nombres[metrica] + '.</p></div><div id="segMet"></div></div>' +
+  const R = (S.resumen.diario || []).filter(d => d.fecha >= ym + '-01' && d.fecha <= fin);
+  let kp = '';
+  let expl = '';
+  if (sel.g === 'ingreso') {
+    const tv = sum(R, d => d.viajes);
+    const tp = sum(R, d => (d.palCam || 0) + (d.palAco || 0));
+    const tt = sum(R, d => d.ingresoT);
+    kp = kpi('Paladas en cantera', vn(tp), '≈ ' + nf(tp * m3p) + ' m³ · ' + nf(sum(R, d => d.unid)) + ' camiones', sel.sub === 'cantera' ? 'kacc' : '') + kpi('Viajes a planta', vn(tv), nf(sum(R, d => d.internos)) + ' internos', sel.sub === 'viajes' ? 'kacc' : '') +
+      kpi('Pesajes de ingreso', vn(tt) + '<small>t</small>', nf(sum(R, d => d.tickets)) + ' tickets · ≈ ' + nf(tt / dens) + ' m³', sel.sub === 'pesajes' ? 'kacc' : '') + kpi('t por viaje', vn(sum(R, d => d.tickets) ? tt / sum(R, d => d.tickets) : null, 1), 'según balanza');
+    expl = { cantera: 'las paladas cargadas en cantera (a camiones y acopio)', viajes: 'los viajes a planta registrados en los talonarios', pesajes: 'las toneladas pesadas en la balanza de ingreso' }[sel.sub];
+  } else if (sel.g === 'consumo') {
+    const tc = sum(R, d => molDia(d));
+    const ds = R.filter(d => d.molPal > 0).length;
+    kp = kpi('Consumo de playa', vn(tc) + '<small>t</small>', nf(sum(R, d => d.molPal)) + ' paladas al cajón', sel.sub === 'playa' ? 'kacc' : '') + kpi('Molienda → silo', vn(sum(R, d => d.molT)) + '<small>t</small>', 'balanza dinámica', sel.sub === 'aSilo' ? 'kacc' : '') +
+      kpi('Silo → producción', '≈ ' + vn(sum(R, d => siloOut(d))) + '<small>t</small>', nf(sum(R, d => d.siloPal)) + ' paladas', sel.sub === 'salidaSilo' ? 'kacc' : '') + kpi('Consumo medio', vn(ds ? tc / ds : null) + '<small>t/día</small>', ds + ' días con molienda');
+    expl = { playa: 'la tierra que se sacó de la playa hacia la molienda (paladas al cajón × t/palada)', aSilo: 'lo que informa la balanza dinámica de molienda, que va al silo', salidaSilo: 'las paladas que se sacan del silo para producción' }[sel.sub];
+  } else {
+    const cl = vals.length ? vals[vals.length - 1] : null;
+    const vMes = vals.map(v => stockEn(v.f));
+    const mx = vMes.length ? Math.max.apply(null, vMes) : null;
+    const mn = vMes.length ? Math.min.apply(null, vMes) : null;
+    const f0 = stockEn(addDias(ym + '-01', -1));
+    const dias2 = sel.g === 'playa' ? b.diasPlaya : b.diasSilo;
+    kp = kpi('Stock al ' + (cl ? fCorta(cl.f) : '—'), cl ? vn(stockEn(cl.f)) + '<small>t</small>' : 'sin dato', cl ? '≈ ' + nf(stockEn(cl.f) / dens) + ' m³' : (sel.g === 'playa' ? 'falta stock inicial o ajuste' : 'sin datos de silo'), 'kacc') +
+      kpi('Máximo del mes', mx === null ? '–' : vn(mx) + '<small>t</small>', mx === null ? '' : fCorta(vals[vMes.indexOf(mx)].f)) + kpi('Mínimo del mes', mn === null ? '–' : vn(mn) + '<small>t</small>', mn === null ? '' : fCorta(vals[vMes.indexOf(mn)].f)) +
+      kpi('Variación del mes', cl && f0 !== null && f0 !== undefined ? (stockEn(cl.f) - f0 >= 0 ? '+' : '') + vn(stockEn(cl.f) - f0) + '<small>t</small>' : '–', dias2 !== null && dias2 !== undefined && fin >= hoy() ? '≈ ' + nf(dias2, 1) + ' días de stock' : 'cierre − día anterior al 1°');
+    expl = sel.g === 'playa' ? 'el stock de tierra en la playa de molienda al final de cada día (balance de ingresos, consumos y ajustes)' : 'el stock de tierra molida en el silo al final de cada día';
+    if (!vals.length) expl += '. No hay stock validado para este mes';
+  }
+  const legEv = '<span class="sw" style="--c:var(--ok)"></span>⛏️ PROD producción<span class="sw" style="--c:var(--bad)"></span>🔧 PARADA avería / mantenimiento<span class="sw" style="--c:var(--info)"></span>🌧️ CLIMA<span class="sw" style="--c:var(--warn)"></span>👷 FALTA de operario' + (esStock ? '' : '<span class="sw mezcla"></span>Dos cosas en el día') + '<span>⛔ RECH camiones rechazados</span>';
+  const legSt = esStock ? '<span class="sw lvl-sw ' + sel.g + '"></span>Nivel de stock (relleno desde abajo, 100 % = ' + nf(maxS, 0) + ' t)<span class="sube">▲</span> sube <span class="baja">▼</span> baja respecto del día anterior' : '';
+  app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Calendario</div><h1>' + esc(G.t) + '</h1><p class="sub">El número de cada día muestra ' + expl + '.' + (esStock ? ' El stock es lo que hay al final del día, no un movimiento.' : ' El color de fondo muestra qué pasó en la cantera.') + '</p></div><div class="col" style="gap:8px;align-items:flex-end"><div id="segGru"></div><div id="segSub"></div></div></div>' +
     '<div class="card"><div class="cal-h"><a class="btn icon" href="#/calendario/' + ant + '" data-dir="der" aria-label="Mes anterior">' + ICON.izq + '</a><h2>' + tit + '</h2><a class="btn icon" href="#/calendario/' + sig + '" data-dir="izq" aria-label="Mes siguiente">' + ICON.der + '</a></div>' +
-    '<div class="cal met-' + metrica + ' ' + (dir ? 'anim-' + dir : '') + '">' + ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => '<div class="dn">' + d + '</div>').join('') + h + '</div>' +
-    '<div class="leg"><span class="sw" style="--c:var(--ok)"></span>⛏️ PROD producción<span class="sw" style="--c:var(--bad)"></span>🔧 PARADA avería / mantenimiento<span class="sw" style="--c:var(--info)"></span>🌧️ CLIMA<span class="sw" style="--c:var(--warn)"></span>👷 FALTA de operario<span class="sw mezcla"></span>Dos cosas en el día<span>⛔ RECH camiones rechazados</span></div></div>' +
-    '<div class="kpis mt stagger">' + kpi('Viajes a planta', vn(tot.v), nf(tot.i) + ' internos') + kpi('Ingreso balanza', vn(tot.t) + '<small>t</small>', '≈ ' + nf(tot.t / dens) + ' m³') +
-    kpi('Paladas en cantera', vn(tot.p), '≈ ' + nf(tot.p * m3p) + ' m³') + kpi('Molienda', vn(tot.m) + '<small>t</small>', '≈ ' + nf(tot.m / dens) + ' m³ · ' + nf(tot.mp) + ' paladas') + '</div></div>';
-  segmento($('#segMet'), [['viajes', 'Viajes'], ['ingreso', 'Ingreso (t)'], ['paladas', 'Paladas'], ['molienda', 'Molienda (t)']], metrica, k => { lsSet('tierra_cal_metrica', k); vCalendario(ym); }, true);
+    '<div class="cal grupo-' + sel.g + ' ' + (dir ? 'anim-' + dir : '') + '">' + ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => '<div class="dn">' + d + '</div>').join('') + h + '</div>' +
+    '<div class="leg">' + (legSt || legEv) + '</div>' + (legSt ? '<div class="leg">' + legEv + '</div>' : '') + '</div>' +
+    '<div class="kpis mt stagger">' + kp + '</div></div>';
+  segmento($('#segGru'), Object.keys(CAL_GRUPOS).map(k => [k, CAL_GRUPOS[k].t, ICON[CAL_GRUPOS[k].ic].replace('<svg', '<svg width="15" height="15"')]), sel.g, k => { lsSet('tierra_cal_grupo', k); vCalendario(ym); }, true);
+  if (G.subs.length) segmento($('#segSub'), G.subs, sel.sub, k => { lsSet('tierra_cal_sub_' + sel.g, k); vCalendario(ym); }, true);
   $$('.cal-h a').forEach(a => a.addEventListener('click', () => { S.calDir = a.dataset.dir; }));
   stagger(app());
   contar(app());
@@ -829,7 +1007,7 @@ async function vDia(f) {
       tabla([[t => '<span class="tag ' + (t.tipo === 'Producción' ? 't-ok' : 't-bad') + '">' + t.tipo + '</span>', 'Tipo'], [t => t.horaInicio + '–' + t.horaFin, 'Horario'], [t => esc(t.tipo === 'Producción' ? t.operador : t.motivoParada), 'Operador / motivo'],
         [t => t.tipo === 'Producción' ? nf(t.horometroIni, 1) + ' → ' + nf(t.horometroFin, 1) : nf(t.horometroParada, 1), 'Horómetro'], [t => t.tipo === 'Producción' ? t.unidadesCargadas : '', 'A planta', 'n'], [t => t.tipo === 'Producción' ? (t.viajesInternos || 0) : '', 'Internos', 'n'],
         [t => t.tipo === 'Producción' ? t.paladasCamiones : '', 'Pal. cam.', 'n'], [t => t.tipo === 'Producción' ? t.paladasAcopios : '', 'Pal. acop.', 'n'], [t => esc(t.personal), 'Personal'], [t => esc(t.observaciones), 'Obs.', 'wrap']], porMaq[mq])).join('') : vacio('Sin jornada de cantera cargada.')) + '</div>' +
-    '<div class="grid g2"><div class="card"><div class="card-h"><div class="t"><h3>Viajes</h3></div></div>' + tabla([[v => esc(v.comprobante) + '·' + (v.nroViaje || ''), 'Comp.'], ['horaCarga', 'Carga'], ['horaDescarga', 'Desc.'], ['chofer', 'Chofer'], ['dominio', 'Dominio'], [v => esc(v.origen) + ' → ' + esc(v.destino), 'Ruta'],
+    '<div class="grid g2"><div class="card"><div class="card-h"><div class="t"><h3>Viajes</h3></div></div>' + tabla([[v => esc(v.comprobante) + '·' + (v.nroViaje || ''), 'Comp.'], ['horaCarga', 'Carga'], ['horaDescarga', 'Desc.'], ['chofer', 'Chofer'], ['dominio', 'Dominio'], [v => esc(v.origen) + ' → ' + esc(v.destino), 'Ruta'], [v => v.horometro === null || v.horometro === undefined ? '' : nf(v.horometro, 1), 'Horóm.', 'n'], [v => esc(v.ticketSalida || ''), 'Ticket sal.'],
       [v => k.pares.some(p => p.v === v) ? '<span class="tag t-ok">' + nf(k.pares.find(p => p.v === v).p.neto, 1) + ' t</span>' : (!aPlanta.has(v) ? '<span class="tag t-mut">otro destino</span>' : k.pes.length ? '<span class="tag t-warn">sin ticket</span>' : '–'), 'Balanza']], j.viajes) + '</div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Balanza de ingreso</h3></div></div>' + tabla([['ticket', 'Ticket'], ['hora', 'Hora'], ['dominio', 'Dominio'], [p => nf(p.neto, 2), 'Neto t', 'n'], ['producto', 'Producto'],
       [p => p.tierra === false ? '<span class="tag t-mut">no tierra</span>' : (k.pares.some(x => x.p === p) ? '<span class="tag t-ok">con viaje</span>' : '<span class="tag t-warn">sin viaje</span>'), 'Cruce']], j.pesajes) + '</div></div>' +

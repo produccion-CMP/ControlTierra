@@ -792,6 +792,22 @@ function conciliar(datos) {
     else if (a.tipo === 'sinPesaje' && vi !== undefined && !uV.has(vi)) { uV.add(vi); ignV.push({ v: viajes[vi], a: a }); }
     else if (a.tipo === 'sinViaje' && pi !== undefined && !uP.has(pi)) { uP.add(pi); ignP.push({ p: pes[pi], a: a }); }
   });
+  const porTk = {};
+  pes.forEach((q, i) => { const t = tkNorm(q.ticket); if (t) porTk[t] = i; });
+  const tkMal = [];
+  viajes.forEach((v, vi) => {
+    const t = tkNorm(v.ticketSalida);
+    if (!t) return;
+    const pi = porTk[t];
+    if (pi === undefined) { if (pes.some(q => q.fecha === v.fecha)) tkMal.push({ v: v, motivo: 'el ticket ' + t + ' no está en la balanza' }); return; }
+    if (uV.has(vi)) return;
+    if (uP.has(pi)) { tkMal.push({ v: v, p: pes[pi], motivo: 'el ticket ' + t + ' ya está asociado a otro viaje' }); return; }
+    uV.add(vi);
+    uP.add(pi);
+    const otroDom = normDom(pes[pi].dominio) !== normDom(v.dominio);
+    if (otroDom) tkMal.push({ v: v, p: pes[pi], motivo: 'el ticket ' + t + ' es del dominio ' + pes[pi].dominio });
+    pares.push({ v: v, p: pes[pi], dt: Math.abs(absMin(pes[pi].fecha, pes[pi].hora) - absMin(v.fecha, v.horaDescarga || v.horaCarga)), porTicket: true, otroDom: otroDom });
+  });
   cand.forEach(c => {
     if (uV.has(c.vi) || uP.has(c.pi)) return;
     uV.add(c.vi);
@@ -830,9 +846,11 @@ function conciliar(datos) {
   return {
     viajesTot: viajesTot, viajes: viajes, pes: pes, pares: pares, ciclos: ciclos, ultPes: ultPes,
     sinTicket: sinT.filter(v => !despues(v)), sinTicketFuera: sinT.filter(despues), sinViaje: pes.filter((_, i) => !uP.has(i)),
-    atipicos: atipicos, diario: Object.keys(dias).sort().map(k => dias[k]), ignoradosV: ignV, ignoradosP: ignP
+    atipicos: atipicos, diario: Object.keys(dias).sort().map(k => dias[k]), ignoradosV: ignV, ignoradosP: ignP, ticketsMal: tkMal
   };
 }
+
+const tkNorm = v => String(v === null || v === undefined ? '' : v).replace(/\D/g, '').replace(/^0+/, '');
 
 function claveViaje(v) {
   return [v.fecha, String(v.comprobante || '').trim(), parseHora(v.horaCarga) || '', normDom(v.dominio)].join('|');

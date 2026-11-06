@@ -12,7 +12,7 @@ function esPlanta(destino) {
 }
 
 function filaVacia(prev) {
-  return { origen: prev ? prev.origen : '', destino: prev ? prev.destino : '', c: '', d: '', autoD: true, pagar: true, resp: '' };
+  return { origen: prev ? prev.origen : '', destino: prev ? prev.destino : '', c: '', d: '', h: '', tk: '', autoD: true, pagar: true, resp: '' };
 }
 
 function nuevoComprobante(numero) {
@@ -109,7 +109,7 @@ function pintarQV(volver) {
     '<label class="f">Tipo de viaje<input id="qvTipo" value="' + esc(QV.tipo) + '"></label>' +
     '</div>' +
     '<div class="sec-h"><span class="eyebrow">Viajes con horario</span><span class="sub">origen → destino · carga y descarga</span></div>' +
-    '<div class="vt-head"><span>#</span><span>Origen</span><span>Destino</span><span>Carga</span><span>Descarga</span><span>Control balanza</span><span>Pagar</span><span></span></div>' +
+    '<div class="vt-head"><span>#</span><span>Origen</span><span>Destino</span><span>Carga</span><span>Descarga</span><span title="Horómetro de la pala cargadora (opcional)">Horóm. pala</span><span title="N° de ticket de salida (opcional)">Ticket sal.</span><span>Control balanza</span><span>Pagar</span><span></span></div>' +
     '<div id="qvFilas"></div>' +
     '<div class="row mt"><button class="btn sm" id="qvMas" tabindex="-1">+ Agregar viaje</button><span id="qvPre"></span></div>' +
     '<div class="internos ' + (c.internos.on ? 'on' : '') + '" id="qvInt"><label class="chk"><span class="switch"><input type="checkbox" id="qvIntOn"' + (c.internos.on ? ' checked' : '') + '><span></span></span><b>Viajes internos de tierra</b><span class="sub">(dentro de la cantera, sin horario)</span></label>' +
@@ -144,6 +144,8 @@ function htmlFilaQV(x, i) {
     '<input data-i="' + i + '" data-k="destino" value="' + esc(x.destino) + '" placeholder="Destino" tabindex="-1" class="' + (QV.c.ia['o' + i] ? 'ia' : '') + '">' +
     '<input data-i="' + i + '" data-k="c" value="' + esc(x.c) + '" placeholder="Carga" inputmode="numeric" maxlength="5" class="hr ' + (QV.c.ia['c' + i] ? 'ia' : '') + '">' +
     '<input data-i="' + i + '" data-k="d" value="' + esc(x.d) + '" placeholder="Descarga" inputmode="numeric" maxlength="5" class="hr ' + (QV.c.ia['d' + i] ? 'ia' : '') + '" style="' + (x.autoD && x.d ? 'color:var(--muted)' : '') + '">' +
+    '<input data-i="' + i + '" data-k="h" value="' + esc(x.h) + '" placeholder="Horóm." inputmode="decimal" class="hr ' + (QV.c.ia['h' + i] ? 'ia' : '') + '" title="Horómetro de la pala cargadora al cargar (opcional)">' +
+    '<input data-i="' + i + '" data-k="tk" value="' + esc(x.tk) + '" placeholder="Ticket" inputmode="numeric" class="hr ' + (QV.c.ia['t' + i] ? 'ia' : '') + '" title="N° de ticket de salida de la balanza (opcional)">' +
     '<span class="bal" data-bal="' + i + '"></span>' +
     '<label class="chk"><input type="checkbox" data-i="' + i + '" data-k="pagar" tabindex="-1"' + (x.pagar ? ' checked' : '') + '></label>' +
     '<button class="btn ghost icon sm" data-quitar="' + i + '" tabindex="-1" aria-label="Quitar">' + ICON.x.replace('<svg', '<svg width="14" height="14"') + '</button></div>';
@@ -199,7 +201,8 @@ function cicloQV(x) {
 function ticketsUsadosDia(excluir) {
   const usados = new Set();
   const vs = (QV.dia || []).filter(v => v.comprobante !== excluir && esPlanta(v.destino) && v.horaDescarga);
-  vs.forEach(v => {
+  vs.forEach(v => { const p = tkNorm(v.ticketSalida) ? (QV.pes || []).find(q => tkNorm(q.ticket) === tkNorm(v.ticketSalida)) : null; if (p) usados.add(p); });
+  vs.filter(v => !tkNorm(v.ticketSalida)).forEach(v => {
     const t = mejorTicket(v.dominio, v.horaDescarga, usados);
     if (t && t.dt <= 90) usados.add(t.p);
   });
@@ -230,6 +233,11 @@ function refrescarBalanzaQV() {
     let h = ci.txt ? '<span class="ciclo ' + ci.cls + '">' + ci.txt + '</span>' : '';
     if (x.c && esPlanta(x.destino)) {
       if (!QV.pes.length) h += '<span class="tag t-mut" title="Importá el PESAJE.XLS de este día para controlar">sin pesaje del día</span>';
+      else if (tkNorm(x.tk)) {
+        const p = QV.pes.find(q => tkNorm(q.ticket) === tkNorm(x.tk));
+        if (!p) h += '<span class="tag t-bad">ticket ' + esc(tkNorm(x.tk)) + ' no está en la balanza</span>';
+        else { usados.add(p); h += '<span class="tag ' + (dom && normDom(p.dominio) !== normDom(dom) ? 't-bad' : 't-ok') + '">' + ICON.ok.replace('<svg', '<svg width="12" height="12"') + 'ticket ' + esc(p.ticket) + ' · ' + p.hora + ' · ' + nf(p.neto, 1) + ' t' + (dom && normDom(p.dominio) !== normDom(dom) ? ' · es de ' + esc(p.dominio) : '') + '</span>'; }
+      }
       else if (!dom) h += '<span class="tag t-mut">falta dominio</span>';
       else {
         const t = mejorTicket(dom, x.d || x.c, usados);
@@ -256,7 +264,7 @@ function precargarDesdeBalanza() {
   const libres = (QV.pes || []).filter(p => normDom(p.dominio) === normDom(dom) && !usados.has(p)).sort((a, b) => (minDe(a.hora) || 0) - (minDe(b.hora) || 0));
   const base = QV.c.filas[0];
   const ciclo = cicloMedioChofer(QV.c.chofer);
-  QV.c.filas = libres.map(p => ({ origen: base.origen, destino: base.destino, c: hDe((minDe(p.hora) || 0) - ciclo), d: p.hora, autoD: false, pagar: true, resp: '' }));
+  QV.c.filas = libres.map(p => ({ origen: base.origen, destino: base.destino, c: hDe((minDe(p.hora) || 0) - ciclo), d: p.hora, h: '', tk: '', autoD: false, pagar: true, resp: '' }));
   QV.c.filas.forEach((x, i) => { QV.c.ia['c' + i] = true; });
   pintarFilasQV();
   resumenQV();
@@ -395,6 +403,8 @@ function enlazarQV() {
     if (el.dataset.k === 'c' || el.dataset.k === 'd') { el.value = el.value.replace(/[^\d:.,]/g, ''); el.classList.remove('inv', 'ia'); }
     if (el.dataset.k === 'd') { x.autoD = false; x.d = el.value; el.style.color = ''; }
     if (el.dataset.k === 'origen' || el.dataset.k === 'destino') x[el.dataset.k] = el.value;
+    if (el.dataset.k === 'h') { el.value = el.value.replace(/[^\d.,]/g, ''); x.h = el.value; el.classList.remove('inv', 'ia'); }
+    if (el.dataset.k === 'tk') { el.value = el.value.replace(/\D/g, ''); x.tk = el.value; el.classList.remove('inv', 'ia'); refrescarBalanzaQV(); }
   });
   fl.addEventListener('change', e => {
     const el = e.target;
@@ -480,6 +490,8 @@ function siguienteCampoQV(el) {
   }
   if (el.id === 'qvIntN') { $('#qvIntP').focus(); return; }
   if (el.id === 'qvIntP' || el.id === 'qvIntL') { $('#qvGuardar').focus(); return; }
+  if (el.dataset && el.dataset.k === 'd') { const h = $('#qvFilas .vt-row[data-i="' + el.dataset.i + '"] [data-k="h"]'); if (h) { h.focus(); h.select(); } return; }
+  if (el.dataset && el.dataset.k === 'h') { const t = $('#qvFilas .vt-row[data-i="' + el.dataset.i + '"] [data-k="tk"]'); if (t) { t.focus(); t.select(); } return; }
   if (el.dataset && (el.dataset.k === 'origen' || el.dataset.k === 'destino')) {
     const s2 = $('#qvFilas .vt-row[data-i="' + el.dataset.i + '"] [data-k="' + (el.dataset.k === 'origen' ? 'destino' : 'c') + '"]');
     if (s2) s2.focus();
@@ -487,6 +499,7 @@ function siguienteCampoQV(el) {
   }
   const i = Number(el.dataset.i);
   const sel = el.dataset.k === 'c' ? '.vt-row[data-i="' + i + '"] [data-k="d"]' : '.vt-row[data-i="' + (i + 1) + '"] [data-k="c"]';
+  if (el.dataset.k === 'tk' && !QV.c.filas[i + 1]) asegurarVacioQV();
   const sig = $('#qvFilas ' + sel);
   if (sig) { sig.focus(); sig.select(); } else $('#qvGuardar').focus();
 }
@@ -526,6 +539,24 @@ function validarQV() {
     if (d < a) d += 1440;
     prev = { c: a, d: d };
   });
+  let hAnt = null;
+  const tks = {};
+  c.filas.forEach((x, i) => {
+    if (!x.c) return;
+    const row = $('#qvFilas .vt-row[data-i="' + i + '"]');
+    const q = k => row ? $('[data-k="' + k + '"]', row) : null;
+    if (String(x.h || '').trim()) {
+      const h = num(x.h);
+      if (isNaN(h) || h < 0) marca(q('h'), 'horómetro del viaje ' + (i + 1));
+      else {
+        if (hAnt && h < hAnt.h) adv.push('Viaje ' + (i + 1) + ': el horómetro (' + nf(h, 1) + ') es menor que el del viaje anterior (' + nf(hAnt.h, 1) + ')');
+        else if (hAnt && hAnt.c && x.c) { const dh = h - hAnt.h; const dr = ((minDe(x.c) - minDe(hAnt.c) + 1440) % 1440) / 60; if (dh > dr + 0.5) adv.push('Viaje ' + (i + 1) + ': el horómetro avanzó ' + nf(dh, 1) + ' h y entre cargas pasaron ' + nf(dr, 1) + ' h'); }
+        hAnt = { h: h, c: x.c };
+      }
+    }
+    const t = tkNorm(x.tk);
+    if (t) { if (tks[t]) marca(q('tk'), 'ticket ' + t + ' repetido'); tks[t] = true; }
+  });
   if (c.internos.on) {
     if (!nInt || nInt < 1) marca($('#qvIntN'), 'cantidad de viajes internos');
     if (!c.internos.lugar) marca($('#qvIntL'), 'lugar de los viajes internos');
@@ -554,7 +585,7 @@ async function guardarQV() {
   QV.tipo = $('#qvTipo').value.trim();
   c.internos.lugar = $('#qvIntL').value.trim();
   $$('#qvFilas input[data-k="c"], #qvFilas input[data-k="d"]').forEach(el => { const x = c.filas[Number(el.dataset.i)]; const h = el.value.trim() ? parseHora(el.value) : ''; if (h === null) el.classList.add('inv'); else if (x) x[el.dataset.k] = h; });
-  $$('#qvFilas input[data-k="origen"], #qvFilas input[data-k="destino"]').forEach(el => { const x = c.filas[Number(el.dataset.i)]; if (x) x[el.dataset.k] = el.value.trim(); });
+  $$('#qvFilas input[data-k="origen"], #qvFilas input[data-k="destino"], #qvFilas input[data-k="h"], #qvFilas input[data-k="tk"]').forEach(el => { const x = c.filas[Number(el.dataset.i)]; if (x) x[el.dataset.k] = el.value.trim(); });
   const v = validarQV();
   if (v.err.length) {
     $('#qvErr').innerHTML = '<div class="alert bad">' + ICON.alerta + '<div><b>Falta completar o corregir:</b> ' + v.err.map(esc).join(' · ') + '</div></div>';
@@ -579,7 +610,7 @@ async function guardarQV() {
       }
     }
   }
-  const comunes = c.filas.filter(x => x.c).map(x => ({ origen: x.origen, destino: x.destino, tipo: QV.tipo, horaCarga: x.c, horaDescarga: x.d, responsable: c.responsable, pagar: x.pagar }));
+  const comunes = c.filas.filter(x => x.c).map(x => ({ origen: x.origen, destino: x.destino, tipo: QV.tipo, horaCarga: x.c, horaDescarga: x.d, responsable: c.responsable, pagar: x.pagar, horometro: String(x.h || '').trim() ? num(x.h) : '', ticketSalida: tkNorm(x.tk) }));
   const nInt = c.internos.on ? Number(c.internos.cantidad) || 0 : 0;
   const internos = [];
   for (let k = 0; k < nInt; k++) internos.push({ interno: true, origen: c.internos.lugar, destino: c.internos.lugar, paladas: c.internos.paladas, responsable: c.responsable, pagar: c.internos.pagar });
@@ -662,7 +693,7 @@ function pintarDiaQV() {
       if (hs.length) QV.tipo = hs[0].tipo;
       QV.c = {
         numero: b.dataset.ed, chofer: vs[0].chofer, dominio: vs[0].dominio, domAuto: false, responsable: vs[0].responsable, respAuto: false, ia: {},
-        filas: hs.map(v => ({ origen: v.origen, destino: v.destino, c: v.horaCarga, d: v.horaDescarga, autoD: false, pagar: v.pagar, resp: '' })),
+        filas: hs.map(v => ({ origen: v.origen, destino: v.destino, c: v.horaCarga, d: v.horaDescarga, h: v.horometro === null || v.horometro === undefined ? '' : String(v.horometro), tk: v.ticketSalida || '', autoD: false, pagar: v.pagar, resp: '' })),
         internos: { on: ints.length > 0, cantidad: ints.length || '', lugar: ints.length ? ints[0].origen : '', paladas: ints.length && ints[0].paladas !== null ? ints[0].paladas : '', pagar: ints.length ? ints[0].pagar : true }
       };
       if (!QV.c.filas.length) QV.c.filas.push(filaVacia({ origen: QV.c.internos.lugar, destino: destinosPlanta()[0] || '' }));
@@ -751,7 +782,9 @@ function aplicarIA(r) {
       c.ia['c' + i] = true;
       if (v.horaDescarga) c.ia['d' + i] = true;
       if (v.origen || v.destino) c.ia['o' + i] = true;
-      return { origen: lug(v.origen) || base.origen, destino: lug(v.destino) || base.destino, c: v.horaCarga, d: v.horaDescarga || '', autoD: !v.horaDescarga, pagar: true, resp: '' };
+      if (v.horometro !== null && v.horometro !== undefined && v.horometro !== '') c.ia['h' + i] = true;
+      if (v.ticketSalida) c.ia['t' + i] = true;
+      return { origen: lug(v.origen) || base.origen, destino: lug(v.destino) || base.destino, c: v.horaCarga, d: v.horaDescarga || '', h: v.horometro === null || v.horometro === undefined ? '' : String(v.horometro), tk: v.ticketSalida || '', autoD: !v.horaDescarga, pagar: true, resp: '' };
     });
   }
   if (r.internos && r.internos.cantidad > 0) {

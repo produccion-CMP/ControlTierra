@@ -46,6 +46,49 @@ function tPaladaCantera(k) {
   return { tp: tk && ppc ? ton / tk / ppc : null, ppc: ppc, tCamion: tk ? ton / tk : null, tickets: tk };
 }
 
+function analizarPala(R) {
+  const dest = destinosPlanta();
+  const viajes = (R.viajes || []).filter(v => v.horaCarga && String(v.tipo).toUpperCase() !== String(par('TIPO_VIAJE_INTERNO', 'INTERNO')).toUpperCase() && (!dest.length || dest.indexOf(String(v.destino).trim().toUpperCase()) >= 0));
+  const tramos = (R.tramos || []).filter(t => t.tipo === 'Producción' && t.horometroIni !== null && t.horometroFin !== null && t.horometroFin >= t.horometroIni);
+  const conH = viajes.filter(v => v.horometro !== null && v.horometro !== undefined);
+  const cargas = conH.map(v => {
+    const cand = tramos.filter(t => t.fecha === v.fecha && v.horometro >= t.horometroIni - 0.3 && v.horometro <= t.horometroFin + 0.3);
+    const mc = minDe(v.horaCarga);
+    const t = cand.find(x => { const a = minDe(x.horaInicio); const b = minDe(x.horaFin); return a !== null && b !== null && mc >= a - 30 && mc <= (b < a ? b + 1440 : b) + 30; }) || cand[0] || null;
+    const esperado = t && minDe(t.horaInicio) !== null ? t.horometroIni + ((mc - minDe(t.horaInicio) + 1440) % 1440) / 60 : null;
+    return { v: v, fecha: v.fecha, hora: v.horaCarga, h: v.horometro, dominio: v.dominio, chofer: v.chofer, maquina: t ? t.maquina : '', tramo: t, desfase: esperado === null ? null : v.horometro - esperado };
+  });
+  const grupos = agrupar(cargas, c => c.fecha + '|' + (c.maquina || '?'));
+  Object.keys(grupos).forEach(g => {
+    const l = grupos[g].sort((a, b) => (minDe(a.hora) || 0) - (minDe(b.hora) || 0));
+    l.forEach((c, i) => {
+      const p = i ? l[i - 1] : null;
+      c.dh = p ? c.h - p.h : null;
+      c.dr = p ? ((minDe(c.hora) - minDe(p.hora) + 1440) % 1440) / 60 : null;
+      const mot = [];
+      if (!c.maquina) mot.push('fuera del rango de horómetro de las palas en la jornada');
+      if (c.dh !== null && c.dh < 0) mot.push('el horómetro retrocede');
+      else if (c.dh !== null && c.dh > c.dr + 0.5) mot.push('el horómetro avanza ' + nf(c.dh, 1) + ' h y el reloj ' + nf(c.dr, 1) + ' h');
+      if (c.desfase !== null && Math.abs(c.desfase) > 1) mot.push('no coincide con la hora de carga (desfase ' + (c.desfase > 0 ? '+' : '') + nf(c.desfase, 1) + ' h)');
+      c.motivo = mot.join(' · ');
+    });
+  });
+  const ints = cargas.filter(c => c.dh !== null && c.dh > 0 && c.dh <= 2).map(c => c.dh * 60).sort((a, b) => a - b);
+  const porMaq = {};
+  cargas.filter(c => c.maquina).forEach(c => {
+    const m = porMaq[c.maquina] || (porMaq[c.maquina] = { n: c.maquina, cargas: 0, dias: new Set(), hMin: {}, hMax: {} });
+    m.cargas++;
+    m.dias.add(c.fecha);
+    m.hMin[c.fecha] = Math.min(m.hMin[c.fecha] === undefined ? Infinity : m.hMin[c.fecha], c.h);
+    m.hMax[c.fecha] = Math.max(m.hMax[c.fecha] === undefined ? -Infinity : m.hMax[c.fecha], c.h);
+  });
+  const maqs = Object.keys(porMaq).map(k => { const m = porMaq[k]; const hs = sum(Array.from(m.dias), f => m.hMax[f] - m.hMin[f]); return { n: k, cargas: m.cargas, dias: m.dias.size, horas: hs, camH: hs > 0 ? (m.cargas - m.dias.size) / hs : null }; });
+  return {
+    viajes: viajes, cargas: cargas, conH: conH.length, conTk: viajes.filter(v => tkNorm(v.ticketSalida)).length,
+    minPorCamion: ints.length ? quant(ints, 0.5) : null, maqs: maqs, malas: cargas.filter(c => c.motivo)
+  };
+}
+
 function controles(r, b) {
   const R = S.resumen;
   const k = conciliar(r);
@@ -109,6 +152,23 @@ function controles(r, b) {
     const sinJ = p.filter(q => !q.observ).length;
     return { sev: p.some(q => q.sinSalida) ? 'bad' : 'warn', t: p.filter(q => q.sinSalida).length + ' sin pesaje de salida · ' + p.filter(q => q.manual).length + ' cargas manuales', d: sinJ ? sinJ + ' sin justificación en la observación.' : 'Todos justificados.', ruta: '#/revision/cruda', filas: p,
       cols: [[x => fCorta(x.fecha), 'Fecha'], ['hora', 'Entrada'], ['salida', 'Salida'], ['dominio', 'Dominio'], [x => [x.manual ? 'manual' : '', x.sinSalida ? 'sin salida' : ''].filter(Boolean).join(' + '), 'Práctica'], [x => nf(x.neto, 2), 'Neto t', 'n'], [x => esc(x.observ || '—'), 'Justificación']] };
+  });
+
+  add('a_ticketSal', A, 'balanza', 'Ticket de salida en los remitos', 'Que el N° de ticket de salida anotado en el remito exista en la balanza, sea del mismo camión y no esté repetido.', () => {
+    const n = k.viajes.filter(v => tkNorm(v.ticketSalida)).length;
+    if (!n) return { sev: 'info', t: 'Sin tickets de salida en los remitos', d: 'El campo todavía es opcional: cuando se cargue, los viajes se enlazan directo con su pesaje.' };
+    const m = k.ticketsMal;
+    if (!m.length) return { sev: 'ok', t: n + ' viajes enlazados por ticket', d: nf(n / (k.viajes.length || 1) * 100, 0) + ' % de los viajes a planta traen el ticket de salida.' };
+    return { sev: 'warn', t: pl(m.length, 'ticket de salida con problemas', 'tickets de salida con problemas'), d: n + ' viajes con ticket; revisá el número anotado.', ruta: '#/revision/cruce', filas: m,
+      cols: [[x => fCorta(x.v.fecha), 'Fecha'], [x => esc(x.v.comprobante), 'Comp.'], [x => x.v.horaCarga, 'Carga'], [x => esc(x.v.dominio), 'Dominio'], [x => esc(x.v.ticketSalida), 'Ticket'], [x => esc(x.motivo), 'Problema']] };
+  });
+
+  add('a_pala', A, 'pala', 'Horómetro de la pala en los remitos', 'Que la lectura del horómetro de cada carga avance con la hora, caiga dentro de la jornada de alguna pala y coincida con la hora de carga (±1 h).', () => {
+    const P = analizarPala(r);
+    if (!P.conH) return { sev: 'info', t: 'Sin horómetro de pala en los remitos', d: 'El campo todavía es opcional: con él se ve qué pala cargó cada camión y cuánto tarda cada carga.' };
+    if (!P.malas.length) return { sev: 'ok', t: P.conH + ' cargas con horómetro consistentes', d: (P.minPorCamion !== null ? 'Mediana ' + nf(P.minPorCamion, 0) + ' min de pala entre camiones. ' : '') + nf(P.conH / (P.viajes.length || 1) * 100, 0) + ' % de los viajes informan horómetro.' };
+    return { sev: 'warn', t: pl(P.malas.length, 'carga con horómetro dudoso', 'cargas con horómetro dudoso'), d: 'De ' + P.conH + ' cargas con horómetro.', ruta: '#/tablero/cantera', filas: P.malas,
+      cols: [[x => fCorta(x.fecha), 'Fecha'], ['hora', 'Carga'], [x => nf(x.h, 1), 'Horóm.', 'n'], [x => esc(x.maquina || '—'), 'Pala'], [x => esc(x.dominio), 'Dominio'], [x => esc(x.motivo), 'Problema']] };
   });
 
   add('a_tara', A, 'balanza', 'Tara de cada camión', 'Que la tara pesada se parezca a la habitual del camión (±' + nf(tolTara * 100) + ' %). Una tara distinta cambia el neto.', () => {
