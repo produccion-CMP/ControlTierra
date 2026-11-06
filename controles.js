@@ -103,6 +103,14 @@ function controles(r, b) {
     return { sev: k.sinViaje.length > 5 ? 'bad' : 'warn', t: pl(k.sinViaje.length, 'ticket sin viaje registrado', 'tickets sin viaje registrado'), d: 'Camiones que entraron a la balanza sin comprobante cargado: ' + nf(sum(k.sinViaje, x => x.neto), 0) + ' t.', ruta: '#/tablero/viajes', filas: k.sinViaje, cols: cols.ticket };
   });
 
+  add('a_practicas', A, 'balanza', 'Malas prácticas en balanza', 'Camiones de tierra sin pesaje de salida (cerrados con la tara del sistema) y patentes cargadas a mano. Cada caso debería tener el motivo en la observación.', () => {
+    const p = (r.pesajes || []).filter(q => q.tierra !== false && (q.manual || q.sinSalida));
+    if (!p.length) return { sev: 'ok', t: 'Pesajes completos y automáticos', d: 'Todos los camiones se pesaron a la entrada y a la salida.' };
+    const sinJ = p.filter(q => !q.observ).length;
+    return { sev: p.some(q => q.sinSalida) ? 'bad' : 'warn', t: p.filter(q => q.sinSalida).length + ' sin pesaje de salida · ' + p.filter(q => q.manual).length + ' cargas manuales', d: sinJ ? sinJ + ' sin justificación en la observación.' : 'Todos justificados.', ruta: '#/revision/cruda', filas: p,
+      cols: [[x => fCorta(x.fecha), 'Fecha'], ['hora', 'Entrada'], ['salida', 'Salida'], ['dominio', 'Dominio'], [x => [x.manual ? 'manual' : '', x.sinSalida ? 'sin salida' : ''].filter(Boolean).join(' + '), 'Práctica'], [x => nf(x.neto, 2), 'Neto t', 'n'], [x => esc(x.observ || '—'), 'Justificación']] };
+  });
+
   add('a_tara', A, 'balanza', 'Tara de cada camión', 'Que la tara pesada se parezca a la habitual del camión (±' + nf(tolTara * 100) + ' %). Una tara distinta cambia el neto.', () => {
     const conT = k.pes.filter(p => p.tara > 0);
     if (conT.length < 5) return { sev: 'info', t: 'Sin taras suficientes para controlar', d: 'El archivo de balanza no trae taras o hay pocos pesajes.' };

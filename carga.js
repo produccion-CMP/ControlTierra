@@ -675,7 +675,6 @@ function prepararHoja() {
   S.imp.filas = filas;
   S.imp.encab = mejor;
   if (esFormatoBalanza(filas[0] || [])) {
-    S.imp.balanza = convertirBalanza(XLSX.utils.sheet_to_json(ws, { raw: false, defval: '' }), par('BALANZA_COD_TIERRA', '002'));
     pintarImportBalanza();
     return;
   }
@@ -684,44 +683,91 @@ function prepararHoja() {
   pintarImport();
 }
 
-function pintarImportBalanza() {
-  const b = S.imp.balanza;
-  const val = b.filas.filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) && x.neto > 0);
-  const fechas = val.map(x => x.fecha).sort();
-  const porDia = agrupar(val, x => x.fecha);
-  const porDom = agrupar(val, x => normDom(x.dominio));
-  $('#impC').innerHTML = '<div class="mt vista"><div class="alert ok">' + ICON.ok + '<div><b>Archivo del software de la balanza reconocido.</b> Se toman solo los pesajes de tierra (material ' + esc(par('BALANZA_COD_TIERRA', '002')) + ') con entrada y salida: neto = peso de entrada − peso de salida.</div></div>' +
-    '<div class="kpis mt stagger">' + kpi('Pesajes de tierra', nf(val.length), fechas.length ? fCorta(fechas[0]) + ' – ' + fCorta(fechas[fechas.length - 1]) : '', 'kacc') +
-    kpi('Toneladas netas', nf(sum(val, x => x.neto), 1), nf(val.length ? sum(val, x => x.neto) / val.length : null, 1) + ' t/camión') +
-    kpi('Camiones con entrada sin salida', nf(b.resumen.abiertas - val.length > 0 ? b.resumen.abiertas - val.length : 0), 'quedan para la próxima importación') +
-    kpi('Otros materiales', nf(b.resumen.otros), 'filas que no son tierra (no se importan)') + '</div>' +
-    '<div class="grid g2 mt"><div id="impDias">' + tabla([[r => fMedia(r), 'Fecha'], [r => porDia[r].length, 'Camiones', 'n'], [r => nf(sum(porDia[r], x => x.neto), 1), 't', 'n'], [r => nf(sum(porDia[r], x => x.neto) / porDia[r].length, 1), 't/camión', 'n'],
-      [r => porDia[r].map(x => x.hora).sort().pop(), 'Último pesaje'], [r => '<span class="sub">…</span>', 'Ya en la base', 'n'], [r => '<span class="sub">…</span>', 'Nuevos', 'n']], Object.keys(porDia).sort()) + '</div><div>' +
-    tabla([[r => r, 'Dominio'], [r => porDom[r].length, 'Pesajes', 'n'], [r => nf(sum(porDom[r], x => x.neto) / porDom[r].length, 1), 'Neto medio t', 'n'], [r => nf(quant(porDom[r].map(x => x.tara).sort((a, c) => a - c), 0.5), 2), 'Tara habitual t', 'n']], Object.keys(porDom).sort()) + '</div></div>' +
-    '<h3 class="mt2">Vista previa</h3><div class="mt">' + tabla([['ticket', 'Ticket'], [r => fCorta(r.fecha), 'Fecha'], ['hora', 'Entrada'], ['dominio', 'Dominio'], [r => nf(r.bruto, 2), 'Bruto t', 'n'], [r => nf(r.tara, 2), 'Tara t', 'n'], [r => nf(r.neto, 2), 'Neto t', 'n'], ['origen', 'Transportista']], val.slice(0, 12)) + '</div>' +
-    '<div class="row mt"><button class="btn pri" id="iImp"' + (val.length ? '' : ' disabled') + '>' + ICON.descargar + 'Importar ' + nf(val.length) + ' pesajes</button></div></div>';
-  stagger($('#impC'));
-  $('#iImp').onclick = () => importarPesajesUI(val);
-  if (fechas.length) api('pesajesClaves', { desde: fechas[0], hasta: fechas[fechas.length - 1] }).then(cl => {
-    const ya = new Set(cl);
-    const dias = Object.keys(porDia).sort();
-    const nuevosTot = val.filter(x => !ya.has(clavePesaje(x))).length;
-    $('#impDias').innerHTML = tabla([[r => fMedia(r), 'Fecha'], [r => porDia[r].length, 'Camiones', 'n'], [r => nf(sum(porDia[r], x => x.neto), 1), 't', 'n'], [r => porDia[r].map(x => x.hora).sort().pop(), 'Último pesaje'],
-      [r => porDia[r].filter(x => ya.has(clavePesaje(x))).length, 'Ya en la base', 'n'], [r => { const n = porDia[r].filter(x => !ya.has(clavePesaje(x))).length; return n ? '<b class="verde">+' + n + '</b>' : '0'; }, 'Nuevos', 'n']], dias);
-    $('#iImp').innerHTML = ICON.descargar + 'Importar ' + nf(val.length) + ' pesajes (' + nf(nuevosTot) + ' nuevos)';
-  }).catch(e => console.warn(e));
+async function contextoBalanza() {
+  if (S.ctxBal && Date.now() - S.ctxBal.t < 600000) return S.ctxBal.d;
+  let d = { codTierra: par('BALANZA_COD_TIERRA', '002'), flota: [], traDom: {}, netos: {} };
+  try { d = await api('contextoBalanza'); } catch (e) { console.warn(e); }
+  S.ctxBal = { t: Date.now(), d: d };
+  return d;
 }
 
-async function importarPesajesUI(val) {
+function tablaAbiertas(l) {
+  return tabla([['ticket', 'Ticket'], [r => fCorta(r.fecha) + ' ' + esc(r.hora), 'Entrada'], [r => esc(r.dominio) + (r.manual ? ' <span class="tag t-warn">manual</span>' : ''), 'Dominio'], [r => nf(r.pesoEntrada, 2), 'Peso entrada t', 'n'], ['transportista', 'Transp.'], ['balancero', 'Balancero'],
+    [r => '<span class="tag t-bad">' + esc(r.estado) + '</span>', 'Estado'], [r => r.observ ? esc(r.observ) : '<span class="tag t-warn">sin justificar</span>', 'Observación']], l, { vacio: 'No hay camiones de tierra con la entrada abierta.' });
+}
+
+function tablaPracticas(l, tipo) {
+  return tabla([['ticket', 'Ticket'], [r => fCorta(r.fecha) + ' ' + esc(r.hora), 'Entrada'], [r => esc(r.salida || ''), 'Salida'], [r => r.minutos === null || r.minutos === undefined ? '' : r.minutos >= 60 ? nf(r.minutos / 60, 1) + ' h' : nf(r.minutos) + ' min', 'Entre entrada y salida', 'n'],
+    [r => esc(r.dominio) + (r.dominioArchivo ? ' <span class="sub">(' + esc(r.dominioArchivo) + ')</span>' : ''), 'Dominio'], [r => nf(r.neto, 2), 'Neto t', 'n'], [r => [r.manual && tipo !== 'manual' ? 'también carga manual' : '', r.sinSalida && tipo !== 'sinSalida' ? 'también sin pesaje de salida' : ''].filter(Boolean).join(' · '), 'Además'],
+    ['balancero', 'Balancero'], [r => r.observ ? esc(r.observ) : '<span class="tag t-warn">sin justificar</span>', 'Justificación (observación)', 'wrap']], l, { vacio: tipo === 'manual' ? 'Sin cargas manuales.' : 'Todos los camiones se pesaron a la salida.' });
+}
+
+function resumenPracticas(C) {
+  const sinJ = C.manuales.concat(C.sinSalida.filter(x => !x.manual)).filter(x => !x.observ).length;
+  return '<h3 class="mt2">Malas prácticas en balanza (solo tierra)</h3><p class="sub">Cada caso debería tener el motivo en la observación del pesaje. ' + (sinJ ? '<b class="rojo">' + pl(sinJ, 'registro', 'registros') + ' sin justificar.</b>' : 'Todos justificados.') + '</p>' +
+    '<h4>Sin pesaje de salida · ' + C.sinSalida.length + '</h4><p class="sub">El camión salió sin pesarse y el pesaje se cerró con la tara cargada en el sistema (salida otro día o más de ' + C.umbral + ' min después de la entrada). El neto no usa la tara real.</p>' + tablaPracticas(C.sinSalida, 'sinSalida') +
+    '<h4>Entradas todavía abiertas · ' + C.abiertas.length + '</h4>' + tablaAbiertas(C.abiertas) +
+    '<h4>Cargas manuales · ' + C.manuales.length + '</h4><p class="sub">Patente escrita a mano con un carácter extra (por ejemplo «LHU 365+») porque el camión no esperó la lectura del sistema.</p>' + tablaPracticas(C.manuales, 'manual');
+}
+
+function tablaDudosos(l, conCheck) {
+  return tabla([[(r, i) => conCheck ? '<input type="checkbox" data-dud="' + i + '"' + (r.incluir ? ' checked' : '') + '>' : '', ''], ['ticket', 'Ticket'], [r => fCorta(r.fecha) + ' ' + esc(r.hora), 'Entrada'], [r => esc(r.dominio) + (r.dominioArchivo ? ' <span class="sub">(' + esc(r.dominioArchivo) + ')</span>' : ''), 'Dominio'],
+    ['material', 'Mat.'], [r => esc(r.cliente || ''), 'Cliente'], [r => esc(r.sentido), 'Sentido'], [r => nf(r.neto, 2), 'Neto t', 'n'], [r => esc(r.motivo), 'Por qué', 'wrap']], l, { vacio: 'Sin registros dudosos.' });
+}
+
+async function pintarImportBalanza() {
+  const ctx = await contextoBalanza();
+  const crudo = XLSX.utils.sheet_to_json(S.imp.wb.Sheets[S.imp.hoja], { raw: false, defval: '' });
+  const C = clasificarBalanza(crudo, Object.assign({}, ctx, { codTierra: par('BALANZA_COD_TIERRA', ctx.codTierra || '002'), maxMinSalida: num(par('BALANZA_MAX_MIN_SALIDA', ctx.maxMinSalida || 120)) }));
+  S.imp.balanza = C;
+  S.imp.crudo = crudo.map(crudoBalanza);
+  const pintar = () => {
+    const val = C.tierra.concat(C.dudosos.filter(x => x.incluir)).filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) && x.neto > 0);
+    const fechas = val.map(x => x.fecha).sort();
+    const porDia = agrupar(val, x => x.fecha);
+    const corr = C.tierra.filter(x => x.dominioArchivo).concat(C.dudosos.filter(x => x.dominioArchivo));
+    const terceros = C.tierra.filter(x => /tercero/.test(x.nota || ''));
+    $('#impC').innerHTML = '<div class="mt vista"><div class="alert ok">' + ICON.ok + '<div><b>Archivo de la balanza reconocido: ' + nf(C.leidas) + ' filas.</b> Cada camión tiene dos filas: la entrada (opción 1) y el pesaje completo con salida (opción 2; la 4 es un pesaje cerrado en el momento). Se importan los pesajes completos que son tierra según el material, el sentido de la carga (entra cargado y sale vacío), que no tengan cliente y la patente.</div></div>' +
+      '<div class="kpis mt stagger">' + kpi('Pesajes de tierra a importar', nf(val.length), fechas.length ? fCorta(fechas[0]) + ' – ' + fCorta(fechas[fechas.length - 1]) + ' · ' + nf(sum(val, x => x.neto), 1) + ' t' : '', 'kacc') +
+      kpi('Dudosos', nf(C.dudosos.length), C.dudosos.filter(x => x.incluir).length + ' incluidos · revisá abajo', C.dudosos.length ? 'warn' : 'ok') +
+      kpi('Sin pesaje de salida', nf(C.sinSalida.length + C.abiertas.length), C.sinSalida.length + ' cerrados con tara del sistema · ' + C.abiertas.length + ' abiertos', C.sinSalida.length + C.abiertas.length ? 'bad' : 'ok') +
+      kpi('Cargas manuales', nf(C.manuales.length), nf(C.manuales.filter(x => !x.observ).length) + ' sin justificar · ' + nf(C.otros) + ' filas de otros materiales ignoradas', C.manuales.length ? 'warn' : 'ok') + '</div>' +
+      (corr.length ? '<div class="alert info">' + ICON.infoI + '<div><b>' + pl(corr.length, 'patente corregida', 'patentes corregidas') + ':</b> ' + corr.map(x => esc(x.dominioArchivo) + ' → ' + esc(x.dominio) + ' (ticket ' + esc(x.ticket) + ')').join(' · ') + '. Se guarda la patente original en la nota del pesaje.</div></div>' : '') +
+      (terceros.length ? '<div class="alert warn">' + ICON.alerta + '<div><b>' + pl(terceros.length, 'pesaje de tierra', 'pesajes de tierra') + ' con camiones fuera de la flota:</b> ' + Array.from(new Set(terceros.map(x => x.dominio))).join(', ') + '. Se importan como terceros; si son errores, corregilos en la balanza.</div></div>' : '') +
+      '<div class="mt"><div id="impDias">' + tabla([[r => fMedia(r), 'Fecha'], [r => porDia[r].length, 'Camiones', 'n'], [r => nf(sum(porDia[r], x => x.neto), 1), 't', 'n'], [r => porDia[r].map(x => x.hora).sort().pop(), 'Último pesaje'], [r => '<span class="sub">…</span>', 'Ya en la base', 'n'], [r => '<span class="sub">…</span>', 'Nuevos', 'n']], Object.keys(porDia).sort()) + '</div>' +
+      '<div>' + resumenPracticas(C) + '</div></div>' +
+      (C.dudosos.length ? '<h3 class="mt2">Registros dudosos</h3><p class="sub">Marcá los que son tierra y querés importar. Por defecto se incluyen los que tienen todas las señales de tierra salvo el código de material.</p>' + tablaDudosos(C.dudosos, true) : '') +
+      '<h3 class="mt2">Vista previa</h3>' + tabla([['ticket', 'Ticket'], [r => fCorta(r.fecha), 'Fecha'], ['hora', 'Entrada'], ['dominio', 'Dominio'], [r => nf(r.bruto, 2), 'Bruto t', 'n'], [r => nf(r.tara, 2), 'Tara t', 'n'], [r => nf(r.neto, 2), 'Neto t', 'n'], ['origen', 'Transportista'], [r => esc(r.nota || ''), 'Nota']], val.slice(0, 12)) +
+      '<div class="row mt"><button class="btn pri" id="iImp"' + (val.length ? '' : ' disabled') + '>' + ICON.descargar + 'Importar ' + nf(val.length) + ' pesajes</button><span class="sub">También se guarda el archivo crudo para control (últimos 30 días).</span></div></div>';
+    stagger($('#impC'));
+    $$('[data-dud]').forEach(ch => { ch.onchange = () => { C.dudosos[Number(ch.dataset.dud)].incluir = ch.checked; pintar(); }; });
+    $('#iImp').onclick = () => importarPesajesUI(val);
+    if (fechas.length) api('pesajesClaves', { desde: fechas[0], hasta: fechas[fechas.length - 1] }).then(cl => {
+      if (!$('#impDias')) return;
+      const ya = new Set(cl);
+      const nuevosTot = val.filter(x => !ya.has(clavePesaje(x))).length;
+      $('#impDias').innerHTML = tabla([[r => fMedia(r), 'Fecha'], [r => porDia[r].length, 'Camiones', 'n'], [r => nf(sum(porDia[r], x => x.neto), 1), 't', 'n'], [r => porDia[r].map(x => x.hora).sort().pop(), 'Último pesaje'],
+        [r => porDia[r].filter(x => ya.has(clavePesaje(x))).length, 'Ya en la base', 'n'], [r => { const n = porDia[r].filter(x => !ya.has(clavePesaje(x))).length; return n ? '<b class="verde">+' + n + '</b>' : '0'; }, 'Nuevos', 'n']], Object.keys(porDia).sort());
+      $('#iImp').innerHTML = ICON.descargar + 'Importar ' + nf(val.length) + ' pesajes (' + nf(nuevosTot) + ' nuevos)';
+    }).catch(e => console.warn(e));
+  };
+  pintar();
+}
+
+async function importarPesajesUI(val, opciones) {
+  const o = opciones || {};
+  const C = S.imp && S.imp.balanza;
   bloquear('Importando ' + val.length + ' pesajes…');
   try {
-    const r = await escribir('importarPesajes', { filas: val }, 'Importación ' + S.imp.nombre);
+    const r = await escribir('importarPesajes', { filas: val, crudo: o.sinCrudo ? [] : (S.imp && S.imp.crudo) || [], archivo: (S.imp && S.imp.nombre) || '', dudosos: C ? C.dudosos.length : 0, abiertas: C ? C.abiertas.length + C.sinSalida.length : 0 }, 'Importación ' + ((S.imp && S.imp.nombre) || 'balanza'));
+    if (o.alTerminar) { o.alTerminar(r); return; }
     if (!r.encolado) {
       avisarInforme(r);
       const fs = val.map(x => x.fecha).sort();
-      $('#impC').innerHTML = '<div class="alert ok mt">' + ICON.ok + '<div><b>Importación completa.</b> ' + r.nuevos + ' nuevos · ' + (r.actualizados || 0) + ' corregidos · ' + (r.iguales || 0) + ' ya estaban iguales · ' + r.total + ' pesajes en la base.</div></div>' +
+      $('#impC').innerHTML = '<div class="alert ok mt">' + ICON.ok + '<div><b>Importación completa.</b> ' + r.nuevos + ' nuevos · ' + (r.actualizados || 0) + ' corregidos · ' + (r.iguales || 0) + ' ya estaban iguales · ' + r.total + ' pesajes en la base.' + (r.crudo ? ' Archivo crudo guardado: ' + r.crudo.filas + ' filas (' + r.crudo.nuevas + ' nuevas).' : '') + '</div></div>' +
         (r.porFecha ? tabla([[f => fMedia(f), 'Fecha'], [f => nf(val.filter(x => x.fecha === f).length), 'En el archivo', 'n'], [f => r.porFecha[f].nuevos, 'Nuevos', 'n'], [f => r.porFecha[f].actualizados, 'Corregidos', 'n'], [f => r.porFecha[f].iguales, 'Ya estaban', 'n'], [f => (r.enBase || {})[f] || 0, 'Total en la base', 'n']], Object.keys(r.porFecha).sort()) : '') +
-        '<div class="row"><a class="btn pri" href="#/tablero/viajes">' + ICON.tablero + 'Ver cruce viajes ↔ balanza</a>' + botonInforme('balanza', { desde: fs[0], hasta: fs[fs.length - 1] }, 'Informe de balanza') + '</div>';
+        (C && (C.sinSalida.length || C.manuales.length || C.abiertas.length) ? '<div class="alert warn">' + ICON.alerta + '<div>En este archivo: ' + C.sinSalida.length + ' sin pesaje de salida, ' + C.abiertas.length + ' entradas abiertas y ' + C.manuales.length + ' cargas manuales de tierra. El detalle queda en Revisión → Balanza cruda y en el informe de balanza.</div></div>' : '') +
+        '<div class="row"><a class="btn pri" href="#/revision">' + ICON.alerta + 'Revisar viajes ↔ balanza</a><a class="btn" href="#/revision/cruda">Balanza cruda</a>' + botonInforme('balanza', { desde: fs[0], hasta: fs[fs.length - 1] }, 'Informe de balanza') + '</div>';
       enlazarInformes($('#impC'));
     } else {
       $('#impC').innerHTML = '<div class="alert warn mt">' + ICON.alerta + '<div><b>La importación quedó en cola</b> porque no hubo conexión con el servidor. Se envía sola al volver la conexión (arriba, junto a «En línea», se ve la cola). Hasta entonces esos pesajes no están en la base.</div></div>';

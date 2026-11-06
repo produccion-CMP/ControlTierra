@@ -371,7 +371,7 @@ function tabla(cols, filas, op = {}) {
   if (!filas.length) return vacio(op.vacio);
   const th = cols.map(c => '<th class="' + (c[2] === 'n' ? 'n' : '') + '">' + esc(c[1]) + '</th>').join('');
   const tb = filas.map((f, i) => '<tr' + (op.fila ? ' class="click" data-fila="' + i + '"' : '') + '>' + cols.map(c => {
-    const v = typeof c[0] === 'function' ? c[0](f) : esc(f[c[0]]);
+    const v = typeof c[0] === 'function' ? c[0](f, i) : esc(f[c[0]]);
     return '<td class="' + (c[2] || '') + '">' + (v === undefined || v === null ? '' : v) + '</td>';
   }).join('') + '</tr>').join('');
   return '<div class="tw ' + (op.max ? 'max' : '') + '"' + (op.id ? ' id="' + op.id + '"' : '') + '><table><thead><tr>' + th + '</tr></thead><tbody>' + tb + '</tbody></table></div>';

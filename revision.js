@@ -40,12 +40,13 @@ async function vRevision(tab) {
   const ok = vivo();
   const st = S.revF || { desde: addDias(hoy(), -14), hasta: addDias(hoy(), -1) };
   S.revF = st;
-  const t = tab === 'controles' ? 'controles' : 'cruce';
+  const t = ['controles', 'cruda'].indexOf(tab) >= 0 ? tab : 'cruce';
   app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Solo editores</div><h1>Revisión de datos</h1><p class="sub">Inconsistencias con opciones para corregirlas: asociar viajes con pesajes, marcar lo que no corresponde e ir a la carga para corregir.</p></div><div id="segRev"></div></div>' +
     '<div class="card"><div class="bar"><label class="f">Desde<input type="date" id="rD" value="' + st.desde + '"></label><label class="f">Hasta<input type="date" id="rH" value="' + st.hasta + '"></label><button class="btn" id="rAp">Aplicar</button></div></div><div id="revC" class="mt"><div class="card"><div class="skel" style="height:300px"></div></div></div></div>';
-  segmento($('#segRev'), [['cruce', 'Viajes ↔ balanza'], ['controles', 'Todos los controles']], t, k => { location.hash = '#/revision/' + k; }, true);
+  segmento($('#segRev'), [['cruce', 'Viajes ↔ balanza'], ['cruda', 'Balanza cruda'], ['controles', 'Todos los controles']], t, k => { location.hash = '#/revision/' + k; }, true);
   $('#rAp').onclick = () => { st.desde = $('#rD').value; st.hasta = $('#rH').value; vRevision(t); };
   await cargarResumen();
+  if (t === 'cruda') return pintarCruda($('#revC'), st);
   let R;
   try { R = await api('rango', { desde: st.desde, hasta: st.hasta }); } catch (e) { $('#revC').innerHTML = '<div class="alert bad">' + ICON.alerta + '<div>' + esc(e.message) + '</div></div>'; return; }
   if (!ok()) return;
@@ -102,5 +103,52 @@ function pintarCruce(c, R, st) {
     if (b.dataset.sp) { const n = await nota('Viaje sin pesaje'); if (n !== null) hacer({ tipo: 'sinPesaje', claveViaje: b.dataset.sp, fecha: b.dataset.f, nota: n }, 'Marcado: no pasó por la balanza'); return; }
     if (b.dataset.sv) { const n = await nota('Ticket sin viaje'); if (n !== null) hacer({ tipo: 'sinViaje', clavePesaje: b.dataset.sv, fecha: b.dataset.f, nota: n }, 'Marcado: no corresponde a un viaje'); return; }
     if (b.dataset.des) hacer({ id: b.dataset.des }, 'Decisión deshecha');
+  };
+}
+
+
+async function pintarCruda(c, st) {
+  let crudo;
+  let claves;
+  let imps;
+  const ctx = await contextoBalanza();
+  try {
+    [crudo, claves, imps] = await Promise.all([api('balanzaCruda', { desde: st.desde, hasta: st.hasta }), api('pesajesClaves', { desde: st.desde, hasta: st.hasta }), api('importaciones')]);
+  } catch (e) { c.innerHTML = '<div class="alert bad">' + ICON.alerta + '<div>' + esc(e.message) + '</div></div>'; return; }
+  const C = clasificarBalanza(crudo, Object.assign({}, ctx, { codTierra: par('BALANZA_COD_TIERRA', ctx.codTierra || '002'), maxMinSalida: num(par('BALANZA_MAX_MIN_SALIDA', ctx.maxMinSalida || 120)) }));
+  const ya = new Set(claves);
+  const faltan = C.tierra.map(x => Object.assign(x, { incluir: true, motivo: x.nota || 'Pesaje de tierra completo' })).concat(C.dudosos).filter(x => !ya.has(clavePesaje(x)));
+  const filtro = { q: '', mat: String(par('BALANZA_COD_TIERRA', ctx.codTierra || '002')).split(',')[0].trim() };
+  const pintarTabla = () => {
+    const q = normTxt(filtro.q);
+    const l = crudo.filter(r => (!filtro.mat || String(r.cod_mat) === filtro.mat) && (!q || normTxt(BALANZA_COLUMNAS.map(k => r[k]).join(' ')).indexOf(q) >= 0));
+    $('#crTab').innerHTML = '<div class="tw max" style="max-height:60vh"><table><thead><tr><th>Archivo</th>' + BALANZA_COLUMNAS.map(k => '<th>' + k + '</th>').join('') + '</tr></thead><tbody>' +
+      l.slice(0, 800).map(r => '<tr><td class="sub">' + esc(r._archivo || '') + '</td>' + BALANZA_COLUMNAS.map(k => '<td>' + esc(r[k]) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div><div class="sub mt">' + nf(l.length) + ' filas' + (l.length > 800 ? ' (se muestran 800; descargá el CSV para ver todas)' : '') + '</div>';
+  };
+  c.innerHTML = '<div class="kpis stagger">' + kpi('Filas crudas guardadas', vn(crudo.length), 'del período, como vienen en el archivo') + kpi('Pesajes de tierra no tomados', vn(faltan.length), 'están en el archivo y no en la base', faltan.length ? 'bad' : 'ok') +
+    kpi('Dudosos', vn(C.dudosos.length), 'material o sentido contradictorio', C.dudosos.length ? 'warn' : 'ok') + kpi('Sin pesaje de salida', vn(C.sinSalida.length + C.abiertas.length), C.manuales.length + ' cargas manuales · ' + C.manuales.concat(C.sinSalida).filter(x => !x.observ).length + ' sin justificar', C.sinSalida.length + C.abiertas.length ? 'bad' : 'ok') + '</div>' +
+    '<div class="card"><div class="card-h"><div class="t"><h3>No tomados en la base</h3><div class="sub">Control automático: pesajes completos del archivo crudo que no están entre los pesajes procesados</div></div>' + (faltan.length ? '<button class="btn pri" id="crImp">' + ICON.descargar + 'Importar los marcados</button>' : '') + '</div>' + tablaDudosos(faltan, true) + '</div>' +
+    '<div class="card">' + resumenPracticas(C) + '</div>' +
+    '<div class="card"><div class="card-h"><div class="t"><h3>Archivo crudo</h3><div class="sub">Control manual: todas las filas tal como vienen del PESAJE.XLS</div></div><div class="row"><input id="crQ" placeholder="Buscar patente, ticket…" style="width:200px"><select id="crM"><option value="">Todos los materiales</option>' + Array.from(new Set(crudo.map(r => String(r.cod_mat)))).sort().map(m => '<option' + (m === filtro.mat ? ' selected' : '') + '>' + esc(m) + '</option>').join('') + '</select><button class="btn sm" id="crCsv">' + ICON.descargar + 'CSV</button></div></div><div id="crTab"></div></div>' +
+    '<div class="card"><div class="card-h"><div class="t"><h3>Últimas importaciones</h3></div></div>' + tabla([[r => esc(String(r.ts).slice(0, 16).replace('T', ' ')), 'Cuándo'], ['archivo', 'Archivo'], ['usuario', 'Usuario'], [r => nf(r.filas), 'Filas', 'n'], [r => nf(r.tierra), 'Tierra', 'n'], [r => nf(r.nuevos), 'Nuevos', 'n'], [r => nf(r.dudosos), 'Dudosos', 'n'], [r => nf(r.abiertas), 'Sin salida', 'n'], [r => r.desde ? fCorta(r.desde) + ' – ' + fCorta(r.hasta) : '', 'Fechas']], imps, { vacio: 'Sin importaciones registradas todavía.' }) + '</div>';
+  stagger(c);
+  contar(c);
+  pintarTabla();
+  $('#crQ').oninput = e => { filtro.q = e.target.value; pintarTabla(); };
+  $('#crM').onchange = e => { filtro.mat = e.target.value; pintarTabla(); };
+  $('#crCsv').onclick = () => {
+    const filas = [['archivo'].concat(BALANZA_COLUMNAS)].concat(crudo.map(r => [r._archivo || ''].concat(BALANZA_COLUMNAS.map(k => r[k]))));
+    const csv = filas.map(f => f.map(v => '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"').join(';')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'balanza_cruda_' + st.desde + '_' + st.hasta + '.csv';
+    a.click();
+  };
+  $$('[data-dud]', c).forEach(ch => { ch.onchange = () => { faltan[Number(ch.dataset.dud)].incluir = ch.checked; }; });
+  if ($('#crImp')) $('#crImp').onclick = () => {
+    const sel = faltan.filter(x => x.incluir);
+    if (!sel.length) return toast('Marcá al menos un pesaje', 'warn');
+    S.imp = { nombre: 'recuperados de la balanza cruda', balanza: C };
+    importarPesajesUI(sel, { sinCrudo: true, alTerminar: r => { invalidar(); toast(r.encolado ? 'Quedó en cola' : r.nuevos + ' pesajes recuperados', 'ok'); vRevision('cruda'); } });
   };
 }
