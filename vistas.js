@@ -57,6 +57,7 @@ async function pintarProyeccion(cont, ok) {
   const pas = pr.pasado.map(x => x.stock).concat(pr.proyeccion.map(() => null));
   const unir = k => pr.pasado.map((x, i) => i === nP - 1 ? x.stock : null).concat(pr.proyeccion.map(x => x[k]));
   const sinStock = pr.stock === null;
+  const todos = pr.pasado.concat(pr.proyeccion);
   const res = sinStock ? '<div class="alert warn">' + ICON.alerta + '<div>El stock de playa no está validado (' + (pr.inicioPlaya ? 'el cálculo da negativo: faltan ingresos o un ajuste' : 'falta un stock inicial') + '). Se muestra solo el balance de ingreso y consumo esperado.</div></div>' :
     '<div class="kpis" style="margin-bottom:6px">' + kpi('Hoy', nf(pr.stock) + '<small>t</small>', '≈ ' + nf(pr.stock / dn) + ' m³', '') +
     kpi('Últimos 7 días', (v7 >= 0 ? '+' : '') + nf(v7) + '<small>t</small>', 'ingreso − molido', v7 < 0 ? 'warn' : 'ok') +
@@ -65,8 +66,8 @@ async function pintarProyeccion(cont, ok) {
   cont.innerHTML = '<div class="card proy-card"><div class="card-h"><div class="t"><h3>Playa de molienda: 7 días atrás y ' + pr.dias + ' adelante</h3><div class="sub">Proyección con el ingreso y consumo habitual de cada día de la semana y el pronóstico de lluvia</div></div>' +
     (S.ses ? botonInforme('playa', { fecha: pr.hasta }, 'Informe') : '') + '</div>' + res +
     (sinStock ? '' : '<div class="chart" style="height:220px"><canvas id="chProy"></canvas></div>') +
-    '<div class="proy-dias">' + pr.proyeccion.map(x => '<div class="' + (x.lluvia ? 'llueve' : '') + '"><span>' + fCorta(x.fecha) + ' ' + (x.clima ? climaIco(x.clima.codigo) : '') + '</span><b>' + (x.ingreso - x.consumo >= 0 ? '+' : '') + nf(x.ingreso - x.consumo) + ' t</b><span class="sub">' + (x.clima ? nf(x.clima.mm, 0) + ' mm · ' + nf(x.clima.tmax) + '°' : '') + '</span></div>').join('') + '</div>' +
-    '<div class="leyenda"><span>Δ por día = ingreso esperado − consumo esperado</span><span>Lluvia: se espera el ' + nf(pr.factorLluvia * 100) + ' % del ingreso (' + esc(pr.fuenteLluvia) + ')</span>' + (pr.errorClima ? '<span class="rojo">Sin pronóstico: ' + esc(pr.errorClima) + '</span>' : '') + '</div></div>';
+    '<div class="proy-tira" id="proyTira">' + todos.map((x, i) => { const dv = x.ingreso - x.consumo; const llu = x.lluvia || (x.clima && x.clima.mm >= (num(par('LLUVIA_MM_PARADA', 5)) || 5)); return '<div class="' + (llu ? 'llueve ' : '') + (i < nP ? 'pas ' : '') + (x.fecha === hoy() ? 'hoy' : '') + '" title="' + fLarga(x.fecha) + (x.clima ? ' · ' + esc(climaTxt(x.clima.codigo)) + ' · ' + nf(x.clima.mm, 1) + ' mm · máx ' + nf(x.clima.tmax) + '°' : '') + ' · ' + (i < nP ? 'real' : 'esperado') + ' ' + (dv >= 0 ? '+' : '') + nf(dv) + ' t"><span class="i">' + (x.clima ? climaIco(x.clima.codigo) : '·') + '</span><span class="mm">' + (x.clima ? nf(x.clima.mm, 0) + ' mm' : '') + '</span><b class="' + (dv > 0.5 ? 'sube' : dv < -0.5 ? 'baja' : '') + '">' + (dv >= 0 ? '+' : '−') + nf(Math.abs(dv)) + '</b></div>'; }).join('') + '</div>' +
+    '<div class="leyenda"><span>Debajo de cada día: clima y saldo en t (ingreso − consumo; real hacia atrás, esperado hacia adelante)</span><span>Lluvia: se espera el ' + nf(pr.factorLluvia * 100) + ' % del ingreso (' + esc(pr.fuenteLluvia) + ')</span>' + (pr.errorClima ? '<span class="rojo">Sin pronóstico: ' + esc(pr.errorClima) + '</span>' : '') + '</div></div>';
   enlazarInformes(cont);
   const iHoy = L.indexOf(fCorta(hoy()));
   if (typeof Chart !== 'undefined' && !S.lineaHoyOk) {
@@ -81,14 +82,24 @@ async function pintarProyeccion(cont, ok) {
       c2.save(); c2.strokeStyle = col; c2.lineWidth = 2; c2.setLineDash([4, 4]); c2.beginPath(); c2.moveTo(x, a.top); c2.lineTo(x, a.bottom); c2.stroke(); c2.setLineDash([]);
       c2.fillStyle = col; c2.font = '800 12px ' + (cssVar('--font') || 'sans-serif'); c2.textAlign = 'center'; c2.fillText('HOY', x, a.top + 12); c2.restore();
     } });
+    Chart.register({ id: 'alinearTira', afterLayout: ch => {
+      const o = ch.options.plugins && ch.options.plugins.alinearTira;
+      const el = o && document.getElementById(o.id);
+      if (!el) return;
+      const n = ch.data.labels.length;
+      const xs = ch.scales.x;
+      const w = n > 1 ? xs.getPixelForValue(1) - xs.getPixelForValue(0) : xs.width;
+      el.style.paddingLeft = Math.max(0, xs.getPixelForValue(0) - w / 2) + 'px';
+      Array.from(el.children).forEach(c => { c.style.width = w + 'px'; });
+    } });
   }
   if (!sinStock) grafico('chProy', 'line', L, [
     { label: 'Stock calculado t', data: pas, borderColor: color(1), backgroundColor: color(1), pointRadius: 3 },
     { label: 'Proyección t', data: unir('stock'), borderColor: color(1), backgroundColor: color(1), borderDash: [6, 4], pointRadius: 2 },
     { label: 'Escenario favorable', data: unir('stockMax'), borderColor: 'transparent', backgroundColor: 'rgba(217,107,58,.14)', fill: '+1', pointRadius: 0 },
     { label: 'Escenario desfavorable', data: unir('stockMin'), borderColor: 'rgba(217,107,58,.35)', backgroundColor: 'rgba(217,107,58,.14)', borderDash: [2, 3], pointRadius: 0 }
-  ], { scales: { y: { beginAtZero: true, min: 0 } }, plugins: { lineaHoy: { i: iHoy }, legend: { display: true, labels: { filter: it => it.text !== 'Escenario favorable' } } } });
-  $$('.proy-dias > div', cont).forEach((d, i) => { if (pr.proyeccion[i] && pr.proyeccion[i].fecha === hoy()) d.classList.add('hoy'); });
+  ], { scales: { y: { beginAtZero: true, min: 0 } }, plugins: { lineaHoy: { i: iHoy }, alinearTira: { id: 'proyTira' }, legend: { display: true, labels: { filter: it => it.text !== 'Escenario favorable' } } } });
+  if (sinStock) { const t = $('#proyTira', cont); if (t) { t.style.display = 'grid'; t.style.gridTemplateColumns = 'repeat(' + todos.length + ', minmax(0, 1fr))'; } }
 }
 
 async function vSolicitudes(cont) {
@@ -206,7 +217,7 @@ async function vInicio() {
     nodo('playa', 'playa', 'Playa', sp.v, ln(sp.m3) + (b.stockPlaya !== null ? ln('≈ ' + nf(b.stockPlaya / b.densidad / m3p) + ' paladas') : '') + delta(dP, ultimo ? 'en el día' : 'en ' + dias + ' días') +
       '<span class="nl io"><i class="in">+ ' + nf(b.ingresoPlaya) + ' t entró</i><i class="out">− ' + nf(b.consumo) + ' t salió</i></span>' + (b.diasPlaya !== null ? '<span class="nl sec">≈ ' + nf(b.diasPlaya, 1) + ' días de molienda</span>' : ''), '#/tablero/balance', ilusStock('playa', pctP, b.stockPlaya === null)) +
     nodo('molienda', 'molienda', 'Molienda', vn(b.consumo) + '<small> t</small>', ln('≈ ' + nf(b.molPal * m3p) + ' m³') + ln(nf(b.molPal) + ' paladas', 'al cajón') + '<span class="nl sec">' + nf(b.fMol, 2) + ' t/palada · ' + nf(molT) + ' t por balanza</span>', '#/tablero/balance') +
-    nodo('silo', 'silo', 'Silo', ss.v, ln(ss.m3) + delta(dS, ultimo ? 'en el día' : 'en ' + dias + ' días') + '<span class="nl io"><i class="in">+ ' + nf(b.consumo) + ' t entró</i><i class="out">− ' + nf(b.siloOut, 0) + ' t salió</i></span><span class="nl sec">' + nf(molT) + ' t por balanza dinámica · ' + nf(b.siloPal) + ' pal. a producción</span>', '#/tablero/balance', ilusStock('silo', pctS, b.stockSilo === null)) +
+    nodo('silo', 'silo', 'Silo', ss.v, ln(ss.m3) + delta(dS, ultimo ? 'en el día' : 'en ' + dias + ' días') + '<span class="nl io"><i class="in">+ ' + nf(b.consumo) + ' t entró</i><i class="out">− ' + nf(b.siloOut, 0) + ' t salió</i></span>' + (b.diasSilo !== null ? '<span class="nl sec">≈ ' + nf(b.diasSilo, 1) + ' días de producción</span>' : '') + '<span class="nl sec">' + nf(molT) + ' t por balanza dinámica · ' + nf(b.siloPal) + ' pal. a producción</span>', '#/tablero/balance', ilusStock('silo', pctS, b.stockSilo === null)) +
     '</div><div class="flujo-leg"><span class="nbadge mv">Movimiento</span><span>tierra que pasó por esa etapa en el período (se suma)</span><span class="nbadge st">Stock</span><span>tierra que hay al ' + alF + ' (es una foto, no se suma)</span><span class="pt"></span><span>sentido del flujo</span></div></div>' + '<div id="proyPlaya"></div>' +
     '<div class="grid ' + (S.ses ? 'g-21' : 'g2') + '" style="align-items:start">' + (S.ses ? '<div class="card"><div class="card-h"><div class="t"><h3>Para revisar</h3><div class="sub">Controles cruzados de los últimos 14 días</div></div><a class="btn sm" href="#/revision/controles">Ver todos</a></div><div class="alertas" id="alertas"><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div></div></div>' : '') +
     '<div class="col" style="gap:16px"><div class="card"><div class="card-h"><div class="t"><h3>Estado de la carga</h3><div class="sub">Último día con datos por fuente</div></div></div><div class="estado">' +
@@ -414,17 +425,8 @@ function tabBalance(c) {
     ['Stock de playa', 'stock inicial o último ajuste + ingresos − consumo de molienda. Antes del primer ajuste se reconstruye hacia atrás; si da negativo se marca «sin dato» hasta el próximo ajuste.'],
     ['m³', 'aproximados: t ÷ densidad (' + nf(b.densidad, 2) + ' t/m³ = t por palada ÷ ' + nf(b.m3Palada) + ' m³ de balde).'],
     ['Stock de silo', 'lo que pasó por la balanza dinámica − paladas extraídas × factor del silo.']
-  ]) + '<div class="kpis stagger">' +
-    kpi('Ingreso balanza', vn(b.ingreso) + '<small>t</small>', '≈ ' + nf(b.ingreso / b.densidad) + ' m³ · ' + nf(b.tickets) + ' camiones', 'kacc', 'Suma de netos de la balanza de ingreso en el período.') +
-    kpi('Consumo molienda', vn(b.consumo) + '<small>t</small>', '≈ ' + nf(b.consumo / b.densidad) + ' m³ · ' + nf(b.molPal) + ' paladas', 'kacc', 'Toneladas que entraron a la línea de molienda.') +
-    kpi('Variación playa', vn(b.ingreso - b.consumo) + '<small>t</small>', '≈ ' + nf((b.ingreso - b.consumo) / b.densidad) + ' m³ · ' + (b.ingreso - b.consumo >= 0 ? 'se acumuló' : 'se consumió stock'), b.ingreso - b.consumo >= 0 ? 'ok' : 'warn', 'Ingreso − consumo. Positivo: la playa crece.') +
-    (b.rechT ? kpi('Rechazado por calidad', vn(b.rechT) + '<small>t</small>', b.excluyeRechazos ? 'no suma a la playa' : 'suma a la playa', 'bad', 'Neto de los camiones con muestra rechazada.') : '') +
-    kpi('Stock playa', b.stockPlaya === null ? 'sin dato' : vn(b.stockPlaya) + '<small>t</small>', b.stockPlaya === null ? (b.inicioPlaya ? 'revisar desde ' + fCorta(b.playaInvalidaDesde) : 'falta stock inicial o ajuste') : '≈ ' + nf(b.stockPlaya / b.densidad) + ' m³ al ' + fCorta(S.hasta), b.stockPlaya === null ? 'bad' : '', 'Stock calculado al final del período. Sin ajuste o con un faltante de datos no se muestra.') +
-    kpi('Cobertura playa', vn(b.diasPlaya, 1) + '<small>días</small>', nf(b.consumoMedio, 0) + ' t/día de molienda', b.diasPlaya !== null && b.diasPlaya < 5 ? 'warn' : '', 'Días de molienda que alcanza el stock de playa.') +
-    kpi('Stock silo', b.stockSilo === null ? 'sin dato' : vn(b.stockSilo) + '<small>t</small>', b.stockSilo === null ? 'falta un ajuste del silo' : '≈ ' + nf(b.stockSilo / b.densidad) + ' m³ · ' + nf(b.siloOut, 0) + ' t extraídas', b.stockSilo === null ? 'warn' : '', 'Tierra molida disponible en silo.') +
-    kpi('t por camión', vn(b.tickets ? b.ingreso / b.tickets : null, 1) + '<small>t</small>', 'neto medio de balanza', '', 'Promedio de toneladas netas por ticket.') +
-    kpi('t por palada (molienda)', vn(b.fMol, 2), b.calibrado ? 'balanza dinámica / paladas' : 'teórico', '', 'Se usa para estimar el consumo cuando falta la balanza dinámica.') +
-    '</div>' + tarjetaCalibracion(b) + '<div class="grid g2">' + caja('chPlaya', 'Playa: ingreso y consumo diario', 'Tocá una barra para ver el día') + caja('chSilo', 'Silo: entrada y extracción diaria', 'Entrada = consumo de molienda') + '</div>' +
+  ]) + resumenTablero(b) +
+tarjetaCalibracion(b) + '<div class="grid g2">' + caja('chPlaya', 'Playa: ingreso y consumo diario', 'Arriba lo que entra, abajo lo que sale. El rombo es el saldo del día: <b class="verde">verde</b> la playa creció, <b class="rojo">rojo</b> bajó.') + caja('chSilo', 'Silo: entrada y extracción diaria', 'Entrada = consumo de molienda. El rombo es el saldo del día: <b class="verde">verde</b> el silo creció, <b class="rojo">rojo</b> bajó.') + '</div>' +
     caja('chStock', 'Evolución de stocks', 'Toneladas al cierre de cada día', 'lg') +
     '<div class="card"><div class="card-h"><div class="t"><h3>Ajustes de stock: medido vs calculado</h3><div class="sub">Tolerancia ±' + par('TOLERANCIA_INVENTARIO', 10) + ' %</div></div></div>' +
     tabla([[x => fMedia(x.fecha), 'Fecha'], ['nodo', 'Nodo'], [x => nf(x.teorico, 0), 'Calculado t', 'n'], [x => nf(x.medido, 0), 'Medido t', 'n'], [x => nf(x.medido / b.densidad, 0), '≈ m³', 'n'], [x => (x.dif >= 0 ? '+' : '') + nf(x.dif, 0), 'Diferencia t', 'n'],
@@ -433,19 +435,58 @@ function tabBalance(c) {
     tabla([[r => '<a href="#/dia/' + r.fecha + '">' + fMedia(r.fecha) + '</a>', 'Fecha'], [r => nf(r.ingreso, 1), 'Ingreso t', 'n'], [r => nf(r.consumo, 1) + (r.estimado ? ' *' : ''), 'Consumo t', 'n'], [r => nf(r.consumo / b.densidad, 0), '≈ m³', 'n'], [r => r.stockPlaya === null ? '<span class="tag t-warn">sin dato</span>' : nf(r.stockPlaya, 0) + (r.estPlaya === 'rec' ? ' ↺' : ''), 'Stock playa t', 'n'],
       [r => nf(r.siloOut, 1), 'Extr. silo t', 'n'], [r => r.stockSilo === null ? '–' : nf(r.stockSilo, 0), 'Stock silo t', 'n'], [r => nf(r.tCamion, 1), 't/camión', 'n'], [r => nf(r.fMol, 2), 't/palada mol.', 'n']],
     b.serie.slice().reverse(), { max: true }) + '<div class="sub mt">* consumo estimado con factor por falta de balanza dinámica en algún turno. ↺ stock reconstruido hacia atrás desde el primer ajuste.</div></div>';
-  grafico('chPlaya', 'bar', L, [
-    { label: 'Ingreso a playa t', data: b.serie.map(s => s.ingresoPlaya), backgroundColor: color(1) },
-    { label: 'Consumo t', data: b.serie.map(s => s.consumo), backgroundColor: color(2) }
-  ], null, irDia(b.serie));
-  grafico('chSilo', 'bar', L, [
-    { label: 'Entrada t', data: b.serie.map(s => s.consumo), backgroundColor: color(2) },
-    { label: 'Extracción t', data: b.serie.map(s => s.siloOut), backgroundColor: color(3) }
-  ], null, irDia(b.serie));
+  barrasNeto('chPlaya', L, b.serie.map(s => s.ingresoPlaya), b.serie.map(s => s.consumo), 'Ingreso a playa t', 'Consumo t', color(1), color(2), irDia(b.serie));
+  barrasNeto('chSilo', L, b.serie.map(s => s.consumo), b.serie.map(s => s.siloOut), 'Entrada t', 'Extracción t', color(2), color(3), irDia(b.serie));
   grafico('chStock', 'line', L, [
     { label: 'Stock playa t', data: b.serie.map(s => s.stockPlaya), borderColor: color(1), backgroundColor: color(1) },
     { label: 'Stock silo t', data: b.serie.map(s => s.stockSilo), borderColor: color(3), backgroundColor: color(3) }
   ], { scales: { y: { beginAtZero: true, min: 0 } } }, irDia(b.serie));
   $('#csvBal').onclick = () => csv('balance_' + S.desde + '_' + S.hasta, [['fecha', 'Fecha'], ['ingreso', 'Ingreso t'], ['consumo', 'Consumo t'], ['stockPlaya', 'Stock playa t'], ['siloOut', 'Extraccion silo t'], ['stockSilo', 'Stock silo t'], ['tCamion', 't/camion'], ['fMol', 't/palada molienda']], b.serie);
+}
+
+function barrasNeto(id, L, ent, sal, lEnt, lSal, cEnt, cSal, alClick) {
+  const neto = ent.map((v, i) => (v || 0) - (sal[i] || 0));
+  const ok = cssVar('--ok') || '#16a34a';
+  const mal = cssVar('--bad') || '#dc2626';
+  return grafico(id, 'bar', L, [
+    { label: lEnt, data: ent.map(v => v || 0), backgroundColor: cEnt, stack: 's', order: 2 },
+    { label: lSal, data: sal.map(v => -(v || 0)), backgroundColor: cSal, stack: 's', order: 2 },
+    { type: 'line', label: 'Saldo del día t', data: neto, showLine: false, pointStyle: 'rectRot', pointRadius: 7, pointHoverRadius: 9, pointBackgroundColor: neto.map(v => v >= 0 ? ok : mal), pointBorderColor: cssVar('--chart-surface') || '#fff', pointBorderWidth: 2, borderColor: 'transparent', backgroundColor: ok, order: 1 }
+  ], {
+    scales: { x: { stacked: true }, y: { stacked: false, beginAtZero: false, grid: { color: c => c.tick.value === 0 ? cssVar('--text') : cssVar('--line'), lineWidth: c => c.tick.value === 0 ? 1.5 : 1 } } },
+    plugins: { tooltip: { callbacks: { label: c => ' ' + c.dataset.label + ': ' + (c.datasetIndex === 2 ? (c.parsed.y >= 0 ? '+' : '−') : '') + nf(Math.abs(c.parsed.y), 1) } } }
+  }, alClick);
+}
+
+function resumenTablero(b) {
+  const vP = b.ingreso - b.consumo;
+  const vS = b.consumo - b.siloOut;
+  const tend = (v, txtU, txtD) => v > 0.5 ? ['sube', '▲', txtU] : v < -0.5 ? ['baja', '▼', txtD] : ['', '=', 'sin cambios'];
+  const it = (e, t, v, d, cls) => '<div class="tb-it ' + (cls || '') + '"><span class="e">' + e + '</span><small>' + t + '</small><b>' + v + '</b><span class="d">' + d + '</span></div>';
+  const fl = cls => '<div class="tb-fl ' + cls + '"><i></i></div>';
+  const centro = (e, t, v, stock, max, dias, txtDias, cls) => {
+    const tp = tend(v, cls === 'playa' ? 'la playa creció' : 'el silo creció', cls === 'playa' ? 'se usó stock de la playa' : 'se usó stock del silo');
+    const pct = stock === null ? 0 : Math.max(0, Math.min(100, stock / (max || 1) * 100));
+    return '<div class="tb-it tb-st ' + tp[0] + '"><span class="e">' + e + '</span><small>' + t + '</small><b class="var">' + tp[1] + ' ' + (v > 0.5 ? '+' : v < -0.5 ? '−' : '') + vn(Math.abs(v)) + '<small>t</small></b><span class="d">' + tp[2] + ' en el período</span>' +
+      '<div class="tb-niv" title="' + nf(pct, 0) + ' % de ' + nf(max) + ' t"><span style="width:' + pct.toFixed(1) + '%"></span></div><div class="tb-stock">' + (stock === null ? '<span class="tag t-warn">stock sin dato</span>' : '📦 hay <b>' + nf(stock) + ' t</b> al ' + fCorta(S.hasta) + ' · ≈ ' + nf(stock / b.densidad) + ' m³') + '</div>' +
+      (dias !== null && dias !== undefined ? '<div class="tb-dias ' + (dias < 5 ? 'warn' : '') + '">⏳ alcanza para ≈ <b>' + nf(dias, 1) + '</b> días ' + txtDias + '</div>' : '') + '</div>';
+  };
+  const blq = (cls, tit, sub, a, m, z) => '<div class="tb-blq ' + cls + '"><div class="tb-h"><b>' + tit + '</b><span>' + sub + '</span></div><div class="tb-ecu">' + a + fl('in') + m + fl('out') + z + '</div></div>';
+  return '<div class="tb-res stagger">' +
+    blq('playa', '🏔️ Playa de molienda', 'del ' + fCorta(S.desde) + ' al ' + fCorta(S.hasta),
+      it('🚛', 'Entró por balanza', vn(b.ingreso) + '<small>t</small>', nf(b.tickets) + ' camiones · ≈ ' + nf(b.ingreso / b.densidad) + ' m³', 'in'),
+      centro('🏔️', 'Variación de la playa', vP, b.stockPlaya, b.maxPlaya, b.diasPlaya, 'de molienda', 'playa'),
+      it('⚙️', 'Salió a molienda', vn(b.consumo) + '<small>t</small>', nf(b.molPal) + ' paladas al cajón · ≈ ' + nf(b.consumo / b.densidad) + ' m³', 'out')) +
+    blq('silo', '🏗️ Silo de tierra molida', 'balanza dinámica → producción',
+      it('⚙️', 'Entró desde molienda', vn(b.consumo) + '<small>t</small>', b.calibrado ? 'pesado en la cinta' : 'estimado con paladas', 'in'),
+      centro('🏗️', 'Variación del silo', vS, b.stockSilo, b.maxSilo, b.diasSilo, 'de producción', 'silo'),
+      it('🧱', 'Salió a producción', vn(b.siloOut) + '<small>t</small>', nf(b.siloPal) + ' paladas del silo', 'out')) +
+    '<div class="tb-chips">' +
+    '<div class="tb-chip"><span>🚚</span><div><b>' + (b.tickets ? nf(b.ingreso / b.tickets, 1) : '–') + ' t</b><small>por camión (balanza)</small></div></div>' +
+    '<div class="tb-chip"><span>🪣</span><div><b>' + nf(b.fMol, 2) + ' t</b><small>por palada ' + (b.calibrado ? '(medido en molienda)' : '(teórico)') + '</small></div></div>' +
+    '<div class="tb-chip"><span>⚖️</span><div><b>' + nf(b.densidad, 2) + ' t/m³</b><small>densidad usada</small></div></div>' +
+    (b.rechT ? '<div class="tb-chip bad"><span>⛔</span><div><b>' + nf(b.rechT) + ' t</b><small>rechazado por calidad · ' + (b.excluyeRechazos ? 'no suma' : 'suma') + ' a la playa</small></div></div>' : '') +
+    '</div></div>';
 }
 
 function tarjetaCalibracion(b) {
@@ -478,18 +519,18 @@ function tabViajes(c) {
   const porOrigen = agrupar(k.viajesTot, v => v.origen || '(sin origen)');
   const origenes = Object.keys(porOrigen).sort((a, b) => porOrigen[b].length - porOrigen[a].length);
   c.innerHTML = guia([
-    ['Camiones declarados en cantera', 'lo que declaran los operadores de pala en la jornada; los viajes internos de cantera se informan aparte.'],
+    ['Cargas completas a camiones en cantera', 'lo que declaran los operadores de pala en la jornada; los viajes internos de cantera se informan aparte.'],
     ['Viajes a planta', 'comprobantes cargados con destino ' + (destinosPlanta().join(', ') || 'cualquiera') + '.'],
     ['Tickets', 'pesadas de la balanza de ingreso. Un viaje se cruza con un ticket si coincide el dominio y la hora (±' + par('VENTANA_MATCH_MIN', 120) + ' min).'],
     ['Ciclo', 'tiempo entre hora de carga y descarga de cada viaje.']
   ]) + '<div class="kpis stagger">' +
-    kpi('Camiones declarados en cantera', vn(palas), nf(internos) + ' viajes internos aparte', '', 'Declarado en la jornada de cantera.') +
+    kpi('Cargas completas a camiones en cantera', vn(palas), nf(internos) + ' viajes internos aparte', '', 'Declarado en la jornada de cantera.') +
     kpi('Viajes a planta', vn(k.viajes.length), nf(k.viajesTot.length) + ' viajes totales', 'kacc') +
     kpi('Diferencia cantera − viajes', vn(palas - k.viajes.length), palas ? nf((palas - k.viajes.length) / palas * 100, 0) + '% de lo declarado' : '', Math.abs(palas - k.viajes.length) > palas * 0.1 ? 'warn' : 'ok', 'Si es alta, faltan comprobantes por cargar o hay viajes internos declarados como a planta.') +
     kpi('Tickets de balanza', vn(k.pes.length), nf(netoT, 0) + ' t netas') +
     kpi('Viajes con ticket', pctMatch === null ? '–' : vn(pctMatch) + '<small>%</small>', nf(k.pares.length) + ' cruzados', pctMatch !== null && pctMatch < 90 ? 'bad' : 'ok', 'Porcentaje de viajes a planta que se encontraron en la balanza.') +
     kpi('Ciclo mediano', vn(cicMed) + '<small>min</small>', 'carga → descarga') +
-    '</div>' + seccionDominios(R, k) + caja('chConc', 'Conciliación diaria', 'Camiones declarados en cantera · viajes cargados · tickets de balanza. Tocá un día para el detalle.', 'lg') +
+    '</div>' + seccionDominios(R, k) + caja('chConc', 'Conciliación diaria', 'Cargas completas a camiones en cantera · viajes cargados · tickets de balanza. Tocá un día para el detalle.', 'lg') +
     '<div class="grid g2">' + caja('chChof', 'Viajes por chofer', 'Período seleccionado') + caja('chOri', 'Viajes por origen', 'Incluye todos los destinos') + '</div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Choferes</h3><div class="sub">Viajes a planta, toneladas cruzadas con balanza y ciclo mediano</div></div></div>' +
     tabla([['n', 'Chofer'], ['viajes', 'Viajes', 'n'], ['dias', 'Días', 'n'], [r => nf(r.viajes / (r.dias || 1), 1), 'Viajes/día', 'n'], [r => nf(r.t, 1), 't (con ticket)', 'n'], [r => nf(r.prom, 1), 't/viaje', 'n'], [r => nf(r.ciclo, 0), 'Ciclo min', 'n'],

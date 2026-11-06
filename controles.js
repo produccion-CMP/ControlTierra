@@ -215,7 +215,7 @@ function controles(r, b) {
     return { sev: 'warn', t: pl(mal.length, 'viaje superpuesto', 'viajes superpuestos'), d: 'Hay cargas que empiezan antes de terminar el viaje anterior.', ruta: '#/tablero/viajes', filas: mal, cols: cols.viaje.concat([['tipo', 'Motivo'], ['choque', 'Choca con']]) };
   });
 
-  add('a_palas', A, 'pala', 'Camiones declarados ↔ viajes', 'Camiones a planta que declaran las palas contra los viajes cargados.', () => {
+  add('a_palas', A, 'pala', 'Cargas completas a camiones ↔ viajes', 'Camiones a planta que declaran las palas contra los viajes cargados.', () => {
     const difer = k.diario.filter(d => d.unid > 0 && Math.abs(d.unid - d.viajes) > Math.max(3, d.unid * 0.15));
     if (!difer.length) return { sev: 'ok', t: 'Cantera y viajes coinciden', d: 'Diferencias dentro de lo normal.' };
     const u = difer[difer.length - 1];
