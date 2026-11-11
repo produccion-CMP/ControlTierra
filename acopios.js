@@ -73,7 +73,7 @@ function planoSVG(E, op) {
 
 function avisoViejos(E) {
   const v = E.sectores.filter(s => celdasViejas(s).length);
-  return v.length ? '<div class="alert warn">' + ICON.alerta + '<div>El plano cambió: ' + v.map(s => '«' + esc(s.nombre) + '»').join(', ') + ' ' + (v.length > 1 ? 'tienen' : 'tiene') + ' celdas del plano anterior. ' + (esAdmin() ? '<a href="#/acopios/sectores">Redibujalos</a> en el plano nuevo.' : 'El administrador tiene que redibujarlos.') + '</div></div>' : '';
+  return v.length ? '<div class="alert warn">' + ICON.alerta + '<div>El plano cambió: ' + v.map(s => '«' + esc(s.nombre) + '»').join(', ') + ' ' + (v.length > 1 ? 'tienen' : 'tiene') + ' celdas del plano anterior. ' + (puede('acopiosConsumo') ? '<a href="#/acopios/sectores">Redibujalos</a> en el plano nuevo.' : 'El responsable de molienda o el administrador tiene que redibujarlos.') + '</div></div>' : '';
 }
 
 function botonFoto() {
@@ -252,7 +252,7 @@ async function vAcopios(tab) {
   if (puede('acopiosConsumo')) tabs.push(['reparto', 'Reparto de la playa']);
   if (puede('acopios')) tabs.push(['descargas', 'Descargas (balanza)']);
   if (puede('acopiosConsumo')) tabs.push(['consumos', 'Consumos y traslados']);
-  if (esAdmin()) tabs.push(['sectores', 'Dibujar sectores']);
+  if (puede('acopiosConsumo')) tabs.push(['sectores', 'Dibujar sectores']);
   const dn = E.densidad || 1.4;
   app().innerHTML = '<div class="vista"><div class="hero"><div><div class="eyebrow">Playa de molienda</div><h1>Acopios</h1><p class="sub">Dónde se descarga cada tierra, cuánto queda en cada acopio y de dónde se está moliendo.</p></div><div id="segAc"></div></div>' +
     (S.ses ? E.avisos : []).map(a => '<div class="alert ' + a[0] + '">' + ICON.alerta + '<div>' + esc(a[1]) + '</div></div>').join('') + '<div id="acCont"></div></div>';
@@ -262,7 +262,7 @@ async function vAcopios(tab) {
   if (t === 'reparto' && puede('acopiosConsumo')) return pintarReparto(c, E, dn);
   if (t === 'descargas') return pintarDescargas(c, E);
   if (t === 'consumos') return pintarConsumos(c, E, dn);
-  return pintarSectores(c, E);
+  return puede('acopiosConsumo') ? pintarSectores(c, E) : pintarPlanoAcopios(c, E, dn);
 }
 
 function pintarPlanoAcopios(c, E, dn) {
@@ -272,7 +272,7 @@ function pintarPlanoAcopios(c, E, dn) {
     kpi('Sin ubicar', E.sinUbicar === null ? 'sin dato' : vn(E.sinUbicar) + '<small>t</small>', 'de ' + (E.stockPlaya === null ? '–' : nf(E.stockPlaya)) + ' t de la playa' + (puede('acopiosConsumo') ? ' · <a href="#/acopios/reparto">repartir</a>' : ''), E.sinUbicar !== null && E.sinUbicar < -1 ? 'bad' : E.sinUbicar > 1 ? 'warn' : 'ok') +
     kpi('t por palada', vn(E.fMol, 2), nf(E.m3Palada) + ' m³ de balde · ' + nf(dn, 2) + ' t/m³') +
     kpi('Turnos sin acopio', vn(E.sinAsignar.length), 'molienda sin asignar', E.sinAsignar.length ? 'warn' : 'ok') + '</div>' +
-    avisoViejos(E) + (sinSect ? '<div class="alert info">' + ICON.infoI + '<div>Todavía no hay sectores dibujados. ' + (esAdmin() ? '<a href="#/acopios/sectores">Dibujalos en el plano</a>.' : 'El administrador tiene que dibujarlos.') + '</div></div>' : '') +
+    avisoViejos(E) + (sinSect ? '<div class="alert info">' + ICON.infoI + '<div>Todavía no hay sectores dibujados. ' + (puede('acopiosConsumo') ? '<a href="#/acopios/sectores">Dibujalos en el plano</a>.' : 'El responsable de molienda o el administrador tiene que dibujarlos.') + '</div></div>' : '') +
     '<div class="grid g-21" style="align-items:start"><div class="card plano-card"><div class="card-h"><div class="t"><h3>Plano</h3><div class="sub">Vista recta de la playa · tocá un sector para ver su acopio</div></div><div class="row" style="gap:8px">' + botonFoto() +
     (puede('acopiosConsumo') ? '<button class="btn sm" id="bMezcla">' + ICON.ajuste + 'Armar mezcla</button>' : '') + '</div></div>' + planoSVG(E, {}) +
     '<div class="leg">' + Object.keys(COLOR_ESTADO_ACOPIO).filter(Boolean).map(k => '<span class="sw" style="--c:' + COLOR_ESTADO_ACOPIO[k] + '"></span>' + k).join('') + '<span class="sw" style="--c:#cbd5e1"></span>Libre</div></div>' +
