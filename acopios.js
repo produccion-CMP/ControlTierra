@@ -65,6 +65,7 @@ function planoSVG(E, op) {
     h += '<path class="borde" d="' + bordeCeldas(cs) + '" style="stroke:' + color(s, i) + '"/>';
     const p = centro(cs);
     h += '<text class="lbl" x="' + p.x + '" y="' + (p.y - 1) + '" text-anchor="middle">' + esc(s.nombre) + '</text><text class="lbl2" x="' + p.x + '" y="' + (p.y + 11) + '" text-anchor="middle">' + (a ? nf(a.stock) + ' t' : 'libre') + '</text>';
+    if (a && a.calidadGral) { const q0 = cs.map(celdaXY).sort((u, w) => u.y - w.y || u.x - w.x)[0]; h += '<circle class="calp" cx="' + (q0.x + 6) + '" cy="' + (q0.y + 6) + '" r="4.2" style="fill:' + (CAL_GRAL_COLOR[a.calidadGral] || '#64748b') + '"><title>Calidad ' + esc(a.calidadGral) + '</title></circle>'; }
     h += '<title>' + esc(s.nombre) + ' (' + cs.map(nomCelda).join(', ') + ')' + (a ? ' · ' + esc(a.nombre) + ' · ' + nf(a.stock) + ' t · ' + a.estado : ' · sin acopio') + '</title></g>';
   });
   return h + '</svg>';
@@ -95,14 +96,160 @@ function calidadTxt(a) {
   return partes.join(' · ');
 }
 
+const CAL_GRAL_COLOR = { 'Muy buena': '#15803d', Buena: '#2a78d6', Regular: '#b45309', Mala: '#b91c1c' };
+
+function chipCalidad(a) {
+  if (!a || !a.calidadGral) return '';
+  return '<span class="tag cal-gral" style="--c:' + (CAL_GRAL_COLOR[a.calidadGral] || '#64748b') + '" title="' + esc(a.calidadNota || '') + (a.calidadFecha ? ' · ' + fCorta(a.calidadFecha) : '') + '">● ' + esc(a.calidadGral) + '</span>';
+}
+
+function colorAcopio(E, a) {
+  const i = E.sectores.findIndex(s => s.id === a.sector);
+  const s = E.sectores[i];
+  return (s && s.color) || COLORES_SECTOR[Math.max(0, i) % COLORES_SECTOR.length];
+}
+
+function ecuacionReparto(E, dn) {
+  const vivos = E.acopios.filter(a => a.estado !== 'Agotado' && a.stock > 0.5).sort((a, b) => b.stock - a.stock);
+  const tot = Math.max(1, E.stockPlaya || 0, E.totalAcopios);
+  const su = E.sinUbicar;
+  const R = E.reparto;
+  const seg = vivos.map(a => '<span style="flex:' + a.stock + ';background:' + colorAcopio(E, a) + '" title="' + esc(a.nombre) + ': ' + nf(a.stock) + ' t"><b>' + (a.stock / tot > 0.08 ? esc(a.nombre.split(' · ')[0]) : '') + '</b></span>').join('') +
+    (su !== null && su > 0.5 ? '<span class="su" style="flex:' + su + '" title="Sin ubicar: ' + nf(su) + ' t"><b>' + (su / tot > 0.08 ? 'sin ubicar' : '') + '</b></span>' : '');
+  const it = (e, t, v, d, cls) => '<div class="rep-it ' + (cls || '') + '"><span class="e">' + e + '</span><small>' + t + '</small><b>' + v + '</b><span class="d">' + d + '</span></div>';
+  let h = '<div class="card rep-ec"><div class="rep-fila">' +
+    it('🏔️', 'Stock de la playa', E.stockPlaya === null ? 'sin dato' : vn(E.stockPlaya) + '<small>t</small>', 'según el balance · ≈ ' + nf((E.stockPlaya || 0) / dn) + ' m³', 'st') + '<div class="op">=</div>' +
+    it('🗂️', 'En acopios', vn(E.totalAcopios) + '<small>t</small>', vivos.length + ' acopios con tierra', 'ac') + '<div class="op">+</div>' +
+    it(su !== null && su < -1 ? '⚠️' : '❓', 'Sin ubicar', su === null ? '–' : vn(su) + '<small>t</small>', su === null ? 'falta el stock de la playa' : su < -1 ? 'se repartió de más' : 'todavía no está en ningún acopio', su !== null && su < -1 ? 'bad' : 'su') + '</div>' +
+    '<div class="rep-barra">' + seg + '</div>';
+  if (R) {
+    const otros = su === null ? null : su - (R.fotoSinRepartir + (R.ingreso - R.ingresoAsignado) - (R.consumo - R.consumoAsignado));
+    const ln = (e, t, v, d) => '<div class="rep-ln"><span>' + e + '</span><div>' + t + '<small>' + d + '</small></div><b class="' + (v >= 0 ? 'mas' : 'menos') + '">' + (v >= 0 ? '+' : '−') + nf(Math.abs(v)) + ' t</b></div>';
+    h += '<details class="rep-det"><summary>¿De dónde sale lo «sin ubicar»?</summary>' +
+      ln('📷', 'Foto del ajuste del ' + fCorta(E.corte.fecha) + ' sin repartir', R.fotoSinRepartir, nf(E.corte.toneladas) + ' t medidas − ' + nf(R.fotoUbicada) + ' t repartidas') +
+      ln('🚛', 'Camiones que llegaron y no tienen acopio', R.ingreso - R.ingresoAsignado, nf(R.ingreso) + ' t ingresadas − ' + nf(R.ingresoAsignado) + ' t asignadas') +
+      ln('⚙️', 'Molienda sin acopio indicado', -(R.consumo - R.consumoAsignado), nf(R.consumo) + ' t molidas − ' + nf(R.consumoAsignado) + ' t con acopio') +
+      (otros !== null && Math.abs(otros) > 1 ? ln('↺', 'Otros', otros, 'acopios agotados con resto, mediciones posteriores y diferencias de estimación') : '') + '</details>';
+  }
+  return h + '</div>';
+}
+
+async function pintarReparto(c, E, dn) {
+  if (!E.corte) {
+    c.innerHTML = '<div class="alert warn">' + ICON.alerta + '<div>Para repartir la playa en acopios hace falta un <b>ajuste de stock de la playa</b> (medición o stock inicial). Cargalo en Cargar → Ajuste de stock y volvé acá.</div></div>';
+    return;
+  }
+  const activos = E.acopios.filter(a => a.estado !== 'Agotado');
+  const st = S.reparto || (S.reparto = { unidad: 't', fecha: E.corte.fecha });
+  if (st.fecha < E.corte.fecha) st.fecha = E.corte.fecha;
+  const optAc = (sel, vacioTxt) => '<option value="">' + (vacioTxt || 'Acopio…') + '</option>' + activos.map(a => '<option value="' + a.id + '"' + (a.id === sel ? ' selected' : '') + '>' + esc(a.nombre) + '</option>').join('');
+  c.innerHTML = ecuacionReparto(E, dn) +
+    '<div class="card"><div class="card-h"><div class="t"><h3><span class="paso">1</span> Foto inicial y calidad de cada acopio</h3><div class="sub">Indicá cuánta tierra hay en cada acopio el día de la foto. Lo que no repartas queda «sin ubicar». Una fecha posterior al ajuste funciona como nueva medición de ese acopio.</div></div>' +
+    '<div class="row" style="gap:8px"><label class="f" style="margin:0">Fecha de la foto<input type="date" id="rF" value="' + st.fecha + '" min="' + E.corte.fecha + '" max="' + hoy() + '"></label><span class="unid-tog" id="rU"><button type="button" data-u="t" class="' + (st.unidad === 't' ? 'on' : '') + '">t</button><button type="button" data-u="m3" class="' + (st.unidad === 'm3' ? 'on' : '') + '">m³</button></span></div></div>' +
+    (activos.length ? '<div class="tw"><table class="rep-tab"><thead><tr><th>Acopio</th><th>Calidad general</th><th class="n">En la foto</th><th class="n">Stock hoy</th></tr></thead><tbody>' + activos.map(a => {
+      const mismo = a.ubicadoFecha === st.fecha;
+      const val = mismo ? (st.unidad === 'm3' ? (a.ubicadoM3 !== null ? a.ubicadoM3 : Math.round(a.ubicado / dn)) : a.ubicado) : '';
+      return '<tr data-a="' + a.id + '"><td><span class="dot" style="background:' + colorAcopio(E, a) + '"></span><b>' + esc(a.nombre) + '</b><div class="sub">' + esc(a.tipo === 'Mezcla' ? 'Mezcla' : a.origen) + (a.ubicadoFecha && !mismo ? ' · medido el ' + fCorta(a.ubicadoFecha) + ': ' + nf(a.ubicado) + ' t' : '') + '</div></td>' +
+        '<td><div class="row" style="gap:6px;flex-wrap:nowrap"><select data-cal>' + opts(E.calidades || ['Muy buena', 'Buena', 'Regular', 'Mala'], a.calidadGral || '', 'Sin calificar') + '</select><input data-nota placeholder="Nota" value="' + esc(a.calidadNota || '') + '" style="min-width:110px"></div></td>' +
+        '<td class="n"><input data-cant type="number" min="0" step="1" value="' + esc(val === null ? '' : val) + '" placeholder="' + st.unidad + '" style="width:110px;text-align:right"></td>' +
+        '<td class="n"><b>' + nf(a.stock) + ' t</b><div class="sub">≈ ' + nf(a.stock / dn) + ' m³</div></td></tr>';
+    }).join('') + '</tbody></table></div><div class="rep-pie"><div id="rRes"></div><button class="btn pri" id="rG">' + ICON.guardar + 'Guardar foto</button></div>' :
+      vacio('No hay acopios armados. Armalos desde «Plano y stock» tocando un sector libre.')) + '</div>' +
+    '<div class="card"><div class="card-h"><div class="t"><h3><span class="paso">2</span> Camiones que llegaron sin acopio</h3><div class="sub">Desde el ' + fCorta(E.corte.fecha) + ', agrupados por día y origen. ✨ = acopio sugerido porque tiene el mismo origen. Los rechazados por calidad no aparecen.</div></div>' +
+    '<div class="row" style="gap:6px"><button class="btn sm" id="iSug">Marcar sugeridos</button><button class="btn sm pri" id="iAsig">Asignar marcados</button></div></div><div id="iLista"><div class="skel" style="height:140px"></div></div></div>' +
+    '<div class="card"><div class="card-h"><div class="t"><h3><span class="paso">3</span> Molienda sin acopio indicado</h3><div class="sub">Turnos desde el ' + fCorta(E.corte.fecha) + ' con paladas del Informe de Producción. Elegí uno o varios e indicá de qué acopio se tomó.</div></div>' +
+    '<div class="row" style="gap:6px;flex-wrap:wrap"><select id="mA">' + optAc('', 'Acopio…') + '</select><label class="row" style="gap:4px;flex-wrap:nowrap"><input id="mP" type="number" min="1" max="100" value="100" style="width:70px"> %</label><button class="btn sm pri" id="mAsig">Asignar</button></div></div>' +
+    (E.sinAsignar.length ? (() => {
+      const dias = agrupar(E.sinAsignar, x => x.fecha);
+      return '<div class="row" style="gap:8px;margin-bottom:8px"><label class="chk"><input type="checkbox" id="mAll"> Todos (' + E.sinAsignar.length + ' turnos · ≈ ' + nf(sum(E.sinAsignar, x => x.paladas * (100 - x.asignado) / 100) * E.fMol) + ' t)</label></div><div class="rep-dias">' +
+        Object.keys(dias).sort().reverse().map(f => { const l = dias[f].sort((a, b) => a.turno < b.turno ? -1 : 1); return '<div class="rep-dia"><label class="chk"><input type="checkbox" data-md="' + f + '"><b>' + fCorta(f) + '</b></label><div class="tts">' +
+          l.map(x => '<label class="tt' + (x.asignado ? ' parcial' : '') + '" title="' + nf(x.paladas) + ' paladas · ≈ ' + nf(x.paladas * E.fMol) + ' t' + (x.asignado ? ' · ya asignado ' + x.asignado + ' %' : '') + '"><input type="checkbox" data-mt="' + x.fecha + '|' + x.turno + '"><span>' + esc(x.turno) + '</span><small>' + nf(x.paladas) + ' pal' + (x.asignado ? ' · ' + x.asignado + ' %' : '') + '</small></label>').join('') + '</div><span class="sub">≈ ' + nf(sum(l, x => x.paladas) * E.fMol) + ' t</span></div>'; }).join('') + '</div>';
+    })() :
+      vacio('Todos los turnos de molienda desde el ajuste tienen acopio.')) + '</div>';
+  stagger(c);
+  contar(c);
+  const resumen = () => {
+    const vals = $$('.rep-tab tr[data-a] [data-cant]', c).map(x => num(x.value)).filter(x => x !== null && x >= 0);
+    const t = sum(vals, x => st.unidad === 'm3' ? x * dn : x);
+    const base = st.fecha === E.corte.fecha ? E.corte.toneladas : null;
+    const r = $('#rRes');
+    if (r) r.innerHTML = base === null ? 'Medición del ' + fCorta(st.fecha) + ': <b>' + nf(t) + ' t</b> en ' + vals.length + ' acopio(s)' : 'Repartido <b>' + nf(t) + ' t</b> de ' + nf(base) + ' t del ajuste · ' + (base - t >= 0 ? 'quedan <b>' + nf(base - t) + ' t</b> sin ubicar' : '<b class="rojo">' + nf(t - base) + ' t de más</b>');
+  };
+  resumen();
+  c.addEventListener('input', e => { if (e.target.matches('[data-cant]')) resumen(); });
+  if ($('#rF')) $('#rF').onchange = e => { st.fecha = e.target.value || E.corte.fecha; pintarReparto(c, E, dn); };
+  if ($('#rU')) $('#rU').onclick = e => { const b = e.target.closest('[data-u]'); if (!b) return; st.unidad = b.dataset.u; pintarReparto(c, E, dn); };
+  $$('.rep-tab tr[data-a] [data-cal], .rep-tab tr[data-a] [data-nota]', c).forEach(el => {
+    el.onchange = async () => {
+      const tr = el.closest('tr');
+      try { await escribir('calidadAcopio', { id: tr.dataset.a, calidadGral: $('[data-cal]', tr).value, calidadNota: $('[data-nota]', tr).value }, 'Calidad de acopio'); toast('Calidad guardada', 'ok'); } catch (er) { toast(er.message, 'bad'); }
+    };
+  });
+  if ($('#rG')) $('#rG').onclick = async () => {
+    const filas = $$('.rep-tab tr[data-a]', c).map(tr => ({ acopio: tr.dataset.a, cantidad: $('[data-cant]', tr).value, unidad: st.unidad })).filter(x => String(x.cantidad).trim() !== '');
+    if (!filas.length) return toast('Cargá la cantidad de al menos un acopio', 'warn');
+    bloquear('Guardando…');
+    try { const r = await escribir('ubicarAcopios', { fecha: st.fecha, filas: filas }, 'Foto de acopios'); toast(r.guardados + ' acopio(s) · ' + nf(r.toneladas) + ' t ubicadas', 'ok'); vAcopios('reparto'); } catch (er) { toast(er.message, 'bad', 7000); } finally { desbloquear(); }
+  };
+  const marcados = new Set();
+  let grupos = [];
+  const pintarGrupos = () => {
+    const l = $('#iLista');
+    if (!l) return;
+    if (!grupos.length) { l.innerHTML = vacio('Todos los camiones desde el ajuste tienen acopio.'); return; }
+    l.innerHTML = '<div class="rep-grupos">' + grupos.map((g, i) => '<details class="rep-g' + (marcados.has(i) ? ' on' : '') + '"><summary><input type="checkbox" data-g="' + i + '"' + (marcados.has(i) ? ' checked' : '') + '><span class="f">' + fCorta(g.fecha) + '</span><span class="o">' + (g.origen ? esc(g.origen) : '<i>origen desconocido</i>') + '</span><span class="n nc">' + g.tickets.length + ' 🚛</span><span class="n"><b>' + nf(g.toneladas) + ' t</b></span>' +
+      '<select data-ga="' + i + '">' + optAc(g.acopio, 'Elegir acopio…') + '</select>' + (g.sugerido && g.acopio === g.sugerido ? '<span class="sug" title="Mismo origen que el acopio">✨</span>' : '<span class="sug"></span>') + '</summary>' +
+      tabla([['hora', 'Hora'], ['ticket', 'Ticket'], ['dominio', 'Dominio'], ['chofer', 'Chofer'], [x => nf(x.neto, 2), 'Neto t', 'n']], g.tickets) + '</details>').join('') + '</div>' +
+      '<div class="sub mt">' + grupos.length + ' grupos · ' + nf(sum(grupos, g => g.tickets.length)) + ' camiones · ' + nf(sum(grupos, g => g.toneladas)) + ' t sin acopio</div>';
+  };
+  try {
+    const r = await api('repartoPlaya');
+    grupos = (r.grupos || []).map(g => Object.assign(g, { acopio: g.sugerido || '' }));
+  } catch (er) { const l = $('#iLista'); if (l) l.innerHTML = '<div class="alert bad">' + ICON.alerta + '<div>' + esc(er.message) + '</div></div>'; return; }
+  pintarGrupos();
+  $('#iLista').addEventListener('click', e => { if (e.target.matches('input[data-g], select')) e.stopPropagation(); }, true);
+  $('#iLista').addEventListener('change', e => {
+    const el = e.target;
+    if (el.dataset.g !== undefined) { const i = Number(el.dataset.g); if (el.checked) marcados.add(i); else marcados.delete(i); el.closest('.rep-g').classList.toggle('on', el.checked); }
+    if (el.dataset.ga !== undefined) { const i = Number(el.dataset.ga); grupos[i].acopio = el.value; if (el.value) marcados.add(i); pintarGrupos(); }
+  });
+  $('#iSug').onclick = () => { grupos.forEach((g, i) => { if (g.acopio) marcados.add(i); }); pintarGrupos(); };
+  $('#iAsig').onclick = async () => {
+    const sel = Array.from(marcados).map(i => grupos[i]).filter(Boolean);
+    if (!sel.length) return toast('Marcá al menos un grupo', 'warn');
+    if (sel.some(g => !g.acopio)) return toast('Hay grupos marcados sin acopio elegido', 'warn');
+    const porAc = {};
+    sel.forEach(g => { (porAc[g.acopio] = porAc[g.acopio] || []).push.apply(porAc[g.acopio], g.tickets.map(t => t.clave)); });
+    bloquear('Asignando…');
+    try {
+      let n = 0;
+      let t = 0;
+      for (const id of Object.keys(porAc)) { const r = await escribir('asignarDescargas', { claves: porAc[id], acopio: id }, 'Descargas a acopio'); n += r.asignados; t += r.toneladas; }
+      toast(n + ' camiones (' + nf(t) + ' t) asignados', 'ok');
+      vAcopios('reparto');
+    } catch (er) { toast(er.message, 'bad', 7000); } finally { desbloquear(); }
+  };
+  if ($('#mAll')) $('#mAll').onchange = e => { $$('[data-mt], [data-md]', c).forEach(x => { x.checked = e.target.checked; }); };
+  $$('[data-md]', c).forEach(d => { d.onchange = () => { $$('[data-mt^="' + d.dataset.md + '|"]', c).forEach(x => { x.checked = d.checked; }); }; });
+  $('#mAsig').onclick = async () => {
+    const items = $$('[data-mt]:checked', c).map(x => ({ fecha: x.dataset.mt.split('|')[0], turno: x.dataset.mt.split('|')[1] }));
+    const ac = $('#mA').value;
+    if (!items.length) return toast('Marcá al menos un turno', 'warn');
+    if (!ac) return toast('Elegí el acopio', 'warn');
+    bloquear('Asignando…');
+    try { const r = await escribir('asignarConsumos', { items: items, acopio: ac, proporcion: $('#mP').value }, 'Consumo por turnos'); toast(r.asignados + ' turno(s) asignados', 'ok'); vAcopios('reparto'); } catch (er) { toast(er.message, 'bad', 7000); } finally { desbloquear(); }
+  };
+}
+
 async function vAcopios(tab) {
   const ok = vivo();
   app().innerHTML = '<div class="vista"><div class="card"><div class="skel" style="height:420px"></div></div></div>';
   const E = await api('acopios');
   if (!ok()) return;
   S.acopios = E;
-  const t = ['plano', 'descargas', 'consumos', 'sectores'].indexOf(tab) >= 0 ? tab : 'plano';
+  const t = ['plano', 'reparto', 'descargas', 'consumos', 'sectores'].indexOf(tab) >= 0 ? tab : 'plano';
   const tabs = [['plano', 'Plano y stock']];
+  if (puede('acopiosConsumo')) tabs.push(['reparto', 'Reparto de la playa']);
   if (puede('acopios')) tabs.push(['descargas', 'Descargas (balanza)']);
   if (puede('acopiosConsumo')) tabs.push(['consumos', 'Consumos y traslados']);
   if (esAdmin()) tabs.push(['sectores', 'Dibujar sectores']);
@@ -112,6 +259,7 @@ async function vAcopios(tab) {
   segmento($('#segAc'), tabs, t, k => { location.hash = '#/acopios/' + k; }, true);
   const c = $('#acCont');
   if (t === 'plano') return pintarPlanoAcopios(c, E, dn);
+  if (t === 'reparto' && puede('acopiosConsumo')) return pintarReparto(c, E, dn);
   if (t === 'descargas') return pintarDescargas(c, E);
   if (t === 'consumos') return pintarConsumos(c, E, dn);
   return pintarSectores(c, E);
@@ -121,7 +269,7 @@ function pintarPlanoAcopios(c, E, dn) {
   const activos = E.acopios.filter(a => a.estado !== 'Agotado');
   const sinSect = !E.sectores.length;
   c.innerHTML = '<div class="kpis stagger">' + kpi('En acopios', vn(E.totalAcopios) + '<small>t</small>', '≈ ' + nf(E.totalAcopios / dn) + ' m³ · ' + activos.length + ' activos', 'kacc') +
-    kpi('Stock de playa calculado', E.stockPlaya === null ? 'sin dato' : vn(E.stockPlaya) + '<small>t</small>', 'balance de ingreso y molienda') +
+    kpi('Sin ubicar', E.sinUbicar === null ? 'sin dato' : vn(E.sinUbicar) + '<small>t</small>', 'de ' + (E.stockPlaya === null ? '–' : nf(E.stockPlaya)) + ' t de la playa' + (puede('acopiosConsumo') ? ' · <a href="#/acopios/reparto">repartir</a>' : ''), E.sinUbicar !== null && E.sinUbicar < -1 ? 'bad' : E.sinUbicar > 1 ? 'warn' : 'ok') +
     kpi('t por palada', vn(E.fMol, 2), nf(E.m3Palada) + ' m³ de balde · ' + nf(dn, 2) + ' t/m³') +
     kpi('Turnos sin acopio', vn(E.sinAsignar.length), 'molienda sin asignar', E.sinAsignar.length ? 'warn' : 'ok') + '</div>' +
     avisoViejos(E) + (sinSect ? '<div class="alert info">' + ICON.infoI + '<div>Todavía no hay sectores dibujados. ' + (esAdmin() ? '<a href="#/acopios/sectores">Dibujalos en el plano</a>.' : 'El administrador tiene que dibujarlos.') + '</div></div>' : '') +
@@ -160,11 +308,11 @@ function tarjetaSector(E, s, dn) {
     if (puede('acopiosConsumo')) bot.push('<button class="btn sm" data-acc="consumo" data-id="' + a.id + '" data-sec="' + s.id + '">Consumo</button><button class="btn sm dan" data-acc="agotar" data-id="' + a.id + '" data-sec="' + s.id + '">Agotado</button>');
   } else if (puede('acopios')) bot.push('<button class="btn sm pri" data-acc="armar" data-sec="' + s.id + '">+ Armar acopio</button>');
   return '<div class="card sector-card" id="sec-' + s.id + '"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><span class="eyebrow">' + esc(s.nombre) + '</span>' +
-    (a ? '<h3 style="margin:2px 0">' + esc(a.nombre) + '</h3><div class="sub">' + (a.tipo === 'Mezcla' ? 'Mezcla: ' + a.componentes.map(x => { const o = E.acopios.find(y => y.id === x.id); return (o ? esc(o.nombre) : '?') + ' ' + nf(x.pct) + ' %'; }).join(' + ') : 'Origen: ' + esc(a.origen)) + '</div><div class="sub">' + calidadTxt(a) + '</div>'
+    (a ? '<h3 style="margin:2px 0">' + esc(a.nombre) + '</h3><div class="sub">' + (a.tipo === 'Mezcla' ? 'Mezcla: ' + a.componentes.map(x => { const o = E.acopios.find(y => y.id === x.id); return (o ? esc(o.nombre) : '?') + ' ' + nf(x.pct) + ' %'; }).join(' + ') : 'Origen: ' + esc(a.origen)) + '</div><div class="sub">' + calidadTxt(a) + ' ' + chipCalidad(a) + '</div>'
       : '<h3 style="margin:2px 0">Libre</h3><div class="sub">' + (ult ? 'Último: ' + esc(ult.nombre) + ' (agotado ' + fCorta(ult.agotado) + ')' : 'Sin acopios todavía') + '</div>') +
     '</div>' + (a ? '<span class="tag" style="background:' + COLOR_ESTADO_ACOPIO[a.estado] + '22;color:' + COLOR_ESTADO_ACOPIO[a.estado] + '">' + esc(a.estado) + '</span>' : '') + '</div>' +
     (a ? '<div class="ac-stock"><div><b>' + nf(a.stock) + ' t</b><small> ≈ ' + nf(a.stock / dn) + ' m³ · ≈ ' + nf(a.stock / E.fMol) + ' paladas</small></div><div class="barra"><span style="width:' + pct + '%"></span></div>' +
-      '<div class="sub">Ingresó ' + nf(a.base) + ' t' + (a.tMedida !== null && a.tMedida !== '' && a.tMedida !== undefined ? ' (medido)' : ' (' + nf(a.camiones) + ' camiones' + (a.ingresoTraslado ? ' + traslados' : '') + ')') + ' · consumido ' + nf(a.consumoT) + ' t (' + nf(a.consumoPaladas) + ' paladas)' + (a.rechazos ? ' · <span class="rojo">' + a.rechazos + ' rechazo(s)</span>' : '') + '</div></div>' : '') +
+      '<div class="sub">' + (a.ubicadoFecha ? 'Foto del ' + fCorta(a.ubicadoFecha) + ': ' + nf(a.ubicado) + ' t · ' : '') + 'Ingresó ' + nf(a.base) + ' t' + (a.ubicadoFecha ? '' : a.tMedida !== null && a.tMedida !== '' && a.tMedida !== undefined ? ' (medido)' : ' (' + nf(a.camiones) + ' camiones' + (a.ingresoTraslado ? ' + traslados' : '') + ')') + ' · consumido ' + nf(a.consumoT) + ' t (' + nf(a.consumoPaladas) + ' paladas)' + (a.rechazos ? ' · <span class="rojo">' + a.rechazos + ' rechazo(s)</span>' : '') + '</div></div>' : '') +
     '<div class="row mt" style="gap:6px">' + bot.join('') + '</div></div>';
 }
 
