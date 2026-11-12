@@ -107,7 +107,7 @@ async function vSolicitudes(cont) {
   let l = [];
   try { l = await api('solicitudes'); } catch (e) { return; }
   if (!l.length) { cont.innerHTML = ''; return; }
-  const txt = r => r.tipo === 'ajusteCisterna' ? 'Nivel de la cisterna de gasoil: ' + nf(num(r.datos.litros)) + ' L el ' + fCorta(r.datos.fecha) + ' ' + esc(r.datos.hora || '') : 'Stock de ' + esc(String(r.datos.nodo || '').toLowerCase()) + ' (' + esc(TIPO_AJUSTE_TXT[r.datos.tipo] || r.datos.tipo) + '): ' + nf(num(r.datos.toneladas)) + ' t el ' + fCorta(r.datos.fecha);
+  const txt = r => r.tipo === 'correccionPesaje' ? 'Corrección de balanza ' + esc(String(r.datos.clave || '').replace(/^T\|/, 'ticket ')) + ': ' + (r.datos.anular ? 'anular el pesaje' : esc(['fecha', 'hora', 'dominio', 'bruto', 'tara', 'neto'].filter(k => r.datos[k] !== undefined && r.datos[k] !== '').map(k => k + ' ' + r.datos[k]).join(' · '))) : r.tipo === 'ajusteCisterna' ? 'Nivel de la cisterna de gasoil: ' + nf(num(r.datos.litros)) + ' L el ' + fCorta(r.datos.fecha) + ' ' + esc(r.datos.hora || '') : 'Stock de ' + esc(String(r.datos.nodo || '').toLowerCase()) + ' (' + esc(TIPO_AJUSTE_TXT[r.datos.tipo] || r.datos.tipo) + '): ' + nf(num(r.datos.toneladas)) + ' t el ' + fCorta(r.datos.fecha);
   cont.innerHTML = '<div class="card retenidos solicitudes"><div class="card-h"><div class="t"><h3>' + ICON.ajuste + ' Ajustes pendientes de autorización</h3><div class="sub">Solo cuentan cuando los autorizás.</div></div></div>' +
     l.map(r => '<div class="ret"><div class="txt"><b>' + txt(r) + '</b><div class="mot">Pedido por ' + esc(r.usuario) + ': «' + esc(r.motivo) + '»</div></div><div class="row"><button class="btn sm pri" data-sa="' + r.id + '">Autorizar</button><button class="btn sm dan" data-sr="' + r.id + '">Rechazar</button></div></div>').join('') + '</div>';
   const res = async (id, accion) => {
@@ -128,7 +128,7 @@ async function misSolicitudes(cont, tipo) {
   let l = [];
   try { l = (await api('solicitudes')).filter(r => !tipo || r.tipo === tipo); } catch (e) { return; }
   cont.innerHTML = l.length ? '<div class="card"><div class="card-h"><div class="t"><h3>Mis pedidos de ajuste</h3><div class="sub">Los autoriza el administrador</div></div></div>' +
-    tabla([[r => fCorta(r.ts.slice(0, 10)), 'Pedido'], [r => r.tipo === 'ajusteCisterna' ? nf(num(r.datos.litros)) + ' L cisterna' : nf(num(r.datos.toneladas)) + ' t ' + esc(String(r.datos.nodo || '').toLowerCase()), 'Ajuste'], [r => esc(r.motivo), 'Motivo', 'wrap'],
+    tabla([[r => fCorta(r.ts.slice(0, 10)), 'Pedido'], [r => r.tipo === 'correccionPesaje' ? 'Balanza ' + esc(String(r.datos.clave || '').replace(/^T\|/, 'ticket ')) : r.tipo === 'ajusteCisterna' ? nf(num(r.datos.litros)) + ' L cisterna' : nf(num(r.datos.toneladas)) + ' t ' + esc(String(r.datos.nodo || '').toLowerCase()), 'Ajuste'], [r => esc(r.motivo), 'Motivo', 'wrap'],
       [r => '<span class="tag ' + (r.estado === 'Aprobado' ? 't-ok' : r.estado === 'Rechazado' ? 't-bad' : 't-warn') + '">' + esc(r.estado) + '</span>' + (r.nota ? ' <span class="sub">' + esc(r.nota) + '</span>' : ''), 'Estado']], l) + '</div>' : '';
 }
 

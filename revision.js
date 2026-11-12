@@ -15,6 +15,33 @@ function minAbs(f, h) {
   return Date.UTC(p[0], p[1] - 1, p[2]) / 60000 + (minDe(h) || 0);
 }
 
+function formCorreccionPesaje(q) {
+  const clave = q.claveOrig || clavePesaje(q);
+  const m = modal('Corregir pesaje · ticket ' + (q.ticket || '–'), '<p class="sub">El PESAJE.XLS no se puede modificar en el sistema de la balanza. La corrección queda guardada aparte y se mantiene aunque se vuelva a importar el archivo. ' + (esAdmin() ? '' : 'La tiene que autorizar el administrador.') + '</p><div class="form">' +
+    '<label class="f">Fecha<input id="cF" type="date" value="' + esc(q.fecha) + '"></label><label class="f">Hora<input id="cH" value="' + esc(q.hora) + '" inputmode="numeric"></label>' +
+    '<label class="f">Dominio<input id="cD" value="' + esc(q.dominio) + '" style="text-transform:uppercase"></label>' +
+    '<label class="f">Bruto t<input id="cB" type="number" step="0.01" value="' + esc(q.bruto === null || q.bruto === undefined ? '' : q.bruto) + '"></label><label class="f">Tara t<input id="cT" type="number" step="0.01" value="' + esc(q.tara === null || q.tara === undefined ? '' : q.tara) + '"></label>' +
+    '<label class="f">Neto t<input id="cN" type="number" step="0.01" value="' + esc(q.neto) + '"></label>' +
+    '<label class="chk full"><input type="checkbox" id="cA"> Anular este pesaje (duplicado, no es tierra, prueba de balanza)</label>' +
+    '<label class="f full">Motivo de la corrección<input id="cM" placeholder="Ej: el balancero cargó la patente equivocada"></label></div>', [
+    { txt: 'Cancelar' },
+    {
+      txt: esAdmin() ? 'Guardar corrección' : 'Pedir autorización', cls: 'pri', fn: async mm => {
+        const mot = $('#cM', mm).value.trim();
+        if (!mot) { toast('Indicá el motivo', 'warn'); return false; }
+        const d = { clave: clave, motivo: mot, anular: $('#cA', mm).checked, fecha: $('#cF', mm).value, hora: $('#cH', mm).value, dominio: normDom($('#cD', mm).value), bruto: $('#cB', mm).value, tara: $('#cT', mm).value, neto: $('#cN', mm).value };
+        bloquear('Guardando…');
+        try { const r = await api('corregirPesaje', d); invalidar(); toast(r.pendiente ? 'Pedido enviado: lo autoriza el administrador' : r.anulado ? 'Pesaje anulado' : 'Pesaje corregido', 'ok', 6000); vRevision('cruce'); return true; } catch (e) { toast(e.message, 'bad', 7000); return false; } finally { desbloquear(); }
+      }
+    }
+  ]);
+  const neto = () => { const b = num($('#cB', m).value); const t = num($('#cT', m).value); if (b !== null && t !== null) $('#cN', m).value = Math.round((b - t) * 1000) / 1000; };
+  $('#cB', m).oninput = neto;
+  $('#cT', m).oninput = neto;
+  $('#cA', m).onchange = e => { $$('#cF, #cH, #cD, #cB, #cT, #cN', m).forEach(x => { x.disabled = e.target.checked; }); };
+  if ($('#cH', m) && typeof mascaraHora === 'function') mascaraHora($('#cH', m));
+}
+
 function sugerenciasCruce(C) {
   const vent = num(par('VENTANA_MATCH_MIN', 120)) || 120;
   return C.sinTicket.map(v => {
@@ -103,7 +130,8 @@ function pintarCruce(c, R, st) {
   const tot = Math.max(1, C.viajes.length + C.pes.length - C.pares.length);
   const seg = (k, val, cls, t) => val ? '<div class="vb ' + cls + '" style="flex:' + val + '" title="' + t + '"><b>' + nf(val) + '</b><span>' + t + '</span></div>' : '';
   const vCel = v => '<div class="rc v"><span class="src">📒 Talonario ' + esc(v.comprobante) + (v.nroViaje ? ' · viaje ' + v.nroViaje : '') + '</span><b>' + esc(v.horaCarga || '–') + ' → ' + esc(v.horaDescarga || '–') + '</b> <span class="dom">' + (v.dominio ? esc(normDom(v.dominio)) : '<span class="tag t-bad">sin patente</span>') + '</span><div class="sub">' + esc(v.chofer) + ' · ' + esc(v.origen) + (v.ticketSalida ? ' · 🎫 ' + esc(v.ticketSalida) : '') + '</div></div>';
-  const pCel = q => '<div class="rc p"><span class="src">⚖️ Ticket ' + esc(q.ticket || '–') + '</span><b>' + esc(q.hora) + '</b> <span class="dom">' + esc(normDom(q.dominio)) + '</span><div class="sub">' + nf(q.neto, 2) + ' t netas' + (q.manual ? ' · carga manual' : '') + (q.sinSalida ? ' · sin pesaje de salida' : '') + '</div></div>';
+  const puedeCorr = puede('pesaje') || puede('acopiosConsumo');
+  const pCel = q => '<div class="rc p"><span class="src">⚖️ Ticket ' + esc(q.ticket || '–') + (q.corregido ? ' <span class="tag t-info" title="' + esc(q.nota || '') + '">✏️ corregido</span>' : '') + (puedeCorr ? ' <button class="lnk" data-corr="' + esc(clavePesaje(q)) + '">corregir</button>' : '') + '</span><b>' + esc(q.hora) + '</b> <span class="dom">' + esc(normDom(q.dominio)) + '</span><div class="sub">' + nf(q.neto, 2) + ' t netas' + (q.manual ? ' · carga manual' : '') + (q.sinSalida ? ' · sin pesaje de salida' : '') + '</div></div>';
   const vacioCel = (lado, txt) => '<div class="rc nada ' + lado + '">' + txt + '</div>';
   const lazo = (cls, ic, t, d) => '<div class="lazo ' + cls + '"><span class="ic">' + ic + '</span><b>' + t + '</b>' + (d ? '<small>' + d + '</small>' : '') + '</div>';
   const fila = f => {
@@ -122,7 +150,9 @@ function pintarCruce(c, R, st) {
     } else if (f.tipo === 'vf') {
       h = vCel(f.v) + lazo('info', '⏳', 'balanza pendiente', 'después del último pesaje importado') + vacioCel('p', '<a href="#/cargar/pesaje">Importar PESAJE.XLS</a>');
     } else if (f.tipo === 'p') {
-      h = '<div class="rc ops">' + (f.sug.length ? '<div class="sub">Sugerido para ' + f.sug.map(v => 'el viaje de las ' + esc(hV(v)) + ' (' + esc(normDom(v.dominio) || 'sin patente') + ')').join(' o ') + ' ↑</div>' : '<div class="sub">Ningún viaje parecido en los talonarios.</div>') +
+      const cand = candViajes(f.p);
+      h = '<div class="rc ops">' + (cand.length ? '<div class="sub"><b>Viajes sin pesaje a ±8 h</b> (primero la misma patente):</div>' + cand.map(o => '<div class="op' + (o.mismo ? ' mismo' : '') + '"><div><span class="src">📒 Talonario ' + esc(o.v.comprobante) + (o.v.nroViaje ? ' · viaje ' + o.v.nroViaje : '') + '</span> <b>' + esc(o.v.horaCarga || '–') + ' → ' + esc(o.v.horaDescarga || '–') + '</b> ' + (o.v.fecha !== f.p.fecha ? '<span class="tag t-mut">' + fCorta(o.v.fecha) + '</span> ' : '') + '<span class="dom">' + esc(normDom(o.v.dominio) || 'sin patente') + '</span>' +
+        '<div class="sub">' + (o.mismo ? '✅ misma patente · ' : o.dist <= 2 && normDom(o.v.dominio) ? '≈ patente parecida · ' : '') + esc(o.v.chofer) + ' · ' + (o.dt < 60 ? o.dt + ' min' : nf(o.dt / 60, 1) + ' h') + ' de diferencia</div></div><button class="btn sm ' + (o.mismo ? 'pri' : '') + '" data-par="' + esc(claveViaje(o.v)) + '" data-pes="' + esc(clavePesaje(f.p)) + '" data-f="' + f.p.fecha + '">Asociar</button></div>').join('') : '') + (f.sug.length ? '<div class="sub">Sugerido para ' + f.sug.map(v => 'el viaje de las ' + esc(hV(v)) + ' (' + esc(normDom(v.dominio) || 'sin patente') + ')').join(' o ') + ' ↑</div>' : (cand.length ? '' : '<div class="sub">No hay viajes sin pesaje a ±8 h.</div>')) +
         '<div class="row" style="gap:6px"><a class="btn sm ghost" href="#/cargar/viajes/' + f.p.fecha + '">Cargar el viaje</a><button class="btn sm" data-sv="' + esc(clavePesaje(f.p)) + '" data-f="' + f.p.fecha + '">No corresponde a un viaje</button></div></div>' +
         lazo('falta', '❓', 'sin viaje', 'balanza → talonarios: no se encontró') + pCel(f.p);
     } else if (f.tipo === 'vi') {
@@ -132,6 +162,17 @@ function pintarCruce(c, R, st) {
     }
     return '<div class="rfila ' + f.tipo + '">' + h + '</div>';
   };
+  const libresV = C.sinTicket.concat(C.sinTicketFuera);
+  function candViajes(q) {
+    const tq = minAbs(q.fecha, q.hora);
+    return libresV.map(v => {
+      let t = minAbs(v.fecha, v.horaDescarga || v.horaCarga);
+      if (v.horaDescarga && minDe(v.horaDescarga) < minDe(v.horaCarga)) t += 1440;
+      const dt = Math.round(Math.abs(t - tq));
+      const dist = levDom(v.dominio, q.dominio);
+      return { v: v, dt: dt, dist: dist, mismo: dist === 0 && !!normDom(v.dominio) };
+    }).filter(o => o.dt <= 480).sort((a, b) => (b.mismo - a.mismo) || (a.dist - b.dist) || (a.dt - b.dt)).slice(0, 6);
+  }
   const resDia = l => {
     const k = t => l.filter(f => t.indexOf(f.tipo) >= 0).length;
     return [['ok', '✓', k(['ok'])], ['dif', '⚠', k(['dif'])], ['sug', '🤔', k(['sug'])], ['falta', '❓', k(['v', 'p'])], ['info', '⏳', k(['vf'])]].filter(x => x[2]).map(x => '<span class="mini ' + x[0] + '">' + x[1] + ' ' + x[2] + '</span>').join('');
@@ -151,7 +192,10 @@ function pintarCruce(c, R, st) {
     (manuales.length ? tabla([[a => a.tipo === 'par' ? '<span class="tag t-ok">✋ Asociado</span>' : a.tipo === 'sinPesaje' ? '<span class="tag t-mut">🚫 Viaje sin pesaje</span>' : '<span class="tag t-mut">🚫 Ticket sin viaje</span>', 'Decisión'],
       [a => a.claveViaje ? '📒 ' + (via[a.claveViaje] ? fCorta(via[a.claveViaje].fecha) + ' ' + esc(via[a.claveViaje].horaCarga) + ' ' + esc(via[a.claveViaje].dominio) : esc(a.claveViaje.split('|').slice(0, 3).join(' '))) : '', 'Viaje'],
       [a => a.clavePesaje ? '⚖️ ' + (pes[a.clavePesaje] ? 'Ticket ' + esc(pes[a.clavePesaje].ticket) + ' · ' + esc(pes[a.clavePesaje].hora) + ' · ' + esc(pes[a.clavePesaje].dominio) : esc(a.clavePesaje)) : '', 'Pesaje'], ['nota', 'Nota'], ['usuario', 'Usuario'],
-      [a => '<button class="btn sm dan" data-des="' + a.id + '">Deshacer</button>', '']], manuales) : vacio('Todavía no hay decisiones manuales.')) + '</div>';
+      [a => '<button class="btn sm dan" data-des="' + a.id + '">Deshacer</button>', '']], manuales) : vacio('Todavía no hay decisiones manuales.')) +
+    '<h4 class="mt">✏️ Correcciones de datos de la balanza</h4><div class="sub">Se mantienen aunque se vuelva a importar el PESAJE.XLS.</div>' +
+    ((R.correcciones || []).length ? tabla([[x => '⚖️ ' + esc(x.ticket ? 'Ticket ' + x.ticket : x.clave), 'Pesaje'], [x => x.anular ? '<span class="tag t-bad">Anulado</span>' : ['fecha', 'hora', 'dominio', 'bruto', 'tara', 'neto'].filter(k => x[k] !== '' && x[k] !== null && x[k] !== undefined).map(k => '<span class="sub">' + k + '</span> <s>' + esc(x.original[k] === undefined ? '' : String(x.original[k])) + '</s> → <b>' + esc(String(x[k])) + '</b>').join('<br>'), 'Cambio'], ['motivo', 'Motivo', 'wrap'], ['usuario', 'Usuario'],
+      [x => esAdmin() ? '<button class="btn sm dan" data-dc="' + x.id + '">Deshacer</button>' : '', '']], R.correcciones) : vacio('Sin correcciones en el período.')) + '</div>';
   stagger(c);
   contar(c);
   const hacer = async (d, txt) => {
@@ -167,6 +211,8 @@ function pintarCruce(c, R, st) {
     if (b.dataset.sp) { const n2 = await nota('Viaje sin pesaje'); if (n2 !== null) hacer({ tipo: 'sinPesaje', claveViaje: b.dataset.sp, fecha: b.dataset.f, nota: n2 }, 'Marcado: no pasó por la balanza'); return; }
     if (b.dataset.sv) { const n2 = await nota('Ticket sin viaje'); if (n2 !== null) hacer({ tipo: 'sinViaje', clavePesaje: b.dataset.sv, fecha: b.dataset.f, nota: n2 }, 'Marcado: no corresponde a un viaje'); return; }
     if (b.dataset.des) hacer({ id: b.dataset.des }, 'Decisión deshecha');
+    if (b.dataset.corr) { const q = C.pes.concat(C.pesajesTodos || []).find(x => clavePesaje(x) === b.dataset.corr) || (R.pesajes || []).find(x => clavePesaje(x) === b.dataset.corr); if (q) formCorreccionPesaje(q); return; }
+    if (b.dataset.dc) { bloquear('Deshaciendo…'); try { await api('deshacerCorreccionPesaje', { id: b.dataset.dc }); invalidar(); toast('Corrección deshecha: volvió el dato original de la balanza', 'ok'); vRevision('cruce'); } catch (e) { toast(e.message, 'bad', 7000); } finally { desbloquear(); } }
   };
 }
 
