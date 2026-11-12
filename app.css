@@ -1294,3 +1294,41 @@ svg.plano .calp { stroke: #fff; stroke-width: 1.5; }
   .rep-tab td .row { flex-wrap: wrap !important; }
   .rep-tab td .row > * { flex: 1 1 140px; }
 }
+.fa { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+.fa section { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--panel-2); min-width: 0; }
+.fa section h4 { margin: 0 0 8px; font-size: .9rem; }
+.fa section.ancho { grid-column: 1 / -1; }
+.fa .form .full { grid-column: 1 / -1; }
+.fa .ori-barra .barra { display: flex; height: 26px; border-radius: 8px; overflow: hidden; gap: 2px; }
+.fa .ori-barra .barra span { display: flex; align-items: center; justify-content: center; color: #fff; font-size: .7rem; font-weight: 700; white-space: nowrap; overflow: hidden; padding: 0 4px; }
+.cont { display: flex; flex-direction: column; gap: 6px; }
+.cont-it { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); }
+.cont-it.on { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 8%, var(--panel)); }
+.cont-it .niv { display: inline-flex; border: 1px solid var(--line-2); border-radius: 999px; overflow: hidden; opacity: .45; }
+.cont-it.on .niv { opacity: 1; }
+.cont-it .niv button { border: 0; background: transparent; padding: 4px 10px; font: inherit; font-size: .75rem; font-weight: 700; color: var(--muted); cursor: pointer; }
+.cont-it .niv button + button { border-left: 1px solid var(--line-2); }
+.cont-it .niv button.on { background: var(--warn); color: #fff; }
+.cont-it .niv button[data-n="Mucho"].on { background: var(--bad); }
+.cont-it .niv button[data-n="Poco"].on { background: #ca8a04; }
+.tex { display: flex; flex-direction: column; gap: 8px; }
+.tex #fTri { max-width: 420px; width: 100%; margin: 0 auto; }
+.tex-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tex-in { display: flex; flex-direction: column; gap: 8px; }
+svg.tri { width: 100%; height: auto; cursor: crosshair; display: block; }
+svg.tri .reg polygon { opacity: .5; }
+svg.tri .grid line { stroke: rgba(0,0,0,.18); stroke-width: .6; }
+svg.tri .borde { fill: none; stroke: var(--text); stroke-width: 1.5; }
+svg.tri .lbls text { font-size: 8px; font-weight: 800; fill: #1c1917; pointer-events: none; paint-order: stroke; stroke: rgba(255,255,255,.75); stroke-width: 2.5px; }
+svg.tri .ax { font-size: 8px; fill: var(--muted); }
+svg.tri .axt { font-size: 9.5px; font-weight: 800; fill: var(--text); }
+svg.tri .pto { fill: #fff; stroke: #111; stroke-width: 3; }
+svg.tri .guia { stroke: #111; stroke-width: 1.2; stroke-dasharray: 3 3; }
+.perfil { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); }
+.perfil .sw { width: 26px; height: 26px; border-radius: 8px; flex: none; }
+.perfil small { display: block; font-size: .66rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 800; }
+.perfil b { font-size: 1rem; }
+@media (max-width: 760px) { .fa, .tex { grid-template-columns: 1fr; } }
+.inf-card .inf-dia { display: flex !important; align-items: center; gap: 6px; flex: 1 1 100%; flex-wrap: wrap; white-space: normal; font-weight: 600; }
+.inf-card .inf-dia select { width: auto; min-width: 120px; padding: 4px 8px; }
+.inf-card span.inf-dia { display: inline-block !important; flex: 0 1 auto; padding: 4px 10px; }

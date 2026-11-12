@@ -2,7 +2,6 @@
 
 const COLOR_ESTADO_ACOPIO = { Cargando: '#2a78d6', 'En consumo': '#1f8a4c', Agotado: '#9ca3af', '': '#d96b3a' };
 const COLORES_SECTOR = ['#d96b3a', '#2a78d6', '#1f8a4c', '#b56a00', '#7c3aed', '#c0261d', '#0e7490', '#a16207', '#be185d', '#4d7c0f'];
-const CALIDADES_ACOPIO = ['Arcillosa', 'Limosa', 'Arenosa', 'Balanceada', 'Con piedras', 'Mezcla', 'Otra'];
 
 const CELDA_PLAYA = {};
 PLANO_PLAYA.celdas.forEach(c => { CELDA_PLAYA[c[0]] = { x: c[1], y: c[2], w: PLANO_PLAYA.c, h: PLANO_PLAYA.c }; });
@@ -92,7 +91,8 @@ function calidadTxt(a) {
   if (comp.some(x => x !== null)) partes.push('Arc/Lim/Are ' + comp.map(x => x === null ? '–' : x).join('/') + ' %');
   else if (mu.some(x => x !== null)) partes.push('Muestras ' + mu.map(x => x === null ? '–' : x).join('/') + ' %');
   if (a.humedad) partes.push('humedad ' + esc(a.humedad.toLowerCase()));
-  if (a.piedrasNivel) partes.push('piedras: ' + esc(a.piedrasNivel.toLowerCase()));
+  const ct = contaminantesDe(a);
+  if (Object.keys(ct).length) partes.push(Object.keys(ct).map(k => esc(k.toLowerCase()) + ' ' + esc(ct[k].toLowerCase())).join(', '));
   return partes.join(' · ');
 }
 
@@ -308,7 +308,7 @@ function tarjetaSector(E, s, dn) {
     if (puede('acopiosConsumo')) bot.push('<button class="btn sm" data-acc="consumo" data-id="' + a.id + '" data-sec="' + s.id + '">Consumo</button><button class="btn sm dan" data-acc="agotar" data-id="' + a.id + '" data-sec="' + s.id + '">Agotado</button>');
   } else if (puede('acopios')) bot.push('<button class="btn sm pri" data-acc="armar" data-sec="' + s.id + '">+ Armar acopio</button>');
   return '<div class="card sector-card" id="sec-' + s.id + '"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><span class="eyebrow">' + esc(s.nombre) + '</span>' +
-    (a ? '<h3 style="margin:2px 0">' + esc(a.nombre) + '</h3><div class="sub">' + (a.tipo === 'Mezcla' ? 'Mezcla: ' + a.componentes.map(x => { const o = E.acopios.find(y => y.id === x.id); return (o ? esc(o.nombre) : '?') + ' ' + nf(x.pct) + ' %'; }).join(' + ') : 'Origen: ' + esc(a.origen)) + '</div><div class="sub">' + calidadTxt(a) + ' ' + chipCalidad(a) + '</div>'
+    (a ? '<h3 style="margin:2px 0">' + esc(a.nombre) + '</h3><div class="sub">' + (a.tipo === 'Mezcla' ? 'Mezcla: ' + a.componentes.map(x => { const o = E.acopios.find(y => y.id === x.id); return (o ? esc(o.nombre) : '?') + ' ' + nf(x.pct) + ' %'; }).join(' + ') : 'Origen: ' + (origenesDe(a).length > 1 ? origenesDe(a).map(o => esc(o.origen) + ' ' + nf(o.pct, 0) + ' %').join(' + ') + (razonTxt(origenesDe(a)) ? ' (' + razonTxt(origenesDe(a)) + ')' : '') : esc(a.origen))) + '</div><div class="sub">' + calidadTxt(a) + ' ' + chipCalidad(a) + '</div>'
       : '<h3 style="margin:2px 0">Libre</h3><div class="sub">' + (ult ? 'Último: ' + esc(ult.nombre) + ' (agotado ' + fCorta(ult.agotado) + ')' : 'Sin acopios todavía') + '</div>') +
     '</div>' + (a ? '<span class="tag" style="background:' + COLOR_ESTADO_ACOPIO[a.estado] + '22;color:' + COLOR_ESTADO_ACOPIO[a.estado] + '">' + esc(a.estado) + '</span>' : '') + '</div>' +
     (a ? '<div class="ac-stock"><div><b>' + nf(a.stock) + ' t</b><small> ≈ ' + nf(a.stock / dn) + ' m³ · ≈ ' + nf(a.stock / E.fMol) + ' paladas</small></div><div class="barra"><span style="width:' + pct + '%"></span></div>' +
@@ -316,37 +316,219 @@ function tarjetaSector(E, s, dn) {
     '<div class="row mt" style="gap:6px">' + bot.join('') + '</div></div>';
 }
 
+const CONTAMINANTES_ACOPIO = ['Piedras', 'Caliza', 'Basura', 'Tierra negra', 'Raíces'];
+const NIVELES_CONT = ['Poco', 'Mediano', 'Mucho'];
+const TEXTURAS = ['Arcillosa', 'Arcillo limosa', 'Arcillo arenosa', 'Franco arcillosa', 'Franco arcillo limosa', 'Franco arcillo arenosa', 'Franca', 'Franco limosa', 'Limosa', 'Franco arenosa', 'Areno franca', 'Arenosa'];
+const TEX_COLOR = { 'Arcillosa': '#b45309', 'Arcillo limosa': '#c2410c', 'Arcillo arenosa': '#d97706', 'Franco arcillosa': '#ca8a04', 'Franco arcillo limosa': '#a16207', 'Franco arcillo arenosa': '#e0a458', 'Franca': '#84a35a', 'Franco limosa': '#6b9e8f', 'Limosa': '#5b8fb0', 'Franco arenosa': '#c9b27a', 'Areno franca': '#dccb94', 'Arenosa': '#ece0b3' };
+
+function texturaUSDA(arc, lim, are) {
+  const c = Number(arc);
+  const s = Number(lim);
+  const a = Number(are);
+  if ([c, s, a].some(x => isNaN(x)) || Math.abs(c + s + a - 100) > 1.5) return '';
+  if (s + 1.5 * c < 15) return 'Arenosa';
+  if (s + 2 * c < 30) return 'Areno franca';
+  if ((c >= 7 && c < 20 && a > 52) || (c < 7 && s < 50)) return 'Franco arenosa';
+  if (c >= 7 && c < 27 && s >= 28 && s < 50 && a <= 52) return 'Franca';
+  if ((s >= 50 && c >= 12 && c < 27) || (s >= 50 && s < 80 && c < 12)) return 'Franco limosa';
+  if (s >= 80 && c < 12) return 'Limosa';
+  if (c >= 20 && c < 35 && s < 28 && a > 45) return 'Franco arcillo arenosa';
+  if (c >= 27 && c < 40 && a > 20 && a <= 45) return 'Franco arcillosa';
+  if (c >= 27 && c < 40 && a <= 20) return 'Franco arcillo limosa';
+  if (c >= 35 && a > 45) return 'Arcillo arenosa';
+  if (c >= 40 && s >= 40) return 'Arcillo limosa';
+  return 'Arcillosa';
+}
+
+const TRI = { w: 300, h: 260, x0: 30, y0: 14 };
+const triXY = (c, s) => ({ x: TRI.x0 + (s + c / 2) / 100 * TRI.w, y: TRI.y0 + (1 - c / 100) * TRI.h });
+const triDesdeXY = (x, y) => { const c = Math.max(0, Math.min(100, (1 - (y - TRI.y0) / TRI.h) * 100)); const s = Math.max(0, Math.min(100 - c, ((x - TRI.x0) / TRI.w) * 100 - c / 2)); return { c: Math.round(c), s: Math.round(s), a: Math.round(100 - Math.round(c) - Math.round(s)) }; };
+let TRI_FONDO = '';
+
+function fondoTriangulo() {
+  if (TRI_FONDO) return TRI_FONDO;
+  const st = 2.5;
+  const cen = {};
+  let h = '';
+  const pt = (c, s) => { const p = triXY(c, s); return p.x.toFixed(1) + ',' + p.y.toFixed(1); };
+  for (let c = 0; c < 100; c += st) for (let s = 0; s + c < 100; s += st) {
+    const t1 = texturaUSDA(c + st / 3, s + st / 3, 100 - c - s - 2 * st / 3);
+    h += '<polygon points="' + pt(c, s) + ' ' + pt(c, s + st) + ' ' + pt(c + st, s) + '" fill="' + TEX_COLOR[t1] + '" stroke="' + TEX_COLOR[t1] + '" stroke-width=".4"/>';
+    (cen[t1] = cen[t1] || []).push([c + st / 3, s + st / 3]);
+    if (s + c + st < 100) {
+      const t2 = texturaUSDA(c + 2 * st / 3, s + 2 * st / 3, 100 - c - s - 4 * st / 3);
+      h += '<polygon points="' + pt(c + st, s) + ' ' + pt(c, s + st) + ' ' + pt(c + st, s + st) + '" fill="' + TEX_COLOR[t2] + '" stroke="' + TEX_COLOR[t2] + '" stroke-width=".4"/>';
+      (cen[t2] = cen[t2] || []).push([c + 2 * st / 3, s + 2 * st / 3]);
+    }
+  }
+  let g = '';
+  for (let k = 10; k < 100; k += 10) {
+    g += '<line x1="' + triXY(k, 0).x + '" y1="' + triXY(k, 0).y + '" x2="' + triXY(k, 100 - k).x + '" y2="' + triXY(k, 100 - k).y + '"/>';
+    g += '<line x1="' + triXY(0, k).x + '" y1="' + triXY(0, k).y + '" x2="' + triXY(100 - k, k).x + '" y2="' + triXY(100 - k, k).y + '"/>';
+    g += '<line x1="' + triXY(0, 100 - k).x + '" y1="' + triXY(0, 100 - k).y + '" x2="' + triXY(100 - k, 0).x + '" y2="' + triXY(100 - k, 0).y + '"/>';
+  }
+  const abrev = { 'Arcillosa': 'Arcillosa', 'Arcillo limosa': 'Arc. limosa', 'Arcillo arenosa': 'Arc. aren.', 'Franco arcillosa': 'Fr. arcillosa', 'Franco arcillo limosa': 'Fr. arc. lim.', 'Franco arcillo arenosa': 'Fr. arc. aren.', 'Franca': 'Franca', 'Franco limosa': 'Fr. limosa', 'Limosa': 'Limosa', 'Franco arenosa': 'Fr. arenosa', 'Areno franca': '', 'Arenosa': '' };
+  const lbl = Object.keys(cen).map(t => { const l = cen[t]; const c = sum(l, x => x[0]) / l.length; const s = sum(l, x => x[1]) / l.length; const p = triXY(c, s); return abrev[t] ? '<text x="' + p.x.toFixed(1) + '" y="' + (p.y + 3).toFixed(1) + '" text-anchor="middle">' + abrev[t] + '</text>' : ''; }).join('');
+  const ax = [];
+  for (let k = 0; k <= 100; k += 20) {
+    const pc = triXY(k, 0);
+    ax.push('<text class="ax" x="' + (pc.x - 6) + '" y="' + (pc.y + 3) + '" text-anchor="end">' + k + '</text>');
+    const ps = triXY(100 - k, k);
+    ax.push('<text class="ax" x="' + (ps.x + 6) + '" y="' + (ps.y + 3) + '">' + k + '</text>');
+    const pa = triXY(0, 100 - k);
+    ax.push('<text class="ax" x="' + pa.x + '" y="' + (pa.y + 13) + '" text-anchor="middle">' + k + '</text>');
+  }
+  TRI_FONDO = '<g class="reg">' + h + '</g><g class="grid">' + g + '</g><g class="lbls">' + lbl + '</g><polygon class="borde" points="' + pt(0, 0) + ' ' + pt(0, 100) + ' ' + pt(100, 0) + '"/>' + ax.join('') +
+    '<text class="axt" x="' + (TRI.x0 + TRI.w * 0.18) + '" y="' + (TRI.y0 + TRI.h * 0.45) + '" transform="rotate(-60 ' + (TRI.x0 + TRI.w * 0.18) + ' ' + (TRI.y0 + TRI.h * 0.45) + ')" text-anchor="middle" dy="-16">% arcilla ↑</text>' +
+    '<text class="axt" x="' + (TRI.x0 + TRI.w * 0.82) + '" y="' + (TRI.y0 + TRI.h * 0.45) + '" transform="rotate(60 ' + (TRI.x0 + TRI.w * 0.82) + ' ' + (TRI.y0 + TRI.h * 0.45) + ')" text-anchor="middle" dy="-16">% limo ↓</text>' +
+    '<text class="axt" x="' + (TRI.x0 + TRI.w / 2) + '" y="' + (TRI.y0 + TRI.h + 28) + '" text-anchor="middle">← % arena</text>';
+  return TRI_FONDO;
+}
+
+function trianguloSVG(c, s) {
+  const ok = c !== null && s !== null && !isNaN(c) && !isNaN(s) && c + s <= 100.5;
+  const p = ok ? triXY(c, s) : null;
+  return '<svg class="tri" viewBox="0 0 ' + (TRI.w + 60) + ' ' + (TRI.h + 50) + '" role="img" aria-label="Triángulo de textura">' + fondoTriangulo() +
+    (p ? '<line class="guia" x1="' + p.x + '" y1="' + p.y + '" x2="' + triXY(c, 0).x + '" y2="' + triXY(c, 0).y + '"/><line class="guia" x1="' + p.x + '" y1="' + p.y + '" x2="' + triXY(100 - s, s).x + '" y2="' + triXY(100 - s, s).y + '"/><line class="guia" x1="' + p.x + '" y1="' + p.y + '" x2="' + triXY(0, s).x + '" y2="' + triXY(0, s).y + '"/>' +
+      '<circle class="pto" cx="' + p.x + '" cy="' + p.y + '" r="7"/>' : '') + '</svg>';
+}
+
+function origenesDe(a) {
+  if (!a) return [];
+  const s = String(a.origenes || '').trim();
+  if (s) return s.split(';').map(x => { const i = x.lastIndexOf(':'); return { origen: x.slice(0, i), pct: Number(x.slice(i + 1)) || 0 }; }).filter(x => x.origen);
+  return a.origen && a.origen !== 'Mezcla' ? [{ origen: a.origen, pct: 100 }] : [];
+}
+
+function contaminantesDe(a) {
+  const o = {};
+  if (!a) return o;
+  String(a.contaminantes || '').split(';').forEach(x => { const p = x.split(':'); if (p[0] && NIVELES_CONT.indexOf(p[1]) >= 0) o[p[0]] = p[1]; });
+  if (!a.contaminantes && a.piedrasNivel) { const m = { Pocas: 'Poco', Muchas: 'Mucho' }[a.piedrasNivel]; if (m) o.Piedras = m; }
+  return o;
+}
+
+function razonTxt(l) {
+  if (l.length < 2) return '';
+  const min = Math.min.apply(null, l.map(x => x.pct).filter(x => x > 0));
+  const r = l.map(x => x.pct / min);
+  return r.every(x => Math.abs(x - Math.round(x)) < 0.08) ? r.map(x => Math.round(x)).join(' : ') : '';
+}
+
 function formAcopio(E, sid, a) {
   const s = E.sectores.find(x => x.id === sid);
   const v = k => a && a[k] !== null && a[k] !== undefined ? a[k] : '';
   const lug = nombres('Lugares');
+  const mezcla = a && a.tipo === 'Mezcla';
   let unidad = 't';
-  const m = modal((a ? 'Editar acopio · ' : 'Armar acopio · ') + (s ? s.nombre : ''), '<div class="form">' +
-    '<label class="f">Nombre<input id="fNom" value="' + esc(v('nombre')) + '" placeholder="' + esc((s ? s.nombre : '') + ' · origen') + '"></label>' +
-    (a && a.tipo === 'Mezcla' ? '<label class="f">Tipo<input value="Mezcla" disabled></label>' : '<label class="f">Origen de la tierra<select id="fOri">' + opts(lug, v('origen'), 'Elegir…') + '</select></label>') +
-    '<label class="f">Calidad<select id="fCal">' + opts(CALIDADES_ACOPIO, v('calidad'), 'Sin indicar') + '</select></label>' +
-    '<label class="f">Humedad<select id="fHum">' + opts(['Seca', 'Normal', 'Húmeda'], v('humedad'), 'Sin indicar') + '</select></label>' +
-    '<label class="f">Piedras<select id="fPie">' + opts(['Sin piedras', 'Pocas', 'Muchas'], v('piedrasNivel'), 'Sin indicar') + '</select></label>' +
-    '<label class="f">% arcilla<input id="fArc" type="number" min="0" max="100" step="0.5" value="' + esc(v('arcilla')) + '"></label>' +
-    '<label class="f">% limo<input id="fLim" type="number" min="0" max="100" step="0.5" value="' + esc(v('limo')) + '"></label>' +
-    '<label class="f">% arena<input id="fAre" type="number" min="0" max="100" step="0.5" value="' + esc(v('arena')) + '"></label>' +
-    '<label class="f">Cantidad medida al cerrar (opcional)<div class="row" style="gap:8px;flex-wrap:nowrap"><input id="fMed" type="number" min="0" step="1" style="flex:1" value="' + esc(v('tMedida')) + '"><span class="unid-tog" id="fU"><button type="button" data-u="t" class="on">t</button><button type="button" data-u="m3">m³</button></span></div></label>' +
+  let modo = 'partes';
+  const ori0 = origenesDe(a);
+  let oris = ori0.length ? ori0.map(x => ({ origen: x.origen, parte: x.pct })) : [{ origen: '', parte: 1 }];
+  if (ori0.length > 1) { const mn = Math.min.apply(null, ori0.map(x => x.pct)); const ok = ori0.every(x => Math.abs(x.pct / mn - Math.round(x.pct / mn)) < 0.08); if (ok) oris = ori0.map(x => ({ origen: x.origen, parte: Math.round(x.pct / mn) })); else modo = 'pct'; }
+  const cont = contaminantesDe(a);
+  const tx = { c: num(v('arcilla')), s: num(v('limo')), a: num(v('arena')) };
+  const m = modal((a ? 'Editar acopio · ' : 'Armar acopio · ') + (s ? s.nombre : ''), '<div class="fa">' +
+    '<section><h4>📍 Acopio</h4><div class="form"><label class="f">Nombre<input id="fNom" value="' + esc(v('nombre')) + '" placeholder="' + esc((s ? s.nombre : '') + ' · origen') + '"></label>' +
     (a ? '<label class="f">Estado<select id="fEst">' + opts(ESTADOS_ACOPIO_TXT, v('estado'), null) + '</select></label>' : '') +
-    '<label class="f full">Observaciones<input id="fObs" value="' + esc(v('observaciones')) + '"></label>' +
-    '<p class="f full sub">Si no cargás la cantidad medida, el acopio suma las toneladas de los camiones que se asignen en «Descargas». Para medir con odómetro usá m³ (perímetro y altura con la calculadora de Ajuste de stock).</p></div>', [
+    '<label class="f">Humedad<select id="fHum">' + opts(['Seca', 'Normal', 'Húmeda'], v('humedad'), 'Sin indicar') + '</select></label>' +
+      '<label class="f full">📏 Cantidad medida al cerrar (opcional)<div class="row" style="gap:8px;flex-wrap:nowrap"><input id="fMed" type="number" min="0" step="1" style="flex:1" value="' + esc(v('tMedida')) + '"><span class="unid-tog" id="fU"><button type="button" data-u="t" class="on">t</button><button type="button" data-u="m3">m³</button></span></div></label>' +
+      '<label class="f full">Observaciones<input id="fObs" value="' + esc(v('observaciones')) + '"></label></div><p class="sub">Si no cargás la cantidad medida, el acopio suma las toneladas de los camiones que se asignen. Para el reparto de la playa usá «Reparto de la playa».</p></section>' +
+    (mezcla ? '<section><h4>🔀 Mezcla de acopios</h4><div class="sub">' + esc(a.componentes.map(x => { const o = E.acopios.find(y => y.id === x.id); return (o ? o.nombre : '?') + ' ' + x.pct + ' %'; }).join(' + ')) + '</div></section>' :
+      '<section><h4>🚛 Origen de la tierra</h4><div class="sub">Si se armó con tierra de varios lugares, agregá cada uno con su proporción en paladas (2 a 1, 3 a 1) o en %.</div>' +
+      '<div class="row" style="gap:6px;margin:8px 0"><span class="unid-tog" id="fModo"><button type="button" data-m="partes">Partes</button><button type="button" data-m="pct">%</button></span><button type="button" class="btn sm" data-pre="1,1">50 / 50</button><button type="button" class="btn sm" data-pre="2,1">2 a 1</button><button type="button" class="btn sm" data-pre="3,1">3 a 1</button></div>' +
+      '<div id="fOris"></div><button type="button" class="btn sm mt" id="fOriAdd">+ Otro origen</button><div id="fOriRes" class="ori-barra mt"></div></section>') +
+    '<section><h4>🔍 Calidad: qué tiene la tierra</h4><div class="cont">' + CONTAMINANTES_ACOPIO.map(k => '<div class="cont-it' + (cont[k] ? ' on' : '') + '" data-c="' + esc(k) + '"><label class="chk"><input type="checkbox"' + (cont[k] ? ' checked' : '') + '> ' + esc(k) + '</label><span class="niv">' + NIVELES_CONT.map(n => '<button type="button" data-n="' + n + '" class="' + (cont[k] === n ? 'on' : '') + '">' + n + '</button>').join('') + '</span></div>').join('') + '</div></section>' +
+    '<section><h4>🔺 Textura: arcilla, limo y arena</h4><div class="tex"><div id="fTri"></div><div class="tex-in"><div class="sub">Tocá el triángulo o cargá dos valores: el tercero se completa para sumar 100 %.</div><div class="tex-3">' +
+      '<label class="f">% arcilla<input id="fArc" type="number" min="0" max="100" step="1" value="' + esc(v('arcilla')) + '"></label>' +
+      '<label class="f">% limo<input id="fLim" type="number" min="0" max="100" step="1" value="' + esc(v('limo')) + '"></label>' +
+      '<label class="f">% arena<input id="fAre" type="number" min="0" max="100" step="1" value="' + esc(v('arena')) + '"></label></div><div id="fPerfil" class="perfil"></div></div></div></section>' +
+    '</div>', [
     { txt: 'Cancelar' },
     {
       txt: 'Guardar', cls: 'pri', fn: async mm => {
         const med = num($('#fMed', mm).value);
+        const lista = mezcla ? [] : pcts();
+        if (!mezcla && !lista.length) { toast('Indicá al menos un origen', 'warn'); return false; }
+        if (!mezcla && new Set(lista.map(x => x.origen)).size !== lista.length) { toast('Hay orígenes repetidos', 'warn'); return false; }
+        const ar = $('#fArc', mm).value;
+        const li = $('#fLim', mm).value;
+        const an = $('#fAre', mm).value;
+        const hayTx = [ar, li, an].some(x => String(x).trim() !== '');
+        if (hayTx && Math.abs((Number(ar) || 0) + (Number(li) || 0) + (Number(an) || 0) - 100) > 1) { toast('Arcilla + limo + arena tienen que sumar 100 %', 'warn'); return false; }
+        const cs = $$('.cont-it.on', mm).map(x => { const n = $('.niv button.on', x); return n ? x.dataset.c + ':' + n.dataset.n : null; });
+        if (cs.some(x => x === null)) { toast('Elegí poco, mediano o mucho en cada ítem marcado', 'warn'); return false; }
         const d = {
-          id: a ? a.id : '', sector: sid, nombre: $('#fNom', mm).value, tipo: a ? a.tipo : 'Simple', origen: $('#fOri', mm) ? $('#fOri', mm).value : 'Mezcla', calidad: $('#fCal', mm).value, humedad: $('#fHum', mm).value,
-          piedrasNivel: $('#fPie', mm).value, arcilla: $('#fArc', mm).value, limo: $('#fLim', mm).value, arena: $('#fAre', mm).value, tMedida: med === null ? '' : Math.round(unidad === 'm3' ? med * (E.densidad || 1.4) : med),
+          id: a ? a.id : '', sector: sid, nombre: $('#fNom', mm).value, tipo: a ? a.tipo : 'Simple', origenes: lista, origen: mezcla ? 'Mezcla' : lista.map(x => x.origen).join(' + '),
+          calidad: hayTx ? texturaUSDA(ar, li, an) : '', humedad: $('#fHum', mm).value, contaminantes: cs.join(';'), piedrasNivel: '',
+          arcilla: ar, limo: li, arena: an, tMedida: med === null ? '' : Math.round(unidad === 'm3' ? med * (E.densidad || 1.4) : med),
           observaciones: $('#fObs', mm).value, estado: $('#fEst', mm) ? $('#fEst', mm).value : '', componentes: a ? a.componentes : []
         };
         try { await escribir('guardarAcopio', d, 'Acopio ' + d.nombre); toast('Acopio guardado', 'ok'); vAcopios('plano'); return true; } catch (e) { toast(e.message, 'bad', 7000); return false; }
       }
     }
-  ]);
+  ], 'grande');
+  const pcts = () => {
+    const l = oris.filter(x => x.origen && Number(x.parte) > 0);
+    const t = sum(l, x => Number(x.parte)) || 1;
+    return l.map(x => ({ origen: x.origen, pct: Math.round(Number(x.parte) / t * 1000) / 10 }));
+  };
+  const pintarOris = () => {
+    if (mezcla) return;
+    $$('#fModo button', m).forEach(b => b.classList.toggle('on', b.dataset.m === modo));
+    $('#fOris', m).innerHTML = oris.map((o, i) => '<div class="row ori" style="gap:8px;margin-bottom:6px;flex-wrap:nowrap"><select data-i="' + i + '" data-k="origen" style="flex:1">' + opts(lug.indexOf(o.origen) >= 0 || !o.origen ? lug : lug.concat([o.origen]), o.origen, 'Elegir origen…') + '</select>' +
+      '<input data-i="' + i + '" data-k="parte" type="number" min="0" step="' + (modo === 'pct' ? '1' : '0.5') + '" value="' + o.parte + '" style="width:80px"><span class="sub" style="width:44px">' + (modo === 'pct' ? '%' : 'partes') + '</span>' + (oris.length > 1 ? '<button type="button" class="btn icon sm dan" data-x="' + i + '">' + ICON.borrar + '</button>' : '') + '</div>').join('');
+    const l = pcts();
+    const tot = sum(oris.filter(x => x.origen), x => Number(x.parte) || 0);
+    $('#fOriRes', m).innerHTML = l.length ? '<div class="barra">' + l.map((x, i) => '<span style="flex:' + x.pct + ';background:' + COLORES_SECTOR[i % COLORES_SECTOR.length] + '">' + esc(x.origen) + ' ' + nf(x.pct, 0) + ' %</span>').join('') + '</div><div class="sub">' + (l.length > 1 ? (razonTxt(l) ? 'Proporción ' + razonTxt(l) + ' · ' : '') + 'de cada 10 paladas: ' + l.map(x => nf(x.pct / 10, 1) + ' de ' + esc(x.origen)).join(', ') : 'Un solo origen') + (modo === 'pct' && Math.abs(tot - 100) > 0.5 ? ' · <span class="rojo">suman ' + nf(tot) + ' %: se normaliza a 100 %</span>' : '') + '</div>' : '';
+  };
+  const pintarTex = () => {
+    const c = num($('#fArc', m).value);
+    const sl = num($('#fLim', m).value);
+    const an = num($('#fAre', m).value);
+    $('#fTri', m).innerHTML = trianguloSVG(c, sl);
+    const t = c !== null && sl !== null && an !== null ? texturaUSDA(c, sl, an) : '';
+    const sm = (c || 0) + (sl || 0) + (an || 0);
+    $('#fPerfil', m).innerHTML = t ? '<span class="sw" style="background:' + TEX_COLOR[t] + '"></span><div><small>Perfil de la tierra</small><b>' + t + '</b></div>' : (c !== null || sl !== null || an !== null) && Math.abs(sm - 100) > 1 ? '<span class="rojo">Suman ' + nf(sm) + ' %</span>' : '<span class="sub">Sin datos de textura</span>';
+  };
+  pintarOris();
+  pintarTex();
+  if (!mezcla) {
+    $('#fModo', m).onclick = e => { const b = e.target.closest('[data-m]'); if (!b || b.dataset.m === modo) return; const l = pcts(); modo = b.dataset.m; if (modo === 'pct') oris = l.length ? l.map(x => ({ origen: x.origen, parte: x.pct })) : oris; else { const r = razonTxt(l); oris = r ? l.map((x, i) => ({ origen: x.origen, parte: Number(r.split(' : ')[i]) })) : oris.map(x => ({ origen: x.origen, parte: x.parte })); } pintarOris(); };
+    $$('[data-pre]', m).forEach(b => { b.onclick = () => { const p = b.dataset.pre.split(',').map(Number); while (oris.length < 2) oris.push({ origen: '', parte: 1 }); modo = 'partes'; oris = oris.slice(0, 2).map((o, i) => ({ origen: o.origen, parte: p[i] })); pintarOris(); }; });
+    $('#fOriAdd', m).onclick = () => { oris.push({ origen: '', parte: modo === 'pct' ? 0 : 1 }); pintarOris(); };
+    $('#fOris', m).addEventListener('change', e => { const el = e.target; if (el.dataset.k) { oris[Number(el.dataset.i)][el.dataset.k] = el.dataset.k === 'parte' ? Number(el.value) : el.value; pintarOris(); } });
+    $('#fOris', m).addEventListener('click', e => { const b = e.target.closest('[data-x]'); if (b) { oris.splice(Number(b.dataset.x), 1); pintarOris(); } });
+  }
+  $$('.cont-it', m).forEach(it => {
+    const ck = $('input', it);
+    ck.onchange = () => { it.classList.toggle('on', ck.checked); if (!ck.checked) $$('.niv button', it).forEach(x => x.classList.remove('on')); };
+    $$('.niv button', it).forEach(b => { b.onclick = () => { $$('.niv button', it).forEach(x => x.classList.toggle('on', x === b)); ck.checked = true; it.classList.add('on'); }; });
+  });
+  const completar = (cambio) => {
+    const c = num($('#fArc', m).value);
+    const sl = num($('#fLim', m).value);
+    const an = num($('#fAre', m).value);
+    if (cambio !== 'are' && c !== null && sl !== null && c + sl <= 100) $('#fAre', m).value = Math.round((100 - c - sl) * 10) / 10;
+    else if (cambio === 'are' && c !== null && an !== null && c + an <= 100) $('#fLim', m).value = Math.round((100 - c - an) * 10) / 10;
+    pintarTex();
+  };
+  $('#fArc', m).oninput = () => completar('arc');
+  $('#fLim', m).oninput = () => completar('lim');
+  $('#fAre', m).oninput = () => completar('are');
+  $('#fTri', m).onclick = e => {
+    const svg = e.target.closest('svg');
+    if (!svg) return;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const q = pt.matrixTransform(svg.getScreenCTM().inverse());
+    const r = triDesdeXY(q.x, q.y);
+    if (r.a < 0) return;
+    $('#fArc', m).value = r.c;
+    $('#fLim', m).value = r.s;
+    $('#fAre', m).value = r.a;
+    pintarTex();
+  };
   $('#fU', m).onclick = e => { const b = e.target.closest('[data-u]'); if (!b) return; unidad = b.dataset.u; $$('#fU button', m).forEach(x => x.classList.toggle('on', x === b)); };
 }
 
@@ -365,7 +547,9 @@ function formMezcla(E) {
       txt: 'Armar mezcla', cls: 'pri', fn: async mm => {
         const tot = sum(filas, x => Number(x.pct) || 0);
         if (Math.abs(tot - 100) > 0.5) { toast('Las proporciones tienen que sumar 100 %', 'warn'); return false; }
-        const d = { sector: $('#xSec', mm).value, nombre: $('#xNom', mm).value, tipo: 'Mezcla', componentes: filas, toneladas: num($('#xT', mm).value) || 0, calidad: 'Mezcla' };
+        const cx = ['arcilla', 'limo', 'arena'].map(k => { const v2 = filas.map(f => { const a = fuentes.find(x => x.id === f.id); const val = a ? (a[k] !== null && a[k] !== '' && a[k] !== undefined ? Number(a[k]) : a['muestra' + k.charAt(0).toUpperCase() + k.slice(1)]) : null; return val === null || val === undefined ? null : val * f.pct / 100; }); return v2.every(x => x !== null) ? Math.round(sum(v2, x => x) * 10) / 10 : null; });
+        const tex = cx.every(x => x !== null) ? texturaUSDA(cx[0], cx[1], cx[2]) : '';
+        const d = { sector: $('#xSec', mm).value, nombre: $('#xNom', mm).value, tipo: 'Mezcla', componentes: filas, toneladas: num($('#xT', mm).value) || 0, calidad: tex || 'Mezcla', arcilla: tex ? cx[0] : '', limo: tex ? cx[1] : '', arena: tex ? Math.round((100 - cx[0] - cx[1]) * 10) / 10 : '' };
         try { await escribir('guardarAcopio', d, 'Mezcla'); toast('Mezcla registrada: se descontaron las paladas de cada acopio', 'ok', 6000); vAcopios('plano'); return true; } catch (e) { toast(e.message, 'bad', 7000); return false; }
       }
     }

@@ -284,6 +284,7 @@ const TIPS_CFG = {
   rPlaya: 'Estado de la playa de molienda: todos los días, con la variación de 7 días y la proyección con el pronóstico.',
   rSemanal: 'Informe semanal: playa y molienda de los últimos 7 días.',
   rMensual: 'Informe mensual: playa y molienda del mes anterior.',
+  rChoferes: 'Desempeño de camioneros, semanal y mensual: ranking, viajes, toneladas, tickets y malas prácticas.',
   rAlertas: 'Advertencias: informes retenidos por datos incompletos y ajustes que esperan autorización.',
   rol: 'Administrador: todo · Abastecimiento: cantera, gasoil, viajes, balanza y calidad enviada · Molienda: molienda, silo, acopios, calidad recibida y ajustes de stock.',
   pin: 'Escribí un PIN nuevo de 4 a 8 números para cambiarlo; vacío lo deja como está.',
@@ -305,8 +306,8 @@ const DEF_CONFIG = {
   Responsables: { t: 'Responsables', c: [['nombre', 'Nombre'], ['activo', 'Activo', 'bool']], orig: 'RESPONSABLE' },
   Usuarios: { t: 'Usuarios', c: [['nombre', 'Usuario'], ['rol', 'Rol', 'sel', ['abastecimiento', 'molienda', 'admin'], ROL_TXT], ['activo', 'Activo', 'bool'], ['pin', 'Nuevo PIN', 'pin']] },
   Camiones: { t: 'Camiones', c: [['dominio', 'Dominio'], ['paladas', 'Paladas por viaje'], ['observaciones', 'Observaciones'], ['activo', 'Activo', 'bool']] },
-  Correos: { t: 'Correos', grupos: [['Destinatario', 4], ['Al cargar datos', 7], ['Programados', 4], ['Avisos', 1]], c: [['nombre', 'Nombre'], ['email', 'Email'], ['tipo', 'Tipo', 'sel', ['PARA', 'CC', 'CCO']], ['activo', 'Activo', 'bool'], ['rJornada', 'Cantera', 'bool'], ['rViajes', 'Viajes', 'bool'], ['rBalanza', 'Balanza', 'bool'],
-    ['rGasoil', 'Gasoil', 'bool'], ['rCalidad', 'Calidad', 'bool'], ['rMolienda', 'Molienda', 'bool'], ['rCubicacion', 'Ajuste de stock', 'bool'], ['rDiario', 'Resumen diario', 'bool'], ['rPlaya', 'Estado de playa', 'bool'], ['rSemanal', 'Semanal', 'bool'], ['rMensual', 'Mensual', 'bool'], ['rAlertas', 'Advertencias', 'bool']] },
+  Correos: { t: 'Correos', grupos: [['Destinatario', 4], ['Al cargar datos', 7], ['Programados', 5], ['Avisos', 1]], c: [['nombre', 'Nombre'], ['email', 'Email'], ['tipo', 'Tipo', 'sel', ['PARA', 'CC', 'CCO']], ['activo', 'Activo', 'bool'], ['rJornada', 'Cantera', 'bool'], ['rViajes', 'Viajes', 'bool'], ['rBalanza', 'Balanza', 'bool'],
+    ['rGasoil', 'Gasoil', 'bool'], ['rCalidad', 'Calidad', 'bool'], ['rMolienda', 'Molienda', 'bool'], ['rCubicacion', 'Ajuste de stock', 'bool'], ['rDiario', 'Resumen diario', 'bool'], ['rPlaya', 'Estado de playa', 'bool'], ['rSemanal', 'Semanal', 'bool'], ['rMensual', 'Mensual', 'bool'], ['rChoferes', 'Camioneros', 'bool'], ['rAlertas', 'Advertencias', 'bool']] },
   Informes: { t: 'Informes', c: [['nombre', 'Informe', 'ro'], ['automatico', 'Envío automático', 'bool'], ['pdf', 'Adjuntar PDF', 'bool'], ['descripcion', 'Qué contiene', 'ro']], fijo: true },
   Parametros: { t: 'Parámetros', c: [['clave', 'Clave', 'ro'], ['valor', 'Valor'], ['descripcion', 'Descripción', 'ro']], fijo: true }
 };
@@ -401,14 +402,19 @@ function pintarCorreosCfg(filas, def, repintar) {
   cc.onclick = e => { const b = e.target.closest('button[data-x]'); if (b) { filas.splice(Number(b.dataset.x), 1); repintar(); } };
 }
 
+const PERIODO_INF = { semanal: 'semana', choferesSemanal: 'semana', mensual: 'mes', choferesMensual: 'mes' };
+const DIAS_SEM = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados', 'domingos'];
+
 function pintarInformesCfg(filas) {
   const ayer = addDias(hoy(), -1);
   $('#infCards').innerHTML = filas.map((f, i) => '<div class="inf-card"><div class="row" style="justify-content:space-between;align-items:flex-start;gap:12px"><div><h4>' + esc(f.nombre) + '</h4><p class="sub">' + esc(f.descripcion) + '</p></div>' +
     '<button class="btn sm" data-prev="' + esc(f.clave) + '">' + ICON.correo + 'Vista previa</button></div><div class="row" style="gap:18px;margin-top:8px">' +
     '<label class="chk" title="' + esc(TIPS_CFG.automatico) + '"><span class="switch"><input type="checkbox" data-i="' + i + '" data-c="automatico"' + (f.automatico ? ' checked' : '') + '><span></span></span>Envío automático</label>' +
-    '<label class="chk" title="' + esc(TIPS_CFG.pdf) + '"><span class="switch"><input type="checkbox" data-i="' + i + '" data-c="pdf"' + (f.pdf ? ' checked' : '') + '><span></span></span>Adjuntar PDF</label></div></div>').join('');
-  $('#infCards').onchange = e => { const el = e.target; if (el.dataset.c) filas[Number(el.dataset.i)][el.dataset.c] = el.checked; };
-  $('#infCards').onclick = e => { const b = e.target.closest('[data-prev]'); if (b) abrirInforme(b.dataset.prev, { fecha: ayer }); };
+    '<label class="chk" title="' + esc(TIPS_CFG.pdf) + '"><span class="switch"><input type="checkbox" data-i="' + i + '" data-c="pdf"' + (f.pdf ? ' checked' : '') + '><span></span></span>Adjuntar PDF</label>' +
+    (PERIODO_INF[f.clave] === 'semana' ? '<label class="chk inf-dia">📅 Se envía los <select data-i="' + i + '" data-c="dia">' + DIAS_SEM.map((d, k) => k ? '<option value="' + k + '"' + (Number(f.dia || par('INFORME_SEMANAL_DIA', 1)) === k ? ' selected' : '') + '>' + d + '</option>' : '').join('') + '</select> con los 7 días anteriores</label>' : '') +
+    (PERIODO_INF[f.clave] === 'mes' ? '<span class="tag t-info inf-dia">📅 Se envía siempre el 1.º de cada mes con el mes anterior completo</span>' : '') + '</div></div>').join('');
+  $('#infCards').onchange = e => { const el = e.target; if (el.dataset.c) filas[Number(el.dataset.i)][el.dataset.c] = el.dataset.c === 'dia' ? Number(el.value) : el.checked; };
+  $('#infCards').onclick = e => { const b = e.target.closest('[data-prev]'); if (b) abrirInforme(b.dataset.prev, { fecha: PERIODO_INF[b.dataset.prev] === 'mes' ? addDias(hoy().slice(0, 8) + '01', -1) : ayer }); };
 }
 
 async function probarIAUI() {
