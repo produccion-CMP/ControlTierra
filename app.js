@@ -412,7 +412,7 @@ function pintarInformesCfg(filas) {
     '<label class="chk" title="' + esc(TIPS_CFG.automatico) + '"><span class="switch"><input type="checkbox" data-i="' + i + '" data-c="automatico"' + (f.automatico ? ' checked' : '') + '><span></span></span>Envío automático</label>' +
     '<label class="chk" title="' + esc(TIPS_CFG.pdf) + '"><span class="switch"><input type="checkbox" data-i="' + i + '" data-c="pdf"' + (f.pdf ? ' checked' : '') + '><span></span></span>Adjuntar PDF</label>' +
     (PERIODO_INF[f.clave] === 'semana' ? '<label class="chk inf-dia">📅 Se envía los <select data-i="' + i + '" data-c="dia">' + DIAS_SEM.map((d, k) => k ? '<option value="' + k + '"' + (Number(f.dia || par('INFORME_SEMANAL_DIA', 1)) === k ? ' selected' : '') + '>' + d + '</option>' : '').join('') + '</select> con los 7 días anteriores</label>' : '') +
-    (PERIODO_INF[f.clave] === 'mes' ? '<span class="tag t-info inf-dia">📅 Se envía siempre el 1.º de cada mes con el mes anterior completo</span>' : '') + '</div></div>').join('');
+    (PERIODO_INF[f.clave] === 'mes' ? '<span class="tag t-info inf-dia">📅 Se envía el ' + (num(par('INFORME_MENSUAL_HABIL', 2)) || 2) + '.º día hábil de cada mes (lunes a viernes sin feriados) con el mes anterior completo</span>' : '') + '</div></div>').join('');
   $('#infCards').onchange = e => { const el = e.target; if (el.dataset.c) filas[Number(el.dataset.i)][el.dataset.c] = el.dataset.c === 'dia' ? Number(el.value) : el.checked; };
   $('#infCards').onclick = e => { const b = e.target.closest('[data-prev]'); if (b) abrirInforme(b.dataset.prev, { fecha: PERIODO_INF[b.dataset.prev] === 'mes' ? addDias(hoy().slice(0, 8) + '01', -1) : ayer }); };
 }
