@@ -452,3 +452,15 @@ Pestaña nueva en Acopios → «Reparto de la playa». La usan el rol molienda y
 - **Cargar → Ajuste de stock**: el admin tiene ✏️ en cada ajuste registrado (lugar y tipo como lista).
 - Backend: `adminHojas`, `adminLeer`, `adminFila` (roles admin, con lock).
 
+## v21 · Informes por correo, personalización, configuración y pantallas más livianas
+- **Informes por correo**: los estilos se pasan a cada elemento (CSS en línea) al generar el informe. Gmail, Outlook, el celular y los reenvíos ya no pierden el formato. En el `<style>` queda solo el ajuste para celular. Tablas con clases propias (sin selectores anidados). El mensual queda por debajo de los 102 KB, el límite a partir del cual Gmail recorta el mensaje.
+- **Personalizar cada informe** (Configuración → Informes → ✏️ Personalizar contenido):
+  - título propio (también se usa en el asunto) y mensaje al inicio;
+  - elegir qué bloques aparecen (resumen rápido, control de datos, botón, tarjetas, gráficos y tablas de cada sección);
+  - la vista previa muestra los cambios antes de guardar.
+  - Columnas nuevas en Informes: `titulo`, `ocultos`, `intro`. Se crean solas.
+- **Configuración**: las pestañas se agrupan en Cantera · Viajes y camiones · Informes · Sistema.
+- **Visualizadores** (sin sesión): no ven ajustes de stock ni referencias a ellos.
+- **Responsable de molienda**: puede importar la balanza de ingreso.
+- **Pantallas cargadas**: Balance, Viajes, Cantera, Calidad y Combustible muestran primero los indicadores y gráficos principales. El resto queda en «📋 Ver información detallada», que recuerda si se dejó abierto. En Inicio, «Para revisar» muestra 4 observaciones.
+

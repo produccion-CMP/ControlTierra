@@ -290,7 +290,7 @@ const TIPS_CFG = {
   rMensual: 'Informe mensual: playa y molienda del mes anterior.',
   rChoferes: 'Desempeño de camioneros, semanal y mensual: ranking, viajes, toneladas, tickets y malas prácticas.',
   rAlertas: 'Advertencias: informes retenidos por datos incompletos y ajustes que esperan autorización.',
-  rol: 'Administrador: todo · Abastecimiento: cantera, gasoil, viajes, balanza y calidad enviada · Molienda: molienda, silo, acopios, calidad recibida y ajustes de stock.',
+  rol: 'Administrador: todo · Abastecimiento: cantera, gasoil, viajes, balanza y calidad enviada · Molienda: molienda, silo, acopios, balanza de ingreso, calidad recibida y ajustes de stock.',
   pin: 'Escribí un PIN nuevo de 4 a 8 números para cambiarlo; vacío lo deja como está.',
   paladas: 'Paladas que carga ese camión por viaje. Se usa para estimar m³ y toneladas enviadas y para completar el ingreso cuando falta la balanza.',
   dominio: 'Patente del camión, igual que en la balanza.',
@@ -316,8 +316,17 @@ const DEF_CONFIG = {
   Parametros: { t: 'Parámetros', c: [['clave', 'Clave', 'ro'], ['valor', 'Valor'], ['descripcion', 'Descripción', 'ro']], fijo: true }
 };
 
+const GRUPOS_CFG = [
+  ['⛏️', 'Cantera', ['Maquinas', 'Operadores', 'CausasParada']],
+  ['🚛', 'Viajes y camiones', ['Choferes', 'Dominios', 'Camiones', 'Lugares', 'TiposViaje', 'Responsables']],
+  ['✉️', 'Informes', ['Informes', 'Correos']],
+  ['⚙️', 'Sistema', ['Usuarios', 'Parametros', 'Datos']]
+];
+
 function segConfig(hoja) {
-  segmento($('#segCfg'), Object.keys(DEF_CONFIG).map(k => [k, DEF_CONFIG[k].t]).concat([['Datos', '🗄️ Bases de datos']]), hoja, k => { location.hash = k === 'Datos' ? '#/datos' : '#/config/' + k; }, true);
+  const nom = k => k === 'Datos' ? 'Bases de datos' : DEF_CONFIG[k].t;
+  $('#segCfg').innerHTML = '<nav class="cfg-nav">' + GRUPOS_CFG.map(g => '<div class="cfg-g' + (g[2].indexOf(hoja) >= 0 ? ' on' : '') + '"><span class="cfg-gt">' + g[0] + ' ' + g[1] + '</span><div class="cfg-ps">' +
+    g[2].map(k => '<a class="cfg-p' + (k === hoja ? ' on' : '') + '" href="' + (k === 'Datos' ? '#/datos' : '#/config/' + k) + '">' + esc(nom(k)) + '</a>').join('') + '</div></div>').join('') + '</nav>';
 }
 
 async function vConfig(hoja) {
@@ -413,16 +422,51 @@ function pintarCorreosCfg(filas, def, repintar) {
 const PERIODO_INF = { semanal: 'semana', choferesSemanal: 'semana', mensual: 'mes', choferesMensual: 'mes' };
 const DIAS_SEM = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados', 'domingos'];
 
+function ocultosInf(f) {
+  return String(f.ocultos || '').split(',').map(x => x.trim()).filter(Boolean);
+}
+
 function pintarInformesCfg(filas) {
   const ayer = addDias(hoy(), -1);
-  $('#infCards').innerHTML = filas.map((f, i) => '<div class="inf-card"><div class="row" style="justify-content:space-between;align-items:flex-start;gap:12px"><div><h4>' + esc(f.nombre) + '</h4><p class="sub">' + esc(f.descripcion) + '</p></div>' +
-    '<button class="btn sm" data-prev="' + esc(f.clave) + '">' + ICON.correo + 'Vista previa</button></div><div class="row" style="gap:18px;margin-top:8px">' +
+  $('#infCards').innerHTML = filas.map((f, i) => {
+    const oc = ocultosInf(f);
+    const nOc = oc.length;
+    return '<div class="inf-card"><div class="row" style="justify-content:space-between;align-items:flex-start;gap:12px"><div><h4>' + esc(f.titulo || f.nombre) + (f.titulo ? ' <span class="sub">(' + esc(f.nombre) + ')</span>' : '') + '</h4><p class="sub">' + esc(f.descripcion) + '</p></div>' +
+    '<button class="btn sm" data-prev="' + i + '">' + ICON.correo + 'Vista previa</button></div><div class="row" style="gap:18px;margin-top:8px">' +
     '<label class="chk" title="' + esc(TIPS_CFG.automatico) + '"><span class="switch"><input type="checkbox" data-i="' + i + '" data-c="automatico"' + (f.automatico ? ' checked' : '') + '><span></span></span>Envío automático</label>' +
     '<label class="chk" title="' + esc(TIPS_CFG.pdf) + '"><span class="switch"><input type="checkbox" data-i="' + i + '" data-c="pdf"' + (f.pdf ? ' checked' : '') + '><span></span></span>Adjuntar PDF</label>' +
     (PERIODO_INF[f.clave] === 'semana' ? '<label class="chk inf-dia">📅 Se envía los <select data-i="' + i + '" data-c="dia">' + DIAS_SEM.map((d, k) => k ? '<option value="' + k + '"' + (Number(f.dia || par('INFORME_SEMANAL_DIA', 1)) === k ? ' selected' : '') + '>' + d + '</option>' : '').join('') + '</select> con los 7 días anteriores</label>' : '') +
-    (PERIODO_INF[f.clave] === 'mes' ? '<span class="tag t-info inf-dia">📅 Se envía el ' + (num(par('INFORME_MENSUAL_HABIL', 2)) || 2) + '.º día hábil de cada mes (lunes a viernes sin feriados) con el mes anterior completo</span>' : '') + '</div></div>').join('');
-  $('#infCards').onchange = e => { const el = e.target; if (el.dataset.c) filas[Number(el.dataset.i)][el.dataset.c] = el.dataset.c === 'dia' ? Number(el.value) : el.checked; };
-  $('#infCards').onclick = e => { const b = e.target.closest('[data-prev]'); if (b) abrirInforme(b.dataset.prev, { fecha: PERIODO_INF[b.dataset.prev] === 'mes' ? addDias(hoy().slice(0, 8) + '01', -1) : ayer }); };
+    (PERIODO_INF[f.clave] === 'mes' ? '<span class="tag t-info inf-dia">📅 Se envía el ' + (num(par('INFORME_MENSUAL_HABIL', 2)) || 2) + '.º día hábil de cada mes (lunes a viernes sin feriados) con el mes anterior completo</span>' : '') + '</div>' +
+    '<details class="inf-pers"' + (f._abierto ? ' open' : '') + ' data-det="' + i + '"><summary>✏️ Personalizar contenido' + (nOc || f.titulo || f.intro ? ' <span class="tag t-warn">' + (nOc ? nOc + ' oculto' + (nOc > 1 ? 's' : '') : 'editado') + '</span>' : '') + '</summary>' +
+    '<div class="form" style="margin-top:10px"><label class="f">Título del informe y del asunto<input data-i="' + i + '" data-c="titulo" value="' + esc(f.titulo || '') + '" placeholder="' + esc(f.nombre) + '"></label>' +
+    '<label class="f full">Mensaje al inicio (opcional)<textarea data-i="' + i + '" data-c="intro" rows="2" placeholder="Ej.: Buenos días, les comparto el estado de la tierra.">' + esc(f.intro || '') + '</textarea></label></div>' +
+    '<p class="sub" style="margin:8px 0 4px">Marcá lo que querés que aparezca:</p>' +
+    (f.bloques || []).map(g => '<div class="cor-g"><span class="eyebrow">' + esc(g.g) + '</span><div class="cor-chips">' + g.items.map(b => '<label class="cor-chip' + (oc.indexOf(b[0]) < 0 ? ' on' : '') + '"><input type="checkbox" data-i="' + i + '" data-b="' + b[0] + '"' + (oc.indexOf(b[0]) < 0 ? ' checked' : '') + '>' + esc(b[1]) + '</label>').join('') + '</div></div>').join('') +
+    '<p class="sub" style="margin-top:8px">Los cambios se aplican al guardar. La vista previa ya los muestra.</p></details></div>';
+  }).join('');
+  const cards = $('#infCards');
+  const upd = e => {
+    const el = e.target;
+    const i = Number(el.dataset.i);
+    if (el.dataset.b) {
+      const oc = ocultosInf(filas[i]).filter(x => x !== el.dataset.b);
+      if (!el.checked) oc.push(el.dataset.b);
+      filas[i].ocultos = oc.join(',');
+      el.closest('.cor-chip').classList.toggle('on', el.checked);
+      return;
+    }
+    if (el.dataset.c) filas[i][el.dataset.c] = el.dataset.c === 'dia' ? Number(el.value) : el.type === 'checkbox' ? el.checked : el.value;
+  };
+  cards.onchange = upd;
+  cards.oninput = e => { if (e.target.dataset.c === 'titulo' || e.target.dataset.c === 'intro') upd(e); };
+  cards.ontoggle = null;
+  $$('details[data-det]', cards).forEach(d => { d.ontoggle = () => { filas[Number(d.dataset.det)]._abierto = d.open; }; });
+  cards.onclick = e => {
+    const b = e.target.closest('[data-prev]');
+    if (!b) return;
+    const f = filas[Number(b.dataset.prev)];
+    abrirInforme(f.clave, { fecha: PERIODO_INF[f.clave] === 'mes' ? addDias(hoy().slice(0, 8) + '01', -1) : ayer, titulo: f.titulo || '', intro: f.intro || '', ocultos: f.ocultos || '' });
+  };
 }
 
 async function probarIAUI() {
