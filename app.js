@@ -173,7 +173,11 @@ async function render() {
       else await vLiquidacion();
     } else if (v === 'config') {
       if (!S.ses || rolN(S.ses.rol) !== 'admin') app().innerHTML = '<div class="vista card empty">' + ICON.alerta + 'Solo administradores.</div>';
+      else if (p[1] === 'Datos') { location.hash = '#/datos'; }
       else await vConfig(p[1] || 'Maquinas');
+    } else if (v === 'datos') {
+      if (!S.ses || rolN(S.ses.rol) !== 'admin') app().innerHTML = '<div class="vista card empty">' + ICON.alerta + 'Solo administradores.</div>';
+      else await vDatos(p[1] ? decodeURIComponent(p[1]) : '');
     } else location.hash = '#/inicio';
   } catch (e) {
     console.error(e);
@@ -312,6 +316,10 @@ const DEF_CONFIG = {
   Parametros: { t: 'Parámetros', c: [['clave', 'Clave', 'ro'], ['valor', 'Valor'], ['descripcion', 'Descripción', 'ro']], fijo: true }
 };
 
+function segConfig(hoja) {
+  segmento($('#segCfg'), Object.keys(DEF_CONFIG).map(k => [k, DEF_CONFIG[k].t]).concat([['Datos', '🗄️ Bases de datos']]), hoja, k => { location.hash = k === 'Datos' ? '#/datos' : '#/config/' + k; }, true);
+}
+
 async function vConfig(hoja) {
   if (!DEF_CONFIG[hoja]) hoja = 'Maquinas';
   const ok = vivo();
@@ -337,7 +345,7 @@ async function vConfig(hoja) {
       pintar();
     } catch (e) { toast(e.message, 'bad'); }
   };
-  segmento($('#segCfg'), Object.keys(DEF_CONFIG).map(k => [k, DEF_CONFIG[k].t]), hoja, k => { location.hash = '#/config/' + k; }, true);
+  segConfig(hoja);
   const celda = (c, v, i) => {
     const a = 'data-i="' + i + '" data-c="' + c[0] + '"';
     if (c[2] === 'bool') return '<label class="switch"><input type="checkbox" ' + a + (v ? ' checked' : '') + '><span></span></label>';

@@ -1245,7 +1245,7 @@ function edAjustes(volver) {
     '<div id="aRes"></div>' +
     '<div class="row mt"><button class="btn pri" id="aG">' + ICON.guardar + 'Guardar ajuste</button></div>' +
     '<details class="mt calc-pilas"><summary><b>¿No sabés los m³? Calculalos midiendo las pilas</b></summary><div class="mt"><div class="row"><button class="btn sm" id="cAdd">+ Agregar pila</button><button class="btn ghost sm" id="bGuiaCub">' + ICON.infoI + 'Cómo medir</button></div><div id="cPilas" class="mt"></div><div class="calc-res" id="cRes"></div></div></details></div>' +
-    '<div class="col" style="gap:16px"><div id="aSol"></div><div class="card"><div class="card-h"><div class="t"><h3>Registrados</h3></div></div>' + tabla([[r => fCorta(r.fecha), 'Fecha'], ['nodo', 'Lugar'], [r => TIPO_AJUSTE_TXT[r.tipo] || r.tipo, 'Qué'], [r => nf(r.toneladas, 0), 't', 'n'], [r => nf(r.toneladas / (densNodo[r.nodo] || bal.densidad), 0), '≈ m³', 'n'], [r => esc(r.observaciones), 'Motivo', 'wrap'], [r => esAdmin() ? '<button class="btn icon sm dan" data-ax="' + r.id + '">' + ICON.borrar + '</button>' : '', '']], lista) + '</div></div></div></div>';
+    '<div class="col" style="gap:16px"><div id="aSol"></div><div class="card"><div class="card-h"><div class="t"><h3>Registrados</h3></div></div>' + tabla([[r => esAdmin() ? '<div class="row" style="gap:4px;flex-wrap:nowrap"><button class="btn icon sm" data-aed="' + r.id + '" title="Corregir">✏️</button><button class="btn icon sm dan" data-ax="' + r.id + '" title="Eliminar">' + ICON.borrar + '</button></div>' : '', ''], [r => fCorta(r.fecha), 'Fecha'], ['nodo', 'Lugar'], [r => TIPO_AJUSTE_TXT[r.tipo] || r.tipo, 'Qué'], [r => nf(r.toneladas, 0), 't', 'n'], [r => nf(r.toneladas / (densNodo[r.nodo] || bal.densidad), 0), '≈ m³', 'n'], [r => esc(r.observaciones), 'Motivo', 'wrap']], lista) + '</div></div></div></div>';
   misSolicitudes($('#aSol'), 'ajusteStock');
   $('#bGuiaCub').onclick = abrirAyuda;
   enlazarInformes(app());
@@ -1359,6 +1359,8 @@ function edAjustes(volver) {
     }
   };
   app().onclick = async e => {
+    const be = e.target.closest('button[data-aed]');
+    if (be) { editarPorIdAdmin('Ajustes', be.dataset.aed, async () => { await cargarResumen(true); edAjustes(volver); }); return; }
     const b = e.target.closest('button[data-ax]');
     if (!b || !(await confirmar('Eliminar ajuste', '¿Eliminar este ajuste de stock?', 'Eliminar', true))) return;
     try {

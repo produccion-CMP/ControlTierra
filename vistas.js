@@ -219,7 +219,12 @@ async function vInicio() {
     nodo('molienda', 'molienda', 'Molienda', vn(b.consumo) + '<small> t</small>', ln('≈ ' + nf(b.molPal * m3p) + ' m³') + ln(nf(b.molPal) + ' paladas', 'al cajón') + '<span class="nl sec">' + nf(b.fMol, 2) + ' t/palada · ' + nf(molT) + ' t por balanza</span>', '#/tablero/balance') +
     nodo('silo', 'silo', 'Silo', ss.v, ln(ss.m3) + delta(dS, ultimo ? 'en el día' : 'en ' + dias + ' días') + '<span class="nl io"><i class="in">+ ' + nf(b.consumo) + ' t entró</i><i class="out">− ' + nf(b.siloOut, 0) + ' t salió</i></span>' + (b.diasSilo !== null ? '<span class="nl sec">≈ ' + nf(b.diasSilo, 1) + ' días de producción</span>' : '') + '<span class="nl sec">' + nf(molT) + ' t por balanza dinámica · ' + nf(b.siloPal) + ' pal. a producción</span>', '#/tablero/balance', ilusStock('silo', pctS, b.stockSilo === null)) +
     '</div><div class="flujo-leg"><span class="nbadge mv">Movimiento</span><span>tierra que pasó por esa etapa en el período (se suma)</span><span class="nbadge st">Stock</span><span>tierra que hay al ' + alF + ' (es una foto, no se suma)</span><span class="pt"></span><span>sentido del flujo</span></div></div>' + '<div id="proyPlaya"></div>' +
-    '<div class="grid ' + (S.ses ? 'g-21' : 'g2') + '" style="align-items:start">' + (S.ses ? '<div class="card"><div class="card-h"><div class="t"><h3>Para revisar</h3><div class="sub">Controles cruzados de los últimos 14 días</div></div><a class="btn sm" href="#/revision/controles">Ver todos</a></div><div class="alertas" id="alertas"><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div></div></div>' : '') +
+    (!S.ses ? '<div class="grid g2 stagger" style="align-items:stretch">' + (cis ? gaugeCisterna(cis) : '') +
+      '<div class="card spark"><div class="row"><span class="eyebrow">Stock en playa</span><span class="right tag t-mut">t' + (b.inicioPlaya ? ' · desde ' + fCorta(b.inicioPlaya) : '') + '</span></div><div class="chart"><canvas id="spSto"></canvas>' + (b.inicioPlaya ? '' : '<div class="chart-vacio">Sin stock inicial de playa.</div>') + '</div></div></div>' +
+      '<div class="grid g2 stagger">' +
+      '<div class="card spark"><div class="row"><span class="eyebrow">Ingreso diario</span><span class="right tag t-mut">t</span></div><div class="chart"><canvas id="spIng"></canvas></div></div>' +
+      '<div class="card spark"><div class="row"><span class="eyebrow">Viajes por día</span><span class="right tag t-mut">a planta</span></div><div class="chart"><canvas id="spVia"></canvas></div></div></div></div>' : '') + (!S.ses ? '' :
+    '<div class="grid g-21" style="align-items:start">' + (S.ses ? '<div class="card"><div class="card-h"><div class="t"><h3>Para revisar</h3><div class="sub">Controles cruzados de los últimos 14 días</div></div><a class="btn sm" href="#/revision/controles">Ver todos</a></div><div class="alertas" id="alertas"><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div></div></div>' : '') +
     '<div class="col" style="gap:16px"><div class="card"><div class="card-h"><div class="t"><h3>Estado de la carga</h3><div class="sub">Último día con datos por fuente</div></div></div><div class="estado">' +
     fuentes.map(f => {
       const sm = semaforoDias((R.ultimo || {})[f[0]]);
@@ -230,7 +235,7 @@ async function vInicio() {
     '<div class="card spark"><div class="row"><span class="eyebrow">Ingreso diario</span><span class="right tag t-mut">t</span></div><div class="chart"><canvas id="spIng"></canvas></div></div>' +
     '<div class="card spark"><div class="row"><span class="eyebrow">Viajes por día</span><span class="right tag t-mut">a planta</span></div><div class="chart"><canvas id="spVia"></canvas></div></div>' +
     '<div class="card spark"><div class="row"><span class="eyebrow">Stock en playa</span><span class="right tag t-mut">t' + (b.inicioPlaya ? ' · desde ' + fCorta(b.inicioPlaya) : '') + '</span></div><div class="chart"><canvas id="spSto"></canvas>' + (b.inicioPlaya ? '' : '<div class="chart-vacio">Cargá un stock inicial o un ajuste de stock de playa para ver la evolución.</div>') + '</div></div>' +
-    '</div></div>';
+    '</div></div>');
   segmento($('#segDias'), opDias, dSel, selDias, true);
   stagger(app());
   contar(app());
@@ -252,6 +257,7 @@ async function vInicio() {
   grafico('spIng', 'bar', L, [{ label: 'Ingreso t', data: serie.map(s => s.ingreso), backgroundColor: color(1) }], spark, i => { location.hash = '#/dia/' + serie[i].fecha; });
   const dv = (R.diario || []).filter(d => serie.length && d.fecha >= serie[0].fecha && d.fecha <= hasta);
   grafico('spVia', 'bar', dv.map(d => fCorta(d.fecha)), [{ label: 'Viajes', data: dv.map(d => d.viajes), backgroundColor: color(2) }], spark, i => { location.hash = '#/dia/' + dv[i].fecha; });
+  [['spIng', sum(serie, x => x.ingreso || 0)], ['spVia', sum(dv, x => x.viajes || 0)]].forEach(x => { const cv = $('#' + x[0]); if (cv && !x[1] && !$('.chart-vacio', cv.parentNode)) cv.insertAdjacentHTML('afterend', '<div class="chart-vacio">Sin datos en el período.</div>'); });
   if (bs.inicioPlaya) grafico('spSto', 'line', L, [{ label: 'Stock playa t', data: serie.map(s => s.stockPlaya), borderColor: color(3), backgroundColor: color(3), fill: false, spanGaps: false }], mezclar(spark, { scales: { y: { beginAtZero: true, min: 0 } } }));
   try {
     const r14 = await p14;
@@ -428,9 +434,9 @@ function tabBalance(c) {
   ]) + resumenTablero(b) +
 tarjetaCalibracion(b) + '<div class="grid g2">' + caja('chPlaya', 'Playa: ingreso y consumo diario', 'Arriba lo que entra, abajo lo que sale. El rombo es el saldo del día: <b class="verde">verde</b> la playa creció, <b class="rojo">rojo</b> bajó.') + caja('chSilo', 'Silo: entrada y extracción diaria', 'Entrada = consumo de molienda. El rombo es el saldo del día: <b class="verde">verde</b> el silo creció, <b class="rojo">rojo</b> bajó.') + '</div>' +
     caja('chStock', 'Evolución de stocks', 'Toneladas al cierre de cada día', 'lg') +
-    '<div class="card"><div class="card-h"><div class="t"><h3>Ajustes de stock: medido vs calculado</h3><div class="sub">Tolerancia ±' + par('TOLERANCIA_INVENTARIO', 10) + ' %</div></div></div>' +
+    (!S.ses ? '' : '<div class="card"><div class="card-h"><div class="t"><h3>Ajustes de stock: medido vs calculado</h3><div class="sub">Tolerancia ±' + par('TOLERANCIA_INVENTARIO', 10) + ' %</div></div></div>' +
     tabla([[x => fMedia(x.fecha), 'Fecha'], ['nodo', 'Nodo'], [x => nf(x.teorico, 0), 'Calculado t', 'n'], [x => nf(x.medido, 0), 'Medido t', 'n'], [x => nf(x.medido / b.densidad, 0), '≈ m³', 'n'], [x => (x.dif >= 0 ? '+' : '') + nf(x.dif, 0), 'Diferencia t', 'n'],
-      [x => '<span class="tag ' + (Math.abs(x.pct) * 100 > (num(par('TOLERANCIA_INVENTARIO', 10)) || 10) ? 't-bad' : 't-ok') + '">' + nf(x.pct * 100, 1) + ' %</span>', '%', 'n'], [x => esc(x.obs), 'Método', 'wrap']], cub, { vacio: 'Con dos o más ajustes de stock se mide la diferencia.' }) + '</div>' +
+      [x => '<span class="tag ' + (Math.abs(x.pct) * 100 > (num(par('TOLERANCIA_INVENTARIO', 10)) || 10) ? 't-bad' : 't-ok') + '">' + nf(x.pct * 100, 1) + ' %</span>', '%', 'n'], [x => esc(x.obs), 'Método', 'wrap']], cub, { vacio: 'Con dos o más ajustes de stock se mide la diferencia.' }) + '</div>') +
     '<div class="card"><div class="card-h"><div class="t"><h3>Detalle diario</h3></div><button class="btn sm" id="csvBal">' + ICON.descargar + 'CSV</button></div>' +
     tabla([[r => '<a href="#/dia/' + r.fecha + '">' + fMedia(r.fecha) + '</a>', 'Fecha'], [r => nf(r.ingreso, 1), 'Ingreso t', 'n'], [r => nf(r.consumo, 1) + (r.estimado ? ' *' : ''), 'Consumo t', 'n'], [r => nf(r.consumo / b.densidad, 0), '≈ m³', 'n'], [r => r.stockPlaya === null ? '<span class="tag t-warn">sin dato</span>' : nf(r.stockPlaya, 0) + (r.estPlaya === 'rec' ? ' ↺' : ''), 'Stock playa t', 'n'],
       [r => nf(r.siloOut, 1), 'Extr. silo t', 'n'], [r => r.stockSilo === null ? '–' : nf(r.stockSilo, 0), 'Stock silo t', 'n'], [r => nf(r.tCamion, 1), 't/camión', 'n'], [r => nf(r.fMol, 2), 't/palada mol.', 'n']],
@@ -526,26 +532,25 @@ function tabViajes(c) {
   ]) + '<div class="kpis stagger">' +
     kpi('Cargas completas a camiones en cantera', vn(palas), nf(internos) + ' viajes internos aparte', '', 'Declarado en la jornada de cantera.') +
     kpi('Viajes a planta', vn(k.viajes.length), nf(k.viajesTot.length) + ' viajes totales', 'kacc') +
-    kpi('Diferencia cantera − viajes', vn(palas - k.viajes.length), palas ? nf((palas - k.viajes.length) / palas * 100, 0) + '% de lo declarado' : '', Math.abs(palas - k.viajes.length) > palas * 0.1 ? 'warn' : 'ok', 'Si es alta, faltan comprobantes por cargar o hay viajes internos declarados como a planta.') +
+    (!S.ses ? '' : kpi('Diferencia cantera − viajes', vn(palas - k.viajes.length), palas ? nf((palas - k.viajes.length) / palas * 100, 0) + '% de lo declarado' : '', Math.abs(palas - k.viajes.length) > palas * 0.1 ? 'warn' : 'ok', 'Si es alta, faltan comprobantes por cargar o hay viajes internos declarados como a planta.')) +
     kpi('Tickets de balanza', vn(k.pes.length), nf(netoT, 0) + ' t netas') +
-    kpi('Viajes con ticket', pctMatch === null ? '–' : vn(pctMatch) + '<small>%</small>', nf(k.pares.length) + ' cruzados', pctMatch !== null && pctMatch < 90 ? 'bad' : 'ok', 'Porcentaje de viajes a planta que se encontraron en la balanza.') +
+    (!S.ses ? kpi('t por viaje', vn(k.pes.length ? netoT / k.pes.length : null, 1) + '<small>t</small>', 'según balanza') : kpi('Viajes con ticket', pctMatch === null ? '–' : vn(pctMatch) + '<small>%</small>', nf(k.pares.length) + ' cruzados', pctMatch !== null && pctMatch < 90 ? 'bad' : 'ok', 'Porcentaje de viajes a planta que se encontraron en la balanza.')) +
     kpi('Ciclo mediano', vn(cicMed) + '<small>min</small>', 'carga → descarga') +
     '</div>' + seccionDominios(R, k) + caja('chConc', 'Conciliación diaria', 'Cargas completas a camiones en cantera · viajes cargados · tickets de balanza. Tocá un día para el detalle.', 'lg') +
     '<div class="grid g2">' + caja('chChof', 'Viajes por chofer', 'Período seleccionado') + caja('chOri', 'Viajes por origen', 'Incluye todos los destinos') + '</div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Choferes</h3><div class="sub">Viajes a planta, toneladas cruzadas con balanza y ciclo mediano</div></div></div>' +
-    tabla([['n', 'Chofer'], ['viajes', 'Viajes', 'n'], ['dias', 'Días', 'n'], [r => nf(r.viajes / (r.dias || 1), 1), 'Viajes/día', 'n'], [r => nf(r.t, 1), 't (con ticket)', 'n'], [r => nf(r.prom, 1), 't/viaje', 'n'], [r => nf(r.ciclo, 0), 'Ciclo min', 'n'],
-      [r => r.sinT ? '<span class="tag t-warn">' + r.sinT + '</span>' : '<span class="tag t-ok">0</span>', 'Sin ticket']], chof, { max: true }) + '</div>' +
+    tabla([['n', 'Chofer'], ['viajes', 'Viajes', 'n'], ['dias', 'Días', 'n'], [r => nf(r.viajes / (r.dias || 1), 1), 'Viajes/día', 'n'], [r => nf(r.t, 1), 't (con ticket)', 'n'], [r => nf(r.prom, 1), 't/viaje', 'n'], [r => nf(r.ciclo, 0), 'Ciclo min', 'n']].concat(S.ses ? [[r => r.sinT ? '<span class="tag t-warn">' + r.sinT + '</span>' : '<span class="tag t-ok">0</span>', 'Sin ticket']] : []), chof, { max: true }) + '</div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Conciliación por día</h3></div><button class="btn sm" id="csvConc">' + ICON.descargar + 'CSV</button></div>' +
     tabla([[r => '<a href="#/dia/' + r.fecha + '">' + fMedia(r.fecha) + '</a>', 'Fecha'], ['unid', 'Declarados en cantera', 'n'], ['internos', 'Internos', 'n'], ['viajes', 'Viajes planta', 'n'], ['tickets', 'Tickets', 'n'],
-      ['pares', 'Cruzados', 'n'], [r => nf(r.neto, 1), 't netas', 'n'],
-      [r => (Math.abs(r.unid - r.viajes) > Math.max(2, r.unid * 0.1) || (r.tickets && r.viajes !== r.tickets)) ? '<span class="tag t-warn">revisar</span>' : '<span class="tag t-ok">ok</span>', 'Estado']],
-    k.diario.slice().reverse(), { max: true }) + '</div>' +
+      ['pares', 'Cruzados', 'n'], [r => nf(r.neto, 1), 't netas', 'n']].concat(S.ses ? [
+      [r => (Math.abs(r.unid - r.viajes) > Math.max(2, r.unid * 0.1) || (r.tickets && r.viajes !== r.tickets)) ? '<span class="tag t-warn">revisar</span>' : '<span class="tag t-ok">ok</span>', 'Estado']] : []),
+    k.diario.slice().reverse(), { max: true }) + '</div>' + (!S.ses ? '' :
     '<div class="grid g2"><div class="card"><div class="card-h"><div class="t"><h3>Viajes sin ticket</h3></div><button class="btn sm" id="csvST">' + ICON.descargar + 'CSV</button></div>' +
     (k.pes.length ? tabla([[r => fCorta(r.fecha), 'Fecha'], ['comprobante', 'Comp.'], ['horaCarga', 'Carga'], ['horaDescarga', 'Desc.'], ['chofer', 'Chofer'], ['dominio', 'Dominio']], k.sinTicket, { max: true, vacio: 'Todos los viajes tienen ticket.' }) : vacio('Sin pesajes importados en el período.')) +
     '</div><div class="card"><div class="card-h"><div class="t"><h3>Tickets sin viaje</h3></div><button class="btn sm" id="csvSV">' + ICON.descargar + 'CSV</button></div>' +
     tabla([[r => fCorta(r.fecha), 'Fecha'], ['hora', 'Hora'], ['ticket', 'Ticket'], ['dominio', 'Dominio'], [r => nf(r.neto, 2), 'Neto t', 'n'], ['producto', 'Producto']], k.sinViaje, { max: true, vacio: 'Todos los tickets tienen viaje.' }) +
     '</div></div>' + (k.atipicos.length ? '<div class="card"><div class="card-h"><div class="t"><h3>Netos fuera de lo normal</h3><div class="sub">Fuera de 1,5 × rango intercuartil del mismo dominio</div></div></div>' +
-      tabla([[r => fCorta(r.fecha), 'Fecha'], ['hora', 'Hora'], ['ticket', 'Ticket'], ['dominio', 'Dominio'], [r => nf(r.neto, 2), 'Neto t', 'n'], [r => nf(r.mediana, 2), 'Mediana dominio', 'n']], k.atipicos, { max: true }) + '</div>' : '');
+      tabla([[r => fCorta(r.fecha), 'Fecha'], ['hora', 'Hora'], ['ticket', 'Ticket'], ['dominio', 'Dominio'], [r => nf(r.neto, 2), 'Neto t', 'n'], [r => nf(r.mediana, 2), 'Mediana dominio', 'n']], k.atipicos, { max: true }) + '</div>' : ''));
   const L = k.diario.map(d => fCorta(d.fecha));
   grafico('chConc', 'bar', L, [
     { label: 'Declarados en cantera', data: k.diario.map(d => d.unid), backgroundColor: color(1) },
@@ -557,8 +562,8 @@ function tabViajes(c) {
   grafico('chOri', 'doughnut', origenes, [{ data: origenes.map(o => porOrigen[o].length), backgroundColor: origenes.map((_, i) => color(i % 8 + 1)), borderColor: cssVar('--chart-surface'), borderWidth: 2 }]);
   if ($('#csvDom')) $('#csvDom').onclick = () => csv('dominios_' + S.desde + '_' + S.hasta, [['dom', 'Dominio'], ['chofer', 'Chofer principal'], ['viajes', 'Viajes'], ['dias', 'Dias'], ['tickets', 'Tickets'], ['tTot', 't pesadas'], ['netoMed', 't por viaje mediana'], ['netoMin', 'Min'], ['netoMax', 'Max'], ['ciclo', 'Ciclo min'], ['paladas', 'Paladas'], ['dens', 't/m3'], ['pctTk', '% con ticket'], ['sinT', 'Sin ticket'], ['atip', 'Atipicos'], ['sinSalida', 'Sin salida'], ['manual', 'Manual'], ['rech', 'Rechazos'], ['conH', 'Con horometro'], ['conTk', 'Con ticket salida']], statsDominios(R, k));
   $('#csvConc').onclick = () => csv('conciliacion_' + S.desde + '_' + S.hasta, [['fecha', 'Fecha'], ['unid', 'Declarados en cantera'], ['internos', 'Internos'], ['viajesTot', 'Viajes totales'], ['viajes', 'Viajes planta'], ['tickets', 'Tickets'], ['pares', 'Cruzados'], ['neto', 't netas']], k.diario);
-  $('#csvST').onclick = () => csv('viajes_sin_ticket', [['fecha', 'Fecha'], ['comprobante', 'Comprobante'], ['nroViaje', 'N viaje'], ['horaCarga', 'Hora carga'], ['horaDescarga', 'Hora descarga'], ['chofer', 'Chofer'], ['dominio', 'Dominio'], ['origen', 'Origen'], ['destino', 'Destino']], k.sinTicket);
-  $('#csvSV').onclick = () => csv('tickets_sin_viaje', [['fecha', 'Fecha'], ['hora', 'Hora'], ['ticket', 'Ticket'], ['dominio', 'Dominio'], ['neto', 'Neto t'], ['producto', 'Producto']], k.sinViaje);
+  if ($('#csvST')) $('#csvST').onclick = () => csv('viajes_sin_ticket', [['fecha', 'Fecha'], ['comprobante', 'Comprobante'], ['nroViaje', 'N viaje'], ['horaCarga', 'Hora carga'], ['horaDescarga', 'Hora descarga'], ['chofer', 'Chofer'], ['dominio', 'Dominio'], ['origen', 'Origen'], ['destino', 'Destino']], k.sinTicket);
+  if ($('#csvSV')) $('#csvSV').onclick = () => csv('tickets_sin_viaje', [['fecha', 'Fecha'], ['hora', 'Hora'], ['ticket', 'Ticket'], ['dominio', 'Dominio'], ['neto', 'Neto t'], ['producto', 'Producto']], k.sinViaje);
 }
 
 function statsDominios(R, k) {
@@ -603,13 +608,13 @@ function seccionDominios(R, k) {
     if (x.manual) al.push(['warn', x.manual + ' manual']);
     if (x.rech) al.push(['bad', x.rech + ' rechazo' + (x.rech > 1 ? 's' : '')]);
     const pctTk = x.pctTk === null ? null : Math.round(x.pctTk);
-    return '<div class="dom-card' + (al.some(a => a[0] === 'bad') ? ' bad' : al.length ? ' warn' : '') + '"><div class="dom-h"><span class="patente">' + esc(x.dom) + '</span><span class="sub" title="' + esc(x.chofer) + '">' + esc(x.chofer.split(' ')[0] || '—') + (x.nChoferes > 1 ? ' +' + (x.nChoferes - 1) : '') + '</span></div>' +
+    return '<div class="dom-card' + (!S.ses ? '' : al.some(a => a[0] === 'bad') ? ' bad' : al.length ? ' warn' : '') + '"><div class="dom-h"><span class="patente">' + esc(x.dom) + '</span><span class="sub" title="' + esc(x.chofer) + '">' + esc(x.chofer.split(' ')[0] || '—') + (x.nChoferes > 1 ? ' +' + (x.nChoferes - 1) : '') + '</span></div>' +
       '<div class="dom-v"><b>' + nf(x.viajes) + '</b><span>viajes · ' + nf(x.dias) + ' días · ' + nf(x.dias ? x.viajes / x.dias : 0, 1) + '/día</span></div>' +
       '<div class="dom-g"><div><small>total t</small><b>' + nf(x.tTot, 0) + '</b></div><div><small>t/viaje</small><b>' + (x.netoMed === null ? '–' : nf(x.netoMed, 1)) + '</b></div>' +
       '<div><small>ciclo</small><b>' + (x.ciclo === null ? '–' : nf(x.ciclo, 0) + "'") + '</b></div><div><small>t/m³</small><b title="t/viaje ÷ (' + x.paladas + ' paladas × m³ de balde)">' + (x.dens === null ? '–' : nf(x.dens, 2)) + '</b></div></div>' +
       (x.netoMed !== null && x.netoMin !== null ? '<div class="dom-rango" title="mín ' + nf(x.netoMin, 1) + ' · mediana ' + nf(x.netoMed, 1) + ' · máx ' + nf(x.netoMax, 1) + ' t"><span style="left:' + (x.netoMin / (x.netoMax || 1) * 100) + '%;right:0"></span><i style="left:' + (x.netoMed / (x.netoMax || 1) * 100) + '%"></i></div>' : '') +
-      '<div class="dom-pie">' + (pctTk === null ? '' : '<span class="tag ' + (pctTk >= 95 ? 't-ok' : pctTk >= 80 ? 't-warn' : 't-bad') + '" title="Viajes cruzados con un pesaje, sobre los viajes de días con balanza importada">' + pctTk + ' % con ticket</span>') + al.map(a => '<span class="tag t-' + a[0] + '">' + a[1] + '</span>').join('') +
-      (x.viajes && (x.conH || x.conTk) ? '<span class="tag t-mut" title="Remitos con horómetro de pala / ticket de salida">⛏ ' + x.conH + ' · 🎫 ' + x.conTk + '</span>' : '') + '</div></div>';
+      '<div class="dom-pie">' + (!S.ses ? '' : (pctTk === null ? '' : '<span class="tag ' + (pctTk >= 95 ? 't-ok' : pctTk >= 80 ? 't-warn' : 't-bad') + '" title="Viajes cruzados con un pesaje, sobre los viajes de días con balanza importada">' + pctTk + ' % con ticket</span>') + al.map(a => '<span class="tag t-' + a[0] + '">' + a[1] + '</span>').join('') +
+      (x.viajes && (x.conH || x.conTk) ? '<span class="tag t-mut" title="Remitos con horómetro de pala / ticket de salida">⛏ ' + x.conH + ' · 🎫 ' + x.conTk + '</span>' : '')) + '</div></div>';
   };
   return '<div class="card"><div class="card-h"><div class="t"><h3>Indicadores por camión</h3><div class="sub">Cada dominio en el período: viajes a planta, toneladas de balanza, carga típica, ciclo, densidad estimada y alertas. Mediana general ' + nf(medG, 1) + ' t/viaje.</div></div><button class="btn sm" id="csvDom">' + ICON.descargar + 'CSV</button></div>' +
     '<div class="dom-grid stagger">' + L.map(tile).join('') + '</div></div>';
@@ -647,7 +652,7 @@ function tabCantera(c) {
       [r => nf(r.disp, 0) + '%', 'Disp.', 'n'], [r => nf(r.utiliz, 0) + '%', 'Utiliz.', 'n'], ['unid', 'A planta', 'n'], ['internos', 'Internos', 'n'], ['palAco', 'Pal. acopio', 'n'],
       [r => nf(r.camH, 1), 'Cam/h', 'n'], [r => nf(r.litros, 0), 'Litros', 'n'], [r => nf(r.lH, 1), 'L/h', 'n']], st.maqs) + '</div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Operadores</h3></div></div>' +
-    tabla([['n', 'Operador'], ['maqs', 'Máquinas'], ['dias', 'Días', 'n'], [r => nf(r.hHor, 1), 'h horóm.', 'n'], ['cam', 'Camiones', 'n'], [r => nf(r.camDia, 1), 'Cam/día', 'n'], ['pal', 'Paladas', 'n'], [r => nf(r.palH, 1), 'Pal/h', 'n']], st.ops) + '</div>' + cardPala(R);
+    tabla([['n', 'Operador'], ['maqs', 'Máquinas'], ['dias', 'Días', 'n'], [r => nf(r.hHor, 1), 'h horóm.', 'n'], ['cam', 'Camiones', 'n'], [r => nf(r.camDia, 1), 'Cam/día', 'n'], ['pal', 'Paladas', 'n'], [r => nf(r.palH, 1), 'Pal/h', 'n']], st.ops) + '</div>' + (S.ses ? cardPala(R) : '');
   grafico('chCam', 'bar', fechas.map(fCorta), [
     { label: 'A planta', data: fechas.map(f => sum(porDia[f], t => t.unidadesCargadas)), backgroundColor: color(1) },
     { label: 'Internos', data: fechas.map(f => sum(porDia[f], t => t.viajesInternos)), backgroundColor: color(2) }
@@ -748,7 +753,7 @@ function tabCombustible(c) {
     ['L/h por carga', 'litros de cada carga ÷ horas del horómetro desde la carga anterior de esa máquina. Detecta cargas mal anotadas o consumos anormales.'],
     ['L por tonelada', 'gasoil de cantera ÷ toneladas ingresadas por balanza: cuánto gasoil cuesta cada tonelada de tierra.'],
     ['Medición', 'medí la cisterna con varilla y cargala en Cargar → Gasoil: la diferencia con el nivel calculado muestra faltantes o cargas sin registrar.']
-  ]) + '<div class="kpis stagger">' +
+  ]) + avisoCisterna(cis) + '<div class="kpis stagger">' +
     kpi('Gasoil a máquinas', vn(litros) + '<small>L</small>', comb.length + ' cargas', 'kacc') +
     kpi('L por tonelada', vn(b.ingreso ? litros / b.ingreso : null, 2) + '<small>L/t</small>', 'gasoil ÷ ingreso de balanza', '', 'Costo en gasoil de cada tonelada que entró.') +
     kpi('L por camión', vn(camiones ? litros / camiones : null, 1) + '<small>L</small>', nf(camiones) + ' camiones cargados', '', 'Gasoil ÷ camiones cargados por las palas (a planta + internos).') +
@@ -758,12 +763,12 @@ function tabCombustible(c) {
     '<div class="grid g2">' + caja('chLh', 'Litros por hora de horómetro', 'Período seleccionado') +
     '<div class="card"><div class="card-h"><div class="t"><h3>Resumen por máquina</h3></div></div>' + tabla([['n', 'Máquina'], [r => nf(r.litros, 0), 'Litros', 'n'], [r => nf(r.hHor, 1), 'h horóm.', 'n'], [r => nf(r.lH, 1), 'L/h', 'n'],
       [r => nf(medianaDe(rg.filter(x => x.maquina === r.n && x.lh !== null && x.horas >= 2).map(x => x.lh)), 1), 'L/h por carga', 'n']], st.maqs.filter(x => x.litros > 0)) + '</div></div>' +
-    '<div class="grid g2"><div class="card"><div class="card-h"><div class="t"><h3>Consumo entre cargas</h3><div class="sub">Rojo: más de 1,5 veces lo habitual de la máquina</div></div></div>' +
+    (!S.ses ? '' : '<div class="grid g2"><div class="card"><div class="card-h"><div class="t"><h3>Consumo entre cargas</h3><div class="sub">Rojo: más de 1,5 veces lo habitual de la máquina</div></div></div>' +
     tabla([[x => fCorta(x.fecha), 'Fecha'], ['maquina', 'Máquina'], [x => nf(x.litros, 0), 'Litros', 'n'], [x => nf(x.horas, 1), 'Horas', 'n'],
       [x => '<span class="tag ' + (x.horas <= 0 || (x.mediana && x.lh > x.mediana * 1.5) ? 't-bad' : 't-mut') + '">' + nf(x.lh, 1) + '</span>', 'L/h', 'n']], rg.slice().reverse(), { max: true, vacio: 'Cargá el horómetro en cada carga de gasoil.' }) + '</div>' +
     '<div class="card"><div class="card-h"><div class="t"><h3>Mediciones de cisterna</h3><div class="sub">Medido con varilla vs calculado</div></div></div>' +
     tabla([[x => fCorta(x.fecha), 'Fecha'], ['hora', 'Hora'], [x => nf(x.litrosMedidos), 'Medido L', 'n'], [x => nf(x.litrosEstimados), 'Calculado L', 'n'],
-      [x => esAjusteCis(x) ? '<span class="tag t-info">Inicio de control</span>' : '<span class="tag ' + (Math.abs(x.diferencia) > (cis.capacidad || 5000) * 0.03 ? 't-bad' : 't-ok') + '">' + nf(x.diferencia) + '</span>', 'Diferencia', 'n']], med, { vacio: 'Sin mediciones en el período.' }) + '</div></div>';
+      [x => esAjusteCis(x) ? '<span class="tag t-info">Inicio de control</span>' : '<span class="tag ' + (Math.abs(x.diferencia) > (cis.capacidad || 5000) * 0.03 ? 't-bad' : 't-ok') + '">' + nf(x.diferencia) + '</span>', 'Diferencia', 'n']], med, { vacio: 'Sin mediciones en el período.' }) + '</div></div>');
   requestAnimationFrame(() => $$('.gauge .arco').forEach(a => { a.style.strokeDashoffset = a.dataset.off; }));
   const L = serie.map(d => fCorta(d.fecha));
   grafico('chNivel', 'line', L, [{ label: 'Nivel L', data: serie.map(d => d.nivel), borderColor: color(1), backgroundColor: color(1), fill: false }], { scales: { y: { beginAtZero: true, suggestedMax: cis.capacidad || undefined } } });
@@ -773,7 +778,17 @@ function tabCombustible(c) {
   ]);
   grafico('chCons', 'bar', fd.map(fCorta), maqs.slice(0, 8).map((m, i) => ({ label: m, data: fd.map(f => sum(porDia[f].filter(x => x.maquina === m), x => x.litros)), backgroundColor: color(i + 1) })), { scales: { x: { stacked: true }, y: { stacked: true } } });
   grafico('chLh', 'bar', conL.map(x => x.n), [{ label: 'L/h', data: conL.map(x => x.lH), backgroundColor: color(4) }]);
-  extrasCombustible(c, cis, comb);
+  extrasCombustible(c, cis, comb.concat(R.cisternaCargas || []));
+}
+
+function avisoCisterna(cis) {
+  if (!S.ses || !cis) return '';
+  const ex = (cis.excesos || []).filter(x => x.fecha >= S.desde && x.fecha <= S.hasta);
+  const fa = (cis.faltantes || []).filter(x => x.fecha >= S.desde && x.fecha <= S.hasta);
+  let h = '';
+  if (ex.length) h += '<div class="alert warn">' + ICON.alerta + '<div><b>El nivel calculado superó la capacidad de la cisterna (' + nf(cis.capacidad) + ' L).</b> ' + ex.map(x => 'Con la carga del ' + fCorta(x.fecha) + ' ' + esc(x.hora) + ' (' + nf(x.carga) + ' L) sobraban ' + nf(x.litros) + ' L').join('; ') + '. El nivel se limitó a la capacidad. Suele indicar cargas a máquinas sin registrar o un inicio de control alto: conviene medir con varilla.</div></div>';
+  if (fa.length) h += '<div class="alert bad">' + ICON.alerta + '<div><b>El nivel calculado quedó por debajo de cero.</b> ' + fa.map(x => fCorta(x.fecha) + ' ' + esc(x.hora) + ' (' + esc(x.maquina) + '): faltaban ' + nf(x.litros) + ' L').join('; ') + '. Falta registrar algún llenado de la cisterna.</div></div>';
+  return h;
 }
 
 function tanqueCisterna(cis) {
