@@ -36,6 +36,13 @@ function tiraEquivalencias(b) {
     }).join('') + '</div><div class="sub equiv-n">← diferencia con el paso anterior · → con el siguiente. Negativo entre Balanza y Playa = rechazos; entre Playa y Molienda = lo que se consumió de la playa.</div></div>';
 }
 
+function badgeVistoBueno(R) {
+  const v = (R.vistos || []).filter(x => x.nodo === 'Playa').slice(-1)[0];
+  if (!v || difDias(v.fecha, hoy()) > 14 || (R.ajustes || []).some(a => a.nodo === 'Playa' && a.tipo !== 'Corrección' && a.fecha > v.fecha)) return '';
+  if (v.estado === 'observado') return S.ses ? '<span class="nl vb-obs">⚠️ observado ' + fCorta(v.fecha) + '</span>' : '';
+  return '<span class="nl vb-ok">✅ visto bueno ' + fCorta(v.fecha) + '</span>';
+}
+
 function nodoStock(b, cual) {
   const v = cual === 'playa' ? b.stockPlaya : b.stockSilo;
   const ini = cual === 'playa' ? b.inicioPlaya : b.inicioSilo;
@@ -189,7 +196,7 @@ async function vInicio() {
     ['pesajes', 'Balanza de ingreso', 'balanza', '#/cargar/pesaje', 'abastecimiento'],
     ['calidad', 'Calidad de tierra', 'calidad', '#/cargar/calidad', 'abastecimiento'],
     ['molienda', 'Molienda y silo', 'molienda', '#/cargar/molienda', 'molienda'],
-    ['cubicacion', 'Ajuste de stock de playa', 'ajuste', '#/cargar/ajustes', 'molienda']
+    ['control', 'Control de stock de playa', 'ok', '#/cargar/vistobueno', 'molienda']
   ];
   const sp = nodoStock(b, 'playa');
   const ss = nodoStock(b, 'silo');
@@ -215,7 +222,7 @@ async function vInicio() {
     nodo('balanza', 'balanza', 'Balanza', vn(b.ingreso) + '<small> t</small>', ln('≈ ' + nf(m3Pes) + ' m³', '· ' + nf(b.tickets) + ' camiones') + ln(densBal ? nf(densBal, 2) + ' t/m³' : '–', 'densidad') +
       (b.ingresoEst ? '<span class="nl sec">+ ≈ ' + nf(b.ingresoEst) + ' t de viajes sin ticket</span>' : '') + (S.ses && b.rechT ? '<span class="nl rojo">' + nf(b.rechT, 0) + ' t rechazadas</span>' : ''), '#/tablero/viajes') +
     nodo('playa', 'playa', 'Playa', sp.v, ln(sp.m3) + (b.stockPlaya !== null ? ln('≈ ' + nf(b.stockPlaya / b.densidad / m3p) + ' paladas') : '') + delta(dP, ultimo ? 'en el día' : 'en ' + dias + ' días') +
-      '<span class="nl io"><i class="in">+ ' + nf(b.ingresoPlaya) + ' t entró</i><i class="out">− ' + nf(b.consumo) + ' t salió</i></span>' + (b.diasPlaya !== null ? '<span class="nl sec">≈ ' + nf(b.diasPlaya, 1) + ' días de molienda</span>' : ''), '#/tablero/balance', ilusStock('playa', pctP, b.stockPlaya === null)) +
+      '<span class="nl io"><i class="in">+ ' + nf(b.ingresoPlaya) + ' t entró</i><i class="out">− ' + nf(b.consumo) + ' t salió</i></span>' + (b.diasPlaya !== null ? '<span class="nl sec">≈ ' + nf(b.diasPlaya, 1) + ' días de molienda</span>' : '') + badgeVistoBueno(R), '#/tablero/balance', ilusStock('playa', pctP, b.stockPlaya === null)) +
     nodo('molienda', 'molienda', 'Molienda', vn(b.consumo) + '<small> t</small>', ln('≈ ' + nf(b.molPal * m3p) + ' m³') + ln(nf(b.molPal) + ' paladas', 'al cajón') + '<span class="nl sec">' + nf(b.fMol, 2) + ' t/palada · ' + nf(molT) + ' t por balanza</span>', '#/tablero/balance') +
     nodo('silo', 'silo', 'Silo', ss.v, ln(ss.m3) + delta(dS, ultimo ? 'en el día' : 'en ' + dias + ' días') + '<span class="nl io"><i class="in">+ ' + nf(b.consumo) + ' t entró</i><i class="out">− ' + nf(b.siloOut, 0) + ' t salió</i></span>' + (b.diasSilo !== null ? '<span class="nl sec">≈ ' + nf(b.diasSilo, 1) + ' días de producción</span>' : '') + '<span class="nl sec">' + nf(molT) + ' t por balanza dinámica · ' + nf(b.siloPal) + ' pal. a producción</span>', '#/tablero/balance', ilusStock('silo', pctS, b.stockSilo === null)) +
     '</div><div class="flujo-leg"><span class="nbadge mv">Movimiento</span><span>tierra que pasó por esa etapa en el período (se suma)</span><span class="nbadge st">Stock</span><span>tierra que hay al ' + alF + ' (es una foto, no se suma)</span><span class="pt"></span><span>sentido del flujo</span></div></div>' + '<div id="proyPlaya"></div>' +
@@ -227,9 +234,11 @@ async function vInicio() {
     '<div class="grid g-21" style="align-items:start">' + (S.ses ? '<div class="card"><div class="card-h"><div class="t"><h3>Para revisar</h3><div class="sub">Controles cruzados de los últimos 14 días</div></div><a class="btn sm" href="#/revision/controles">Ver todos</a></div><div class="alertas" id="alertas"><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div></div></div>' : '') +
     '<div class="col" style="gap:16px"><div class="card"><div class="card-h"><div class="t"><h3>Estado de la carga</h3><div class="sub">Último día con datos por fuente</div></div></div><div class="estado">' +
     fuentes.map(f => {
-      const sm = semaforoDias((R.ultimo || {})[f[0]]);
-      const smc = f[0] === 'cubicacion' ? (sm.dias !== null && sm.dias <= (num(par('DIAS_CUBICACION', 30)) || 30) ? { cls: 'ok', txt: 'hace ' + sm.dias + ' días' } : { cls: sm.dias === null ? 'bad' : 'warn', txt: sm.dias === null ? 'sin datos' : 'hace ' + sm.dias + ' días' }) : sm;
-      return '<a class="fila ' + f[4] + '" href="' + (S.ses ? f[3] : '#/calendario') + '"><span class="ico">' + ICON[f[2]] + '</span><span class="txt"><b>' + f[1] + '</b><small>' + ((R.ultimo || {})[f[0]] ? fMedia(R.ultimo[f[0]]) + ' · ' + smc.txt : 'sin datos') + '</small></span><span class="semaforo ' + smc.cls + '"></span></a>';
+      const uf = f[0] === 'control' ? [(R.ultimo || {}).cubicacion, (R.ultimo || {}).vistoBueno].filter(Boolean).sort().pop() : (R.ultimo || {})[f[0]];
+      const sm = semaforoDias(uf);
+      const dVB = num(par('DIAS_VISTO_BUENO', 7)) || 7;
+      const smc = f[0] === 'control' ? (sm.dias === null ? { cls: 'bad', txt: 'sin datos' } : { cls: sm.dias <= dVB ? 'ok' : sm.dias <= (num(par('DIAS_CUBICACION', 30)) || 30) ? 'warn' : 'bad', txt: 'hace ' + sm.dias + ' días' + (uf === (R.ultimo || {}).vistoBueno ? ' · visto bueno' : ' · ajuste') }) : sm;
+      return '<a class="fila ' + f[4] + '" href="' + (S.ses ? f[3] : '#/calendario') + '"><span class="ico">' + ICON[f[2]] + '</span><span class="txt"><b>' + f[1] + '</b><small>' + (uf ? fMedia(uf) + ' · ' + smc.txt : 'sin datos') + '</small></span><span class="semaforo ' + smc.cls + '"></span></a>';
     }).join('') + '</div></div>' + (cis ? gaugeCisterna(cis) : '') + '</div></div>' +
     '<div class="grid g3 stagger">' +
     '<div class="card spark"><div class="row"><span class="eyebrow">Ingreso diario</span><span class="right tag t-mut">t</span></div><div class="chart"><canvas id="spIng"></canvas></div></div>' +

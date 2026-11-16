@@ -13,7 +13,7 @@ const AYUDA = {
   'tablero/balance': {
     t: 'Balance de tierra', que: 'Cuánta tierra entró, cuánta se consumió y cuánta queda en playa y silo, día por día.',
     pasos: ['Elegí el período arriba.', 'Tocá una barra para abrir el parte de ese día.', 'Compará los ajustes de stock con lo calculado en la tabla de ajustes.'],
-    controles: ['m_inventario', 'm_cubicacion', 'm_stock', 'm_cobertura', 'm_estimados']
+    controles: ['m_inventario', 'm_cubicacion', 'm_vistobueno', 'm_stock', 'm_cobertura', 'm_estimados']
   },
   'tablero/controles': {
     t: 'Controles cruzados', que: 'La app compara datos que vienen de fuentes distintas (palas, viajes, balanza, gasoil, molienda, ajustes de stock) para encontrar errores de carga, faltantes o desvíos.',
@@ -102,7 +102,7 @@ const AYUDA = {
       ['Precisión', 'Con cinta y fórmulas el error es de ±10 %: medí siempre con el mismo método y mirá la tendencia.']
     ],
     calc: [['Lo que hay ahora / Stock inicial', 'fijan el stock en ese valor al inicio del día.'], ['Sumar / restar', 'suma o resta toneladas (negativo para restar).'], ['t ↔ m³', 'densidad = t por palada de molienda ÷ m³ del balde (M3_POR_PALADA).'], ['Diferencia', 'medido − calculado. Si se repite en el mismo sentido, revisá el t/palada o los ingresos.'], ['Sin dato', 'si el stock calculado da negativo, la app no lo muestra hasta el próximo ajuste.']],
-    controles: ['m_cubicacion', 'm_inventario', 'm_stock']
+    controles: ['m_cubicacion', 'm_vistobueno', 'm_inventario', 'm_stock']
   },
   revision: {
     t: 'Revisión de datos', sector: 'abastecimiento', que: 'Lista las inconsistencias del período y ofrece cómo resolverlas. En «Viajes ↔ balanza» cada viaje sin ticket muestra los pesajes que podrían ser suyos y por qué; las decisiones quedan registradas y se pueden deshacer.',

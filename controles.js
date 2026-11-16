@@ -318,12 +318,26 @@ function controles(r, b) {
 
   add('m_atraso', Mo, 'reloj', 'Molienda al día', 'Que el Informe de Producción o la carga manual tengan los turnos hasta ayer.', atraso('molienda', 'Molienda', '#/cargar/molienda'));
 
-  add('m_cubicacion', Mo, 'ajuste', 'Ajuste de stock periódico', 'Medir la playa al menos cada ' + diasCub + ' días para corregir el balance.', () => {
+  add('m_cubicacion', Mo, 'ajuste', 'Control de stock periódico', 'Dar el visto bueno o medir la playa al menos cada ' + diasCub + ' días.', () => {
     if (!b.hayAjuste) return { sev: 'warn', t: 'Sin stock inicial ni ajuste', d: 'Sin un ajuste no se puede saber el stock. Cargá cuánta tierra hay en la playa.', ruta: '#/cargar/ajustes' };
-    const f = ult.cubicacion;
+    const f = [ult.cubicacion, ult.vistoBueno].filter(Boolean).sort().pop();
     const dd = f ? difDias(f, hoy()) : null;
-    if (dd === null || dd > diasCub) return { sev: 'warn', t: f ? 'Último ajuste hace ' + dd + ' días' : 'Sin ajustes de playa', d: 'Conviene medir cada ' + diasCub + ' días.', ruta: '#/cargar/ajustes' };
-    return { sev: 'ok', t: 'Ajuste reciente (' + fMedia(f) + ')', d: 'Hace ' + dd + ' días.' };
+    if (dd === null || dd > diasCub) return { sev: 'warn', t: f ? 'Último control de stock hace ' + dd + ' días' : 'Sin controles de stock de playa', d: 'Dá el visto bueno si el stock coincide, o medí y ajustá. Se espera al menos cada ' + diasCub + ' días.', ruta: '#/cargar/vistobueno' };
+    return { sev: 'ok', t: 'Control de stock reciente (' + fMedia(f) + ')', d: 'Hace ' + dd + ' días · ' + (f === ult.vistoBueno ? 'visto bueno' : 'ajuste') + '.' };
+  });
+
+  add('m_vistobueno', Mo, 'ok', 'Visto bueno del stock de playa', 'El responsable de molienda confirma cada ' + (num(par('DIAS_VISTO_BUENO', 7)) || 7) + ' días que el stock calculado coincide con la playa, y que no cambie después.', () => {
+    const sg = seguimientoStock('Playa');
+    const dVB = num(par('DIAS_VISTO_BUENO', 7)) || 7;
+    if (sg.pendiente) return { sev: 'bad', t: 'Stock de playa observado el ' + fCorta(sg.pendiente.fecha), d: (sg.pendiente.apreciacion === 'mas' ? 'Parece haber más tierra que lo calculado. ' : sg.pendiente.apreciacion === 'menos' ? 'Parece haber menos tierra que lo calculado. ' : '') + sg.pendiente.nota.replace(/[.\s]+$/, '') + '. Medí y ajustá.', ruta: '#/cargar/ajustes' };
+    if (sg.derivas.length) {
+      const x = sg.derivas[0];
+      return { sev: 'warn', t: 'El stock con visto bueno del ' + fCorta(x.fecha) + ' cambió ' + (x.dif > 0 ? '+' : '') + nf(x.dif, 0) + ' t', d: 'Se cargaron o corrigieron datos de fechas ya controladas.', ruta: '#/cargar/vistobueno', filas: sg.derivas, cols: [[y => fCorta(y.fecha), 'Fecha'], [y => nf(y.stock, 0), 'Visto bueno t', 'n'], [y => nf(y.ahora, 0), 'Hoy da t', 'n'], [y => nf(y.dif, 0), 'Diferencia t', 'n'], ['usuario', 'Usuario']] };
+    }
+    if (!sg.ultVB) return { sev: 'info', t: 'Sin vistos buenos de stock', d: 'Si el stock coincide con lo que se ve, dá el visto bueno en vez de ajustar.', ruta: '#/cargar/vistobueno' };
+    const dd = difDias(sg.ultVB.fecha, hoy());
+    if (dd > dVB) return { sev: 'warn', t: 'Último visto bueno hace ' + dd + ' días', d: 'Se espera cada ' + dVB + ' días.', ruta: '#/cargar/vistobueno' };
+    return { sev: 'ok', t: 'Visto bueno al día (' + fMedia(sg.ultVB.fecha) + ')', d: nf(sg.ultVB.stock, 0) + ' t confirmadas por ' + (sg.ultVB.usuario || '') + '.' };
   });
 
   add('m_inventario', Mo, 'playa', 'Diferencia en los ajustes', 'Diferencia entre lo medido y el stock calculado en ese momento (tolerancia ' + nf(tolInv * 100) + ' %).', () => {

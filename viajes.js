@@ -143,9 +143,9 @@ function htmlFilaQV(x, i) {
     '<input data-i="' + i + '" data-k="origen" value="' + esc(x.origen) + '" placeholder="Origen" tabindex="-1" class="' + (QV.c.ia['o' + i] ? 'ia' : '') + '">' +
     '<input data-i="' + i + '" data-k="destino" value="' + esc(x.destino) + '" placeholder="Destino" tabindex="-1" class="' + (QV.c.ia['o' + i] ? 'ia' : '') + '">' +
     '<input data-i="' + i + '" data-k="c" value="' + esc(x.c) + '" placeholder="Carga" inputmode="numeric" maxlength="5" class="hr ' + (QV.c.ia['c' + i] ? 'ia' : '') + '">' +
-    '<input data-i="' + i + '" data-k="d" value="' + esc(x.d) + '" placeholder="Descarga" inputmode="numeric" maxlength="5" class="hr ' + (QV.c.ia['d' + i] ? 'ia' : '') + '" style="' + (x.autoD && x.d ? 'color:var(--muted)' : '') + '">' +
-    '<input data-i="' + i + '" data-k="h" value="' + esc(x.h) + '" placeholder="Horóm." inputmode="decimal" class="hr ' + (QV.c.ia['h' + i] ? 'ia' : '') + '" title="Horómetro de la pala cargadora al cargar (opcional)">' +
-    '<input data-i="' + i + '" data-k="tk" value="' + esc(x.tk) + '" placeholder="Ticket" inputmode="numeric" class="hr ' + (QV.c.ia['t' + i] ? 'ia' : '') + '" title="N° de ticket de salida de la balanza (opcional)">' +
+    '<input data-i="' + i + '" data-k="d" value="' + esc(x.d) + '" placeholder="' + estDescargaQV(x) + '" title="Hora de descarga del talonario. El ≈ es solo una referencia: no se guarda." inputmode="numeric" maxlength="5" class="hr ' + (QV.c.ia['d' + i] ? 'ia' : '') + '">' +
+    '<input data-i="' + i + '" data-k="h" value="' + esc(x.h) + '" placeholder="16154.2" inputmode="decimal" class="hrm ' + (QV.c.ia['h' + i] ? 'ia' : '') + '" title="Horómetro de la pala cargadora al cargar (opcional). Formato 16154.2: hasta 1 decimal">' +
+    '<input data-i="' + i + '" data-k="tk" value="' + esc(x.tk) + '" placeholder="Ticket" inputmode="numeric" class="hrm ' + (QV.c.ia['t' + i] ? 'ia' : '') + '" title="N° de ticket de salida de la balanza (opcional)">' +
     '<span class="bal" data-bal="' + i + '"></span>' +
     '<label class="chk"><input type="checkbox" data-i="' + i + '" data-k="pagar" tabindex="-1"' + (x.pagar ? ' checked' : '') + '></label>' +
     '<button class="btn ghost icon sm" data-quitar="' + i + '" tabindex="-1" aria-label="Quitar">' + ICON.x.replace('<svg', '<svg width="14" height="14"') + '</button></div>';
@@ -186,6 +186,11 @@ function asegurarVacioQV() {
       autocompletar(inp, () => nombres('Lugares'), v => { QV.c.filas[Number(inp.dataset.i)][inp.dataset.k] = v; alCambiarRuta(Number(inp.dataset.i)); });
     });
   }
+}
+
+function estDescargaQV(x) {
+  const m = x && x.c ? minDe(x.c) : null;
+  return m === null || m === undefined ? 'Descarga' : '≈ ' + hDe(m + cicloMedioChofer(QV.c.chofer));
 }
 
 function cicloQV(x) {
@@ -231,12 +236,12 @@ function refrescarBalanzaQV() {
     if (!el) return;
     const ci = cicloQV(x);
     let h = ci.txt ? '<span class="ciclo ' + ci.cls + '">' + ci.txt + '</span>' : '';
-    if (x.c && esPlanta(x.destino)) {
+    if ((x.c || tkNorm(x.tk)) && esPlanta(x.destino)) {
       if (!QV.pes.length) h += '<span class="tag t-mut" title="Importá el PESAJE.XLS de este día para controlar">sin pesaje del día</span>';
       else if (tkNorm(x.tk)) {
         const p = QV.pes.find(q => tkNorm(q.ticket) === tkNorm(x.tk));
         if (!p) h += '<span class="tag t-bad">ticket ' + esc(tkNorm(x.tk)) + ' no está en la balanza</span>';
-        else { usados.add(p); h += '<span class="tag ' + (dom && normDom(p.dominio) !== normDom(dom) ? 't-bad' : 't-ok') + '">' + ICON.ok.replace('<svg', '<svg width="12" height="12"') + 'ticket ' + esc(p.ticket) + ' · ' + p.hora + ' · ' + nf(p.neto, 1) + ' t' + (dom && normDom(p.dominio) !== normDom(dom) ? ' · es de ' + esc(p.dominio) : '') + '</span>'; }
+        else { usados.add(p); const dtk = x.d || x.c ? Math.abs(((minDe(p.hora) || 0) - (minDe(x.d || x.c) || 0) + 2160) % 1440 - 720) : null; h += '<span class="tag ' + (dom && normDom(p.dominio) !== normDom(dom) ? 't-bad' : 't-ok') + '" title="La hora de balanza es solo referencia: se guarda la del talonario">' + ICON.ok.replace('<svg', '<svg width="12" height="12"') + 'ticket ' + esc(p.ticket) + ' · balanza ' + p.hora + (dtk ? ' (Δ ' + dtk + ' min)' : '') + ' · ' + nf(p.neto, 1) + ' t' + (dom && normDom(p.dominio) !== normDom(dom) ? ' · es de ' + esc(p.dominio) : '') + '</span>'; }
       }
       else if (!dom) h += '<span class="tag t-mut">falta dominio</span>';
       else {
@@ -251,7 +256,7 @@ function refrescarBalanzaQV() {
   const pre = $('#qvPre');
   if (pre) {
     const libres = dom ? (QV.pes || []).filter(p => normDom(p.dominio) === normDom(dom) && !usados.has(p)) : [];
-    const cargadas = QV.c.filas.filter(x => x.c).length;
+    const cargadas = QV.c.filas.filter(x => x.c || tkNorm(x.tk)).length;
     const html = libres.length && !cargadas ? '<button class="btn sm" id="qvDesdeBal" tabindex="-1" style="border-color:var(--s3);color:var(--s3)">' + ICON.balanza + 'Precargar ' + libres.length + ' viaje' + (libres.length > 1 ? 's' : '') + ' desde balanza</button>' :
       libres.length ? '<span class="sub">' + libres.length + ' pesada' + (libres.length > 1 ? 's' : '') + ' de este camión sin viaje: ' + libres.map(p => p.hora).join(', ') + '</span>' : '';
     if (pre.dataset.h !== html) { pre.innerHTML = html; pre.dataset.h = html; }
@@ -263,12 +268,11 @@ function precargarDesdeBalanza() {
   const usados = ticketsUsadosDia(QV.c.numero);
   const libres = (QV.pes || []).filter(p => normDom(p.dominio) === normDom(dom) && !usados.has(p)).sort((a, b) => (minDe(a.hora) || 0) - (minDe(b.hora) || 0));
   const base = QV.c.filas[0];
-  const ciclo = cicloMedioChofer(QV.c.chofer);
-  QV.c.filas = libres.map(p => ({ origen: base.origen, destino: base.destino, c: hDe((minDe(p.hora) || 0) - ciclo), d: p.hora, h: '', tk: '', autoD: false, pagar: true, resp: '' }));
-  QV.c.filas.forEach((x, i) => { QV.c.ia['c' + i] = true; });
+  QV.c.filas = libres.map(p => ({ origen: base.origen, destino: base.destino, c: '', d: '', h: '', tk: p.ticket ? tkNorm(p.ticket) : '', autoD: false, pagar: true, resp: '' }));
+  QV.c.filas.forEach((x, i) => { QV.c.ia['t' + i] = true; });
   pintarFilasQV();
   resumenQV();
-  toast('Se precargaron ' + libres.length + ' viajes con la hora de balanza como descarga. Corregí la hora de carga con el talonario (violeta = estimada).', 'info', 8000);
+  toast('Se precargaron ' + libres.length + ' viajes con su ticket de balanza. Completá la hora de carga y de descarga del talonario: la hora de balanza queda solo como referencia.', 'info', 9000);
 }
 
 function cicloMedioChofer(ch) {
@@ -408,6 +412,12 @@ function enlazarQV() {
   });
   fl.addEventListener('change', e => {
     const el = e.target;
+    if (el.dataset && el.dataset.k === 'h' && el.value.trim()) {
+      const xh = c.filas[Number(el.dataset.i)];
+      const hn = horNum(el.value);
+      if (hn === null || isNaN(hn)) { el.classList.add('inv'); toast('Horómetro inválido: usá el formato 16154.2 (hasta 1 decimal)', 'bad'); }
+      else { el.value = hn.toFixed(1); if (xh) xh.h = el.value; }
+    }
     const i = Number(el.dataset.i);
     const x = c.filas[i];
     if (!x) return;
@@ -468,11 +478,9 @@ function normalizarHoraQV(el) {
   if (h === null) { el.classList.add('inv'); return; }
   el.value = h;
   x[el.dataset.k] = h;
-  if (el.dataset.k === 'c' && (x.autoD || !x.d)) {
-    x.d = hDe(minDe(h) + cicloMedioChofer(QV.c.chofer));
-    x.autoD = true;
+  if (el.dataset.k === 'c') {
     const d = $('#qvFilas .vt-row[data-i="' + i + '"] [data-k="d"]');
-    if (d && document.activeElement !== d) { d.value = x.d; d.style.color = 'var(--muted)'; }
+    if (d) d.placeholder = estDescargaQV(x);
   }
   asegurarVacioQV();
   refrescarBalanzaQV();
@@ -514,14 +522,14 @@ function validarQV() {
   if (!c.chofer) marca($('#qvChofer'), 'chofer');
   if (!c.dominio) marca($('#qvDom'), 'dominio');
   if (!c.responsable) marca($('#qvResp'), 'responsable de carga');
-  const filas = c.filas.filter(x => x.c || x.d);
+  const filas = c.filas.filter(x => x.c || x.d || tkNorm(x.tk));
   const nInt = c.internos.on ? Number(c.internos.cantidad) || 0 : 0;
   if (!filas.length && !nInt) marca($('#qvFilas [data-k="c"]'), 'al menos un viaje con horario o viajes internos');
   if (filas.length && !QV.tipo) marca($('#qvTipo'), 'tipo de viaje');
   let prev = null;
   let off = 0;
   c.filas.forEach((x, i) => {
-    if (!x.c && !x.d) return;
+    if (!x.c && !x.d && !tkNorm(x.tk)) return;
     const row = $('#qvFilas .vt-row[data-i="' + i + '"]');
     const q = k => row ? $('[data-k="' + k + '"]', row) : null;
     if (!x.origen) marca(q('origen'), 'origen del viaje ' + (i + 1));
@@ -546,8 +554,8 @@ function validarQV() {
     const row = $('#qvFilas .vt-row[data-i="' + i + '"]');
     const q = k => row ? $('[data-k="' + k + '"]', row) : null;
     if (String(x.h || '').trim()) {
-      const h = num(x.h);
-      if (isNaN(h) || h < 0) marca(q('h'), 'horómetro del viaje ' + (i + 1));
+      const h = horNum(x.h);
+      if (h === null || isNaN(h)) marca(q('h'), 'horómetro del viaje ' + (i + 1) + ' (formato 16154.2, hasta 1 decimal)');
       else {
         if (hAnt && h < hAnt.h) adv.push('Viaje ' + (i + 1) + ': el horómetro (' + nf(h, 1) + ') es menor que el del viaje anterior (' + nf(hAnt.h, 1) + ')');
         else if (hAnt && hAnt.c && x.c) { const dh = h - hAnt.h; const dr = ((minDe(x.c) - minDe(hAnt.c) + 1440) % 1440) / 60; if (dh > dr + 0.5) adv.push('Viaje ' + (i + 1) + ': el horómetro avanzó ' + nf(dh, 1) + ' h y entre cargas pasaron ' + nf(dr, 1) + ' h'); }
@@ -610,7 +618,7 @@ async function guardarQV() {
       }
     }
   }
-  const comunes = c.filas.filter(x => x.c).map(x => ({ origen: x.origen, destino: x.destino, tipo: QV.tipo, horaCarga: x.c, horaDescarga: x.d, responsable: c.responsable, pagar: x.pagar, horometro: String(x.h || '').trim() ? num(x.h) : '', ticketSalida: tkNorm(x.tk) }));
+  const comunes = c.filas.filter(x => x.c).map(x => ({ origen: x.origen, destino: x.destino, tipo: QV.tipo, horaCarga: x.c, horaDescarga: x.d, responsable: c.responsable, pagar: x.pagar, horometro: String(x.h || '').trim() ? horNum(x.h) : '', ticketSalida: tkNorm(x.tk) }));
   const nInt = c.internos.on ? Number(c.internos.cantidad) || 0 : 0;
   const internos = [];
   for (let k = 0; k < nInt; k++) internos.push({ interno: true, origen: c.internos.lugar, destino: c.internos.lugar, paladas: c.internos.paladas, responsable: c.responsable, pagar: c.internos.pagar });
@@ -693,7 +701,7 @@ function pintarDiaQV() {
       if (hs.length) QV.tipo = hs[0].tipo;
       QV.c = {
         numero: b.dataset.ed, chofer: vs[0].chofer, dominio: vs[0].dominio, domAuto: false, responsable: vs[0].responsable, respAuto: false, ia: {},
-        filas: hs.map(v => ({ origen: v.origen, destino: v.destino, c: v.horaCarga, d: v.horaDescarga, h: v.horometro === null || v.horometro === undefined ? '' : String(v.horometro), tk: v.ticketSalida || '', autoD: false, pagar: v.pagar, resp: '' })),
+        filas: hs.map(v => ({ origen: v.origen, destino: v.destino, c: v.horaCarga, d: v.horaDescarga, h: horTxt(v.horometro), tk: v.ticketSalida || '', autoD: false, pagar: v.pagar, resp: '' })),
         internos: { on: ints.length > 0, cantidad: ints.length || '', lugar: ints.length ? ints[0].origen : '', paladas: ints.length && ints[0].paladas !== null ? ints[0].paladas : '', pagar: ints.length ? ints[0].pagar : true }
       };
       if (!QV.c.filas.length) QV.c.filas.push(filaVacia({ origen: QV.c.internos.lugar, destino: destinosPlanta()[0] || '' }));
@@ -784,7 +792,7 @@ function aplicarIA(r) {
       if (v.origen || v.destino) c.ia['o' + i] = true;
       if (v.horometro !== null && v.horometro !== undefined && v.horometro !== '') c.ia['h' + i] = true;
       if (v.ticketSalida) c.ia['t' + i] = true;
-      return { origen: lug(v.origen) || base.origen, destino: lug(v.destino) || base.destino, c: v.horaCarga, d: v.horaDescarga || '', h: v.horometro === null || v.horometro === undefined ? '' : String(v.horometro), tk: v.ticketSalida || '', autoD: !v.horaDescarga, pagar: true, resp: '' };
+      return { origen: lug(v.origen) || base.origen, destino: lug(v.destino) || base.destino, c: v.horaCarga, d: v.horaDescarga || '', h: horTxt(v.horometro), tk: v.ticketSalida || '', autoD: !v.horaDescarga, pagar: true, resp: '' };
     });
   }
   if (r.internos && r.internos.cantidad > 0) {

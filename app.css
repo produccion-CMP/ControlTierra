@@ -738,7 +738,7 @@ details.guia .cuerpo b { color: var(--text); }
 .vt-row:focus-within { background: var(--accent-soft); }
 .vt-row .n { font-weight: 800; color: var(--accent); text-align: center; font-size: .85rem; }
 .vt-row input { padding: 7px 9px; font-size: .88rem; }
-.vt-row input.hr { text-align: center; font-variant-numeric: tabular-nums; font-size: .95rem; }
+.vt-row input.hr, .vt-row input.hrm { text-align: center; font-variant-numeric: tabular-nums; font-size: .95rem; }
 .vt-row .bal { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; font-size: .72rem; min-width: 0; }
 .vt-row .bal .ciclo { color: var(--muted); font-weight: 700; }
 .vt-row .bal .ciclo.adv { color: var(--warn); }
@@ -1371,3 +1371,38 @@ svg.tri .guia { stroke: #111; stroke-width: 1.2; stroke-dasharray: 3 3; }
 .mas-det[open] > summary { border-style: solid; background: var(--panel-2); }
 .mas-det > .mas-c { margin-top: 14px; display: flex; flex-direction: column; gap: 16px; }
 @media (max-width: 600px) { .mas-det > summary { flex-wrap: wrap; } .mas-det .mas-s { flex-basis: 100%; order: 3; } }
+.vb-stock { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; padding: 16px; border-radius: 16px; background: var(--panel-2); border: 1px solid var(--line); }
+.vb-big { font-size: 2.6rem; font-weight: 800; line-height: 1.1; margin: 4px 0 2px; }
+.vb-big small { font-size: 1rem; color: var(--muted); font-weight: 700; }
+.vb-barra { height: 8px; border-radius: 99px; background: var(--line); margin: 10px 0 4px; overflow: hidden; }
+.vb-barra i { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
+.vb-desde { display: flex; flex-direction: column; gap: 4px; justify-content: center; padding-left: 14px; border-left: 1px dashed var(--line); }
+.vb-desde b { font-size: 1.1rem; }
+.vb-desde .in { color: var(--ok); font-weight: 700; }
+.vb-desde .out { color: var(--bad); font-weight: 700; }
+.vb-ops { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.vb-op { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 14px 10px; border-radius: 16px; border: 2px solid var(--line); background: var(--panel); cursor: pointer; text-align: center; color: var(--text); text-decoration: none; font: inherit; transition: border-color .2s, background .2s, transform .15s; }
+.vb-op span { font-size: 1.6rem; }
+.vb-op small { color: var(--muted); }
+.vb-op:hover { transform: translateY(-1px); }
+.vb-op.ok.on { border-color: var(--ok); background: var(--ok-soft); }
+.vb-op.warn.on { border-color: var(--warn); background: var(--warn-soft); }
+.vb-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+.vb-kpis > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--panel-2); }
+.vb-kpis .l { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+.vb-kpis b { font-size: 1.05rem; }
+.vb-kpis small { color: var(--muted); font-size: .75rem; }
+.vb-lista { display: flex; flex-direction: column; gap: 8px; max-height: 560px; overflow: auto; }
+.vb-it { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); border-left: 4px solid var(--line); background: var(--panel); }
+.vb-it.ok { border-left-color: var(--ok); }
+.vb-it.warn { border-left-color: var(--warn); }
+.vb-it.info { border-left-color: var(--info); }
+.vb-ic { font-size: 1.2rem; line-height: 1.3; }
+.vb-tx { flex: 1; min-width: 0; }
+.vb-v { font-weight: 800; }
+.vb-nota { margin-top: 4px; font-size: .88rem; }
+.vb-der { display: flex; gap: 6px; margin-top: 6px; padding: 6px 8px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: .82rem; }
+.vb-der svg { width: 16px; height: 16px; flex: none; margin-top: 1px; }
+@media (max-width: 640px) { .vb-stock { grid-template-columns: minmax(0, 1fr); } .vb-desde { border-left: 0; padding-left: 0; border-top: 1px dashed var(--line); padding-top: 10px; } .vb-kpis { gap: 6px; } .vb-kpis > div { padding: 8px; } .vb-kpis b { font-size: .95rem; } .vb-ops { grid-template-columns: minmax(0, 1fr); } .vb-op { flex-direction: row; justify-content: flex-start; gap: 10px; text-align: left; } }
+.nl.vb-ok { color: var(--ok); font-weight: 700; font-size: .78rem; }
+.nl.vb-obs { color: var(--warn); font-weight: 700; font-size: .78rem; }

@@ -26,6 +26,7 @@ const PERMISOS = {
   liquidacion: ['abastecimiento'],
   molienda: ['molienda'],
   ajustes: ['molienda'],
+  vistobueno: ['molienda'],
   acopios: ['abastecimiento', 'molienda'],
   acopiosConsumo: ['molienda']
 };
@@ -110,6 +111,20 @@ const fLarga = f => { const t = aFecha(f).toLocaleDateString('es-AR', { weekday:
 const tick = v => nf(v, Math.abs(v) < 10 && v % 1 ? 1 : 0);
 const nf = (n, d = 0) => (n === null || n === undefined || isNaN(n) || !isFinite(n)) ? '–' : Number(n).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
 const num = v => { if (v === '' || v === null || v === undefined) return null; const n = Number(String(v).replace(',', '.')); return isNaN(n) ? null : n; };
+const horNum = v => {
+  if (v === '' || v === null || v === undefined) return null;
+  if (typeof v === 'number') return isFinite(v) && v >= 0 ? Math.round(v * 10) / 10 : NaN;
+  const t = String(v).trim().replace(/\s+/g, '');
+  if (!t) return null;
+  if (!/^\d[\d.,]*$/.test(t)) return NaN;
+  const m = t.match(/^(.*?)(?:[.,](\d{1,3}))?$/);
+  const ent = m[1].replace(/[.,]/g, '');
+  const dec = m[2] || '';
+  if (dec.length === 3) return Number(ent + dec);
+  if (dec.length === 2 || !/^\d+$/.test(ent)) return NaN;
+  return Number(ent + (dec ? '.' + dec : ''));
+};
+const horTxt = v => { const h = horNum(v); return h === null || isNaN(h) ? '' : h.toFixed(1); };
 const sum = (a, f) => a.reduce((s, x) => s + (Number(f(x)) || 0), 0);
 const minDe = h => { const m = String(h || '').match(/(\d{1,2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
 const hDe = m => pad(Math.floor(((m % 1440) + 1440) % 1440 / 60)) + ':' + pad(((m % 60) + 60) % 60);
@@ -755,6 +770,44 @@ function calcBalance(desde, hasta) {
     diasPlaya: consumoMedio > 0 && stockPlaya !== null ? stockPlaya / consumoMedio : null, diasSilo: siloMedio > 0 && stockSilo !== null ? stockSilo / siloMedio : null,
     cubicaciones: cub,
     hayAjuste: ajustes.length > 0, calibrado: pH > 0, estimados: enR.filter(s => s.estimado).length
+  };
+}
+
+function seguimientoStock(nodo) {
+  const nd = nodo || 'Playa';
+  const aj = (S.resumen.ajustes || []).filter(a => a.nodo === nd);
+  const vb = (S.resumen.vistos || []).filter(v => v.nodo === nd);
+  const tol = (num(par('TOLERANCIA_VISTO_BUENO', 3)) || 3) / 100;
+  const minT = num(par('DIFERENCIA_MIN_VISTO_BUENO', 50)) || 50;
+  const fechas = aj.map(a => a.fecha).concat(vb.map(v => v.fecha)).sort();
+  const serie = fechas.length ? calcBalance(addDias(fechas[0], -1), hoy()).serie : [];
+  const key = nd === 'Playa' ? 'stockPlaya' : 'stockSilo';
+  const stockAl = f => {
+    let v = null;
+    for (let i = 0; i < serie.length && serie[i].fecha <= f; i++) v = serie[i][key];
+    return v;
+  };
+  const diaTs = ts => { const d = ts ? new Date(ts) : null; return d && !isNaN(d) ? iso(d) : ''; };
+  const items = vb.map(v => {
+    const ahora = stockAl(v.fecha);
+    const cerrado = diaTs(v.ts) > v.fecha;
+    const st = num(v.stock);
+    const dif = cerrado && ahora !== null && st !== null ? ahora - st : null;
+    return { tipo: v.estado === 'conforme' ? 'vb' : 'obs', fecha: v.fecha, hora: v.hora || '', stock: st, ahora: ahora, dif: dif, deriva: dif !== null && Math.abs(dif) > Math.max(minT, Math.abs(st) * tol), cerrado: cerrado, usuario: v.usuario, nota: v.nota || '', apreciacion: v.apreciacion || '', id: v.id };
+  }).concat(aj.map(a => ({ tipo: 'aj', ajTipo: a.tipo, fecha: a.fecha, hora: '', stock: a.tipo === 'Corrección' ? null : num(a.toneladas), corr: a.tipo === 'Corrección' ? num(a.toneladas) : null, ahora: stockAl(a.fecha), usuario: a.usuario, nota: a.observaciones || '', id: a.id })));
+  const clave = x => x.fecha + (x.hora || '99:99');
+  items.sort((a, b) => clave(a) < clave(b) ? 1 : -1);
+  items.forEach((x, i) => { const p = items[i + 1]; x.diasAnt = p ? difDias(p.fecha, x.fecha) : null; });
+  const ultCtrl = items.find(x => x.tipo === 'vb' || (x.tipo === 'aj' && x.ajTipo !== 'Corrección')) || null;
+  const ultVB = items.find(x => x.tipo === 'vb') || null;
+  const pendiente = items.length && items[0].tipo === 'obs' ? items[0] : null;
+  const mov = ultCtrl && ultCtrl.fecha < hoy() ? calcBalance(addDias(ultCtrl.fecha, 1), hoy()) : null;
+  return {
+    nodo: nd, items: items, ultCtrl: ultCtrl, ultVB: ultVB, pendiente: pendiente, derivas: items.filter(x => x.deriva), tol: tol, minT: minT,
+    dias: ultCtrl ? difDias(ultCtrl.fecha, hoy()) : null,
+    entro: mov ? (nd === 'Playa' ? mov.ingresoPlaya : mov.consumo) : 0, salio: mov ? (nd === 'Playa' ? mov.consumo : mov.siloOut) : 0,
+    vb30: items.filter(x => x.tipo === 'vb' && difDias(x.fecha, hoy()) <= 30).length,
+    stockAl: stockAl
   };
 }
 

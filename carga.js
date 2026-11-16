@@ -7,6 +7,7 @@ const MODULOS = [
   ['pesaje', 'Balanza de ingreso', 'Importar el PESAJE.XLS para cruzarlo con los viajes.', 'balanza', 2, 'pesajes', 'abastecimiento'],
   ['calidad', 'Calidad de tierra', 'Calidad enviada (abastecimiento) y recibida (molienda) de los camiones de la balanza, en bloque.', 'calidad', 5, 'calidad', 'abastecimiento'],
   ['molienda', 'Molienda y silo', 'Se lee del Informe de Producción; acá se corrige un turno.', 'molienda', 7, 'molienda', 'molienda'],
+  ['vistobueno', 'Visto bueno de stock', 'Confirmar que el stock calculado coincide con lo que se ve, sin ajustarlo.', 'ok', 3, 'vistoBueno', 'molienda'],
   ['ajustes', 'Ajuste de stock', 'Cargar cuánta tierra hay en playa o silo, en t o m³.', 'ajuste', 4, 'cubicacion', 'molienda']
 ];
 
@@ -40,6 +41,7 @@ async function vCargar(mod, arg) {
   if (mod === 'molienda') return edMolienda(arg || hoy(), volver);
   if (mod === 'calidad') return edCalidad(arg || hoy(), volver);
   if (mod === 'ajustes') return edAjustes(volver);
+  if (mod === 'vistobueno') return edVistoBueno(volver, arg === 'Silo' ? 'Silo' : 'Playa');
 }
 
 function dice(a, b) {
@@ -1236,7 +1238,8 @@ function edAjustes(volver) {
   let tipo = lista.some(a => a.nodo === 'Playa' && a.tipo !== 'Corrección') ? 'Cubicación' : 'Stock inicial';
   let unidad = lsGet('tierra_ajuste_unidad', 't');
   app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos · Molienda</div><h1>Ajuste de stock</h1><p class="sub">Calculado hoy: playa ' + stk(bal.stockPlaya, densNodo.Playa) + ' · silo ' + stk(bal.stockSilo, densNodo.Silo) + '</p></div></div>' +
-    '<div class="row">' + botonInforme('cubicacion', { fecha: hoy() }, 'Informe') + '</div></div>' +
+    '<div class="row"><a class="btn" href="#/cargar/vistobueno">' + ICON.ok + 'Dar visto bueno</a>' + botonInforme('cubicacion', { fecha: hoy() }, 'Informe') + '</div></div>' +
+    '<div class="alert info">' + ICON.infoI + '<div>Si el stock calculado coincide con lo que se ve en la playa, no hace falta ajustarlo: <a href="#/cargar/vistobueno"><b>dá el visto bueno</b></a> y queda registrado el control.</div></div>' +
     '<div class="grid g-21" style="align-items:start"><div class="card"><div class="card-h"><div class="t"><h3>¿Cuánta tierra hay?</h3><div class="sub">Escribí lo que hay en toneladas o en metros cúbicos; la app hace la conversión.</div></div></div>' +
     '<div class="form"><label class="f">Fecha<input type="date" id="aF" value="' + hoy() + '"></label><label class="f">Lugar<div id="aNseg"></div></label>' +
     '<label class="f full">Qué cargás<div id="aTseg"></div></label>' +
@@ -1371,6 +1374,120 @@ function edAjustes(volver) {
       toast(er.message, 'bad');
     }
   };
+}
+
+const VB_TIPO = {
+  vb: { ic: '✅', t: 'Visto bueno', cls: 'ok' },
+  obs: { ic: '⚠️', t: 'Observado', cls: 'warn' },
+  aj: { ic: '📏', t: 'Ajuste', cls: 'info' }
+};
+
+function itemSeguimiento(x, nodo) {
+  const tp = VB_TIPO[x.tipo];
+  const apr = x.apreciacion === 'mas' ? ' · parece haber más' : x.apreciacion === 'menos' ? ' · parece haber menos' : '';
+  const tit = x.tipo === 'aj' ? (TIPO_AJUSTE_TXT[x.ajTipo] || x.ajTipo) : tp.t + apr;
+  const val = x.tipo === 'aj' && x.corr !== null ? (x.corr >= 0 ? '+' : '') + nf(x.corr, 0) + ' t' : x.stock === null ? '–' : nf(x.stock, 0) + ' t';
+  const deriva = x.deriva ? '<div class="vb-der">' + ICON.alerta + '<span>Hoy el cálculo al ' + fCorta(x.fecha) + ' da <b>' + nf(x.ahora, 0) + ' t</b> (' + (x.dif > 0 ? '+' : '') + nf(x.dif, 0) + ' t). Se cargaron o corrigieron datos de esa fecha o anteriores después del visto bueno.</span></div>' : '';
+  return '<div class="vb-it ' + tp.cls + '"><span class="vb-ic">' + tp.ic + '</span><div class="vb-tx"><div class="row" style="justify-content:space-between;gap:8px"><b>' + esc(tit) + '</b><span class="tnum vb-v">' + val + '</span></div>' +
+    '<div class="sub">' + esc(fMedia(x.fecha)) + (x.hora ? ' ' + esc(x.hora) : '') + ' · ' + esc(x.usuario || '') + (x.diasAnt !== null && x.diasAnt !== undefined ? ' · ' + (x.diasAnt === 0 ? 'mismo día que el anterior' : x.diasAnt + ' días después del anterior') : '') + '</div>' +
+    (x.nota ? '<div class="vb-nota">' + esc(x.nota) + '</div>' : '') + deriva + '</div>' +
+    (esAdmin() && x.tipo !== 'aj' ? '<button class="btn icon sm dan" data-vbx="' + x.id + '" title="Eliminar">' + ICON.borrar + '</button>' : '') + '</div>';
+}
+
+function edVistoBueno(volver, nodoIni) {
+  let nodo = nodoIni || 'Playa';
+  let estado = 'conforme';
+  let apr = '';
+  const dVB = num(par('DIAS_VISTO_BUENO', 7)) || 7;
+  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos · Molienda</div><h1>Visto bueno de stock</h1><p class="sub">Confirmá que el stock calculado coincide con lo que ves. No cambia el stock: deja registrado el control.</p></div></div>' +
+    '<div class="row"><div id="vbN"></div><a class="btn" href="#/cargar/ajustes">' + ICON.ajuste + 'Medir y ajustar</a></div></div><div id="vbCuerpo"></div></div>';
+  segmento($('#vbN'), [['Playa', 'Playa'], ['Silo', 'Silo']], nodo, k => { nodo = k; pintar(); }, true);
+  const pintar = () => {
+    const sg = seguimientoStock(nodo);
+    const dens = nodo === 'Silo' ? (num(par('DENSIDAD_SILO', '')) || calcBalance(addDias(hoy(), -30), hoy()).densidad) : calcBalance(addDias(hoy(), -30), hoy()).densidad;
+    const ult = sg.ultCtrl;
+    const semCls = sg.pendiente ? 'bad' : sg.dias === null ? 'bad' : sg.derivas.length ? 'warn' : sg.dias <= dVB ? 'ok' : sg.dias <= dVB * 2 ? 'warn' : 'bad';
+    const avisos = (sg.pendiente ? '<div class="alert warn">' + ICON.alerta + '<div><b>Stock observado el ' + fCorta(sg.pendiente.fecha) + ' sin resolver.</b> ' + esc(sg.pendiente.nota.replace(/[.\s]+$/, '')) + '. Medí ' + (nodo === 'Playa' ? 'la playa' : 'el silo') + ' y cargá un ajuste, o dá el visto bueno si ya coincide.</div></div>' : '') +
+      (sg.derivas.length ? '<div class="alert warn">' + ICON.alerta + '<div><b>' + sg.derivas.length + ' visto' + (sg.derivas.length > 1 ? 's' : '') + ' bueno' + (sg.derivas.length > 1 ? 's' : '') + ' con el stock cambiado después.</b> Se cargaron o corrigieron datos de fechas ya controladas. Revisalo en el seguimiento.</div></div>' : '');
+    $('#vbCuerpo').innerHTML = avisos + '<div class="grid g-21" style="align-items:start"><div class="card"><div class="card-h"><div class="t"><h3>¿Coincide con lo que ves en ' + (nodo === 'Playa' ? 'la playa' : 'el silo') + '?</h3><div class="sub">Mirá el acopio y compará con el stock calculado.</div></div></div>' +
+      '<div class="form"><label class="f">Stock al cierre del<input type="date" id="vbF" value="' + hoy() + '" max="' + hoy() + '"></label><label class="f">Hora<input type="time" id="vbH" value="' + new Date().toTimeString().slice(0, 5) + '"></label></div>' +
+      '<div id="vbStock" class="mt"></div>' +
+      '<div class="vb-ops mt"><button type="button" class="vb-op ok" data-e="conforme"><span>✅</span><b>Coincide</b><small>doy el visto bueno</small></button><button type="button" class="vb-op warn" data-e="observado"><span>⚠️</span><b>No coincide</b><small>registro la diferencia</small></button><a class="vb-op info" href="#/cargar/ajustes"><span>📏</span><b>Medir y ajustar</b><small>cargo lo que hay</small></a></div>' +
+      '<div id="vbObs" class="mt" hidden><label class="f">¿Qué ves?<div id="vbA"></div></label></div>' +
+      '<label class="f full mt">Comentario <span id="vbReq">(opcional)</span><textarea id="vbNota" rows="2" placeholder="Ej.: el acopio del sector norte se ve más bajo"></textarea></label>' +
+      '<div class="row mt"><button class="btn pri" id="vbG">' + ICON.ok + 'Registrar visto bueno</button></div></div>' +
+      '<div class="col" style="gap:16px"><div class="card"><div class="card-h"><div class="t"><h3>Control del stock</h3><div class="sub">' + nodo + '</div></div><span class="semaforo ' + semCls + '"></span></div><div class="vb-kpis">' +
+      '<div><span class="l">Último control</span><b>' + (ult ? (ult.tipo === 'vb' ? '✅ ' : '📏 ') + fCorta(ult.fecha) : 'sin controles') + '</b><small>' + (ult ? 'hace ' + sg.dias + ' día' + (sg.dias === 1 ? '' : 's') + ' · se espera cada ' + dVB : 'dá el primer visto bueno') + '</small></div>' +
+      '<div><span class="l">Desde ese control</span><b class="tnum">+' + nf(sg.entro, 0) + ' / −' + nf(sg.salio, 0) + ' t</b><small>entró / salió</small></div>' +
+      '<div><span class="l">Vistos buenos 30 días</span><b class="tnum">' + sg.vb30 + '</b><small>' + sg.items.filter(x => x.tipo === 'obs' && difDias(x.fecha, hoy()) <= 30).length + ' observados</small></div></div>' +
+      '<div class="chart" style="height:190px"><canvas id="vbCh"></canvas></div></div>' +
+      '<div class="card"><div class="card-h"><div class="t"><h3>Seguimiento</h3><div class="sub">Vistos buenos, observaciones y ajustes</div></div></div><div class="vb-lista">' +
+      (sg.items.length ? sg.items.slice(0, 40).map(x => itemSeguimiento(x, nodo)).join('') : vacio('Todavía no hay controles de stock.')) + '</div></div></div></div>';
+    const b60 = calcBalance(addDias(hoy(), -60), hoy());
+    const key = nodo === 'Playa' ? 'stockPlaya' : 'stockSilo';
+    const ser = b60.serie;
+    const pto = t => ser.map((s, i) => { const nx = ser[i + 1]; const x = sg.items.find(it => it.tipo === t && it.fecha >= s.fecha && (!nx || it.fecha < nx.fecha)); return x ? (x.stock !== null ? x.stock : s[key]) : null; });
+    grafico('vbCh', 'line', ser.map(s => fCorta(s.fecha)), [
+      { label: 'Stock calculado t', data: ser.map(s => s[key]), borderColor: cssVar('--s1'), backgroundColor: 'transparent', spanGaps: true },
+      { label: 'Visto bueno', data: pto('vb'), showLine: false, pointRadius: 6, pointStyle: 'circle', borderColor: cssVar('--ok'), backgroundColor: cssVar('--ok') },
+      { label: 'Observado', data: pto('obs'), showLine: false, pointRadius: 7, pointStyle: 'triangle', borderColor: cssVar('--warn'), backgroundColor: cssVar('--warn') },
+      { label: 'Ajuste', data: pto('aj'), showLine: false, pointRadius: 6, pointStyle: 'rectRot', borderColor: cssVar('--info'), backgroundColor: cssVar('--info') }
+    ]);
+    const stockEl = () => {
+      const f = $('#vbF').value || hoy();
+      const v = sg.stockAl(f);
+      const bal = calcBalance(addDias(hoy(), -30), hoy());
+      const max = nodo === 'Playa' ? bal.maxPlaya : bal.maxSilo;
+      const ok = v !== null && v >= 0;
+      $('#vbStock').innerHTML = ok ? '<div class="vb-stock"><div><span class="eyebrow">Stock calculado ' + (f === hoy() ? 'hasta ahora' : 'al cierre del ' + fCorta(f)) + '</span><div class="vb-big tnum">' + nf(v, 0) + '<small> t</small></div><div class="sub">≈ ' + nf(v / dens, 0) + ' m³ · ≈ ' + nf(v / dens / (bal.m3Palada || 3), 0) + ' paladas</div>' +
+        '<div class="vb-barra"><i style="width:' + Math.min(100, Math.max(2, v / (max || 1) * 100)) + '%"></i></div><div class="sub">' + nf(v / (max || 1) * 100, 0) + ' % del máximo (' + nf(max, 0) + ' t)</div></div>' +
+        (ult ? '<div class="vb-desde"><span class="eyebrow">Desde el último control</span><b>' + fCorta(ult.fecha) + '</b><span class="in">+ ' + nf(sg.entro, 0) + ' t entró</span><span class="out">− ' + nf(sg.salio, 0) + ' t salió</span></div>' : '') + '</div>' +
+        (f === hoy() ? '<p class="sub mt">Incluye lo cargado hasta ahora. Si faltan turnos o pesajes de hoy, elegí ayer.</p>' : '')
+        : '<div class="alert bad">' + ICON.alerta + '<div>No hay stock calculado para esa fecha. <a href="#/cargar/ajustes"><b>Cargá un ajuste</b></a> para fijar el punto de partida.</div></div>';
+      $('#vbG').disabled = !ok;
+      return ok ? v : null;
+    };
+    const pintarEstado = () => {
+      $$('.vb-op[data-e]').forEach(b => b.classList.toggle('on', b.dataset.e === estado));
+      $('#vbObs').hidden = estado !== 'observado';
+      $('#vbReq').textContent = estado === 'observado' ? '(obligatorio)' : '(opcional)';
+      $('#vbG').innerHTML = estado === 'observado' ? ICON.alerta + 'Registrar diferencia' : ICON.ok + 'Registrar visto bueno';
+      $('#vbG').classList.toggle('dan', estado === 'observado');
+    };
+    segmento($('#vbA'), [['mas', 'Parece haber más'], ['menos', 'Parece haber menos'], ['', 'No sé']], apr, k => { apr = k; }, true);
+    $$('.vb-op[data-e]').forEach(b => { b.onclick = () => { estado = b.dataset.e; pintarEstado(); }; });
+    $('#vbF').onchange = stockEl;
+    stockEl();
+    pintarEstado();
+    $('#vbG').onclick = async () => {
+      const v = stockEl();
+      if (v === null) return;
+      const nota = $('#vbNota').value.trim();
+      if (estado === 'observado' && !nota) { $('#vbNota').classList.add('inv'); return toast('Contá qué diferencia ves', 'bad'); }
+      try {
+        await escribir('guardarVistoBueno', { fecha: $('#vbF').value || hoy(), hora: $('#vbH').value, nodo: nodo, estado: estado, stock: Math.round(v * 10) / 10, m3: Math.round(v / dens), apreciacion: apr, nota: nota }, (estado === 'conforme' ? 'Visto bueno ' : 'Observación ') + nodo);
+        await cargarResumen(true);
+        toast(estado === 'conforme' ? 'Visto bueno registrado' : 'Diferencia registrada', 'ok');
+        estado = 'conforme';
+        apr = '';
+        pintar();
+      } catch (e) {
+        toast(e.message, 'bad');
+      }
+    };
+    $('#vbCuerpo').onclick = async e => {
+      const b = e.target.closest('[data-vbx]');
+      if (!b || !(await confirmar('Eliminar', '¿Eliminar este control de stock?', 'Eliminar', true))) return;
+      try {
+        await escribir('eliminarVistoBueno', { id: b.dataset.vbx }, 'Eliminar visto bueno');
+        await cargarResumen(true);
+        pintar();
+      } catch (er) {
+        toast(er.message, 'bad');
+      }
+    };
+  };
+  pintar();
 }
 
 async function edGasoil(f, volver) {
