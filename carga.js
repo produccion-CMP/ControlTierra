@@ -4,6 +4,7 @@ const MODULOS = [
   ['jornada', 'Jornada de cantera', 'Tramos de producción y paradas por máquina: horómetros, camiones a planta e internos.', 'pala', 3, 'jornada', 'abastecimiento'],
   ['gasoil', 'Gasoil de cantera', 'Cargas a máquinas, llenado y medición de la cisterna.', 'combustible', 6, 'gasoil', 'abastecimiento'],
   ['viajes', 'Viajes de camiones', 'Talonarios: viajes con horario, viajes internos y control con la balanza.', 'camion', 1, 'viajes', 'abastecimiento'],
+  ['corregir', 'Corregir registros', 'Buscar y editar viajes de camiones o jornadas de cantera cargadas con algún error.', 'editar', 5, 'viajes', 'abastecimiento'],
   ['pesaje', 'Balanza de ingreso', 'Importar el PESAJE.XLS para cruzarlo con los viajes.', 'balanza', 2, 'pesajes', 'abastecimiento'],
   ['calidad', 'Calidad de tierra', 'Calidad enviada (abastecimiento) y recibida (molienda) de los camiones de la balanza, en bloque.', 'calidad', 5, 'calidad', 'abastecimiento'],
   ['molienda', 'Molienda y silo', 'Se lee del Informe de Producción; acá se corrige un turno.', 'molienda', 7, 'molienda', 'molienda'],
@@ -11,7 +12,7 @@ const MODULOS = [
   ['ajustes', 'Ajuste de stock', 'Cargar cuánta tierra hay en playa o silo, en t o m³.', 'ajuste', 4, 'cubicacion', 'molienda']
 ];
 
-async function vCargar(mod, arg) {
+async function vCargar(mod, arg, arg2) {
   const ok = vivo();
   await cargarResumen();
   if (!ok()) return;
@@ -34,7 +35,8 @@ async function vCargar(mod, arg) {
     return;
   }
   const volver = '<a class="btn icon" href="#/cargar" aria-label="Volver">' + ICON.izq + '</a>';
-  if (mod === 'viajes') return edViajes(arg, volver);
+  if (mod === 'viajes') return edViajes(arg, volver, arg2);
+  if (mod === 'corregir') return edCorregir(arg === 'cantera' ? 'cantera' : 'viajes', volver);
   if (mod === 'gasoil') return edGasoil(arg || hoy(), volver);
   if (mod === 'jornada') return edJornada(arg || hoy(), volver);
   if (mod === 'pesaje') return edPesaje(volver);
@@ -236,7 +238,7 @@ async function edJornada(f, volver) {
     })));
   S.ed = { fecha: f, maqs: maqs, t: t, previos: j.horometrosPrevios || {}, sucio: false };
   const bor = lsGet('tierra_borrador_' + f, null);
-  let aviso = j.tramos.length ? '<div class="alert info">' + ICON.infoI + '<div>Jornada ya registrada por <b>' + esc(j.tramos[0].usuario || '—') + '</b>. Al guardar se reemplaza completa.</div></div>' : '';
+  let aviso = j.tramos.length ? '<div class="alert info">' + ICON.editar + '<div style="flex:1"><b>Jornada ya registrada' + (j.tramos[0].usuario ? ' por ' + esc(j.tramos[0].usuario) : '') + '.</b> Podés corregir cualquier campo: al guardar se reemplaza completa y el cambio queda en el historial de correcciones.<label class="f mt">Motivo de la corrección (opcional)<input id="edMot" placeholder="Ej.: horómetro final mal cargado"></label></div></div>' : '';
   if (bor && bor.t) aviso += '<div class="alert warn" id="avBor">' + ICON.alerta + '<div style="flex:1">Hay un borrador sin guardar de esta fecha. <button class="btn sm" id="bRest">Restaurar</button> <button class="btn sm dan" id="bDesc">Descartar</button></div></div>';
   app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos</div><h1>Jornada de cantera</h1></div></div>' +
     '<div class="row"><label class="f">Fecha<div class="row" style="flex-wrap:nowrap;gap:4px"><a class="btn icon" href="#/cargar/jornada/' + addDias(f, -1) + '">' + ICON.izq + '</a><input type="date" id="edF" value="' + f + '" style="width:170px"><a class="btn icon" href="#/cargar/jornada/' + addDias(f, 1) + '">' + ICON.der + '</a></div></label>' +
@@ -574,7 +576,7 @@ async function guardarJornada() {
   if (!tramos.length && !(await confirmar('Jornada vacía', 'No hay tramos. Si existía una jornada para esta fecha, se eliminará. ¿Continuar?', 'Continuar', true))) return;
   bloquear('Guardando jornada…');
   try {
-    const r = await escribir('guardarJornada', { fecha: S.ed.fecha, tramos: tramos }, 'Jornada cantera ' + S.ed.fecha);
+    const r = await escribir('guardarJornada', { fecha: S.ed.fecha, tramos: tramos, motivo: $('#edMot') ? $('#edMot').value.trim() : '' }, 'Jornada cantera ' + S.ed.fecha);
     avisarInforme(r);
     lsDel('tierra_borrador_' + S.ed.fecha);
     S.ed.sucio = false;
@@ -643,7 +645,7 @@ function parseNum(v) {
 function edPesaje(volver) {
   S.imp = null;
   app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos</div><h1>Balanza de ingreso</h1><p class="sub">Exportá el pesaje desde el software de la balanza (PESAJE.XLS, .xlsx o .csv) y soltalo acá. Los tickets ya importados se actualizan, no se duplican.</p></div></div></div>' +
-    '<div class="row" style="justify-content:flex-end;margin-bottom:10px"><a class="btn" href="#/acopios/descargas">' + ICON.playa + 'Asignar descargas a acopios</a></div><div class="card"><div class="drop" id="drop">' + ICON.archivo + '<b>Arrastrá el archivo o tocá para elegirlo</b><span class="sub">PESAJE.XLS · .xlsx · .csv</span><input type="file" id="fileP" accept=".xls,.xlsx,.csv" class="hide"></div><div id="impC"></div></div></div>';
+    '<div class="row" style="justify-content:flex-end;margin-bottom:10px"><a class="btn" href="#/acopios/descargas">' + ICON.playa + 'Asignar descargas a acopios</a></div><div class="card"><div class="drop" id="drop">' + ICON.archivo + '<b>Arrastrá el archivo o tocá para elegirlo</b><span class="sub">PESAJE.XLS · .xlsx · .csv</span><input type="file" id="fileP" accept=".xls,.xlsx,.csv" class="hide"></div><div id="impC"></div></div><div id="impHist" class="mt"></div></div>';
   const drop = $('#drop');
   const fi = $('#fileP');
   drop.onclick = () => fi.click();
@@ -651,6 +653,27 @@ function edPesaje(volver) {
   drop.ondragleave = () => drop.classList.remove('on');
   drop.ondrop = e => { e.preventDefault(); drop.classList.remove('on'); if (e.dataTransfer.files[0]) leerArchivo(e.dataTransfer.files[0]); };
   fi.onchange = () => { if (fi.files[0]) leerArchivo(fi.files[0]); };
+  pintarHistImp();
+}
+
+const tsTxt = ts => { const d = ts ? new Date(ts) : null; if (!d || isNaN(d)) return String(ts || ''); return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const rangoTxt = (d, h) => !d ? '–' : d === h ? fMedia(d) : fCorta(d) + ' al ' + fCorta(h) + (d.slice(0, 4) !== h.slice(0, 4) ? ' ' + h.slice(0, 4) : '');
+
+async function pintarHistImp() {
+  const el = $('#impHist');
+  if (!el) return;
+  try {
+    const imps = await api('importaciones');
+    if (!$('#impHist')) return;
+    const u = imps[0];
+    el.innerHTML = '<div class="card"><div class="card-h"><div class="t"><h3>Registro de cargas del archivo</h3><div class="sub">Cuándo se importó, quién y qué fechas trae cada archivo</div></div></div>' +
+      (u ? '<div class="imp-ult"><span class="imp-ic">' + ICON.archivo + '</span><div><span class="eyebrow">Última carga</span><b>' + esc(tsTxt(u.ts)) + '</b><span class="sub">por ' + esc(u.usuario || '') + (u.archivo ? ' · ' + esc(u.archivo) : '') + '</span></div>' +
+        '<div><span class="eyebrow">Registros del archivo</span><b>' + rangoTxt(u.desde, u.hasta) + '</b><span class="sub">' + nf(u.tierra) + ' pesajes de tierra · ' + nf(u.nuevos) + ' nuevos</span></div>' +
+        '<div><span class="eyebrow">Último registro</span><b>' + (u.hasta ? (difDias(u.hasta, hoy()) === 0 ? 'hoy' : 'hace ' + difDias(u.hasta, hoy()) + ' día' + (difDias(u.hasta, hoy()) === 1 ? '' : 's')) : '–') + '</b><span class="sub">' + (u.hasta ? fMedia(u.hasta) : '') + '</span></div></div>' : vacio('Todavía no se cargó ningún archivo.')) +
+      (imps.length > 1 ? tabla([[r => esc(tsTxt(r.ts)), 'Cuándo se cargó'], [r => esc(r.usuario || ''), 'Usuario'], [r => esc(r.archivo || ''), 'Archivo'], [r => rangoTxt(r.desde, r.hasta), 'Registros del'], [r => nf(r.tierra), 'Pesajes', 'n'], [r => nf(r.nuevos), 'Nuevos', 'n']], imps.slice(0, 15)) : '') + '</div>';
+  } catch (e) {
+    el.innerHTML = '';
+  }
 }
 
 async function leerArchivo(file) {
@@ -766,7 +789,8 @@ async function importarPesajesUI(val, opciones) {
     if (!r.encolado) {
       avisarInforme(r);
       const fs = val.map(x => x.fecha).sort();
-      $('#impC').innerHTML = '<div class="alert ok mt">' + ICON.ok + '<div><b>Importación completa.</b> ' + r.nuevos + ' nuevos · ' + (r.actualizados || 0) + ' corregidos · ' + (r.iguales || 0) + ' ya estaban iguales · ' + r.total + ' pesajes en la base.' + (r.corregidos ? ' ' + r.corregidos + ' pesaje(s) con corrección manual: se mantuvo la corrección.' : '') + (r.crudo ? ' Archivo crudo guardado: ' + r.crudo.filas + ' filas (' + r.crudo.nuevas + ' nuevas).' : '') + '</div></div>' +
+      pintarHistImp();
+      $('#impC').innerHTML = '<div class="alert ok mt">' + ICON.ok + '<div><b>Importación completa</b> el ' + fMedia(hoy()) + ' a las ' + new Date().toTimeString().slice(0, 5) + ' por ' + esc(r.usuario || (S.ses && S.ses.nombre) || '') + ' · registros del ' + rangoTxt(fs[0], fs[fs.length - 1]) + '.<br>' + r.nuevos + ' nuevos · ' + (r.actualizados || 0) + ' corregidos · ' + (r.iguales || 0) + ' ya estaban iguales · ' + r.total + ' pesajes en la base.' + (r.corregidos ? ' ' + r.corregidos + ' pesaje(s) con corrección manual: se mantuvo la corrección.' : '') + (r.crudo ? ' Archivo crudo guardado: ' + r.crudo.filas + ' filas (' + r.crudo.nuevas + ' nuevas).' : '') + '</div></div>' +
         (r.porFecha ? tabla([[f => fMedia(f), 'Fecha'], [f => nf(val.filter(x => x.fecha === f).length), 'En el archivo', 'n'], [f => r.porFecha[f].nuevos, 'Nuevos', 'n'], [f => r.porFecha[f].actualizados, 'Corregidos', 'n'], [f => r.porFecha[f].iguales, 'Ya estaban', 'n'], [f => (r.enBase || {})[f] || 0, 'Total en la base', 'n']], Object.keys(r.porFecha).sort()) : '') +
         (C && (C.sinSalida.length || C.manuales.length || C.abiertas.length) ? '<div class="alert warn">' + ICON.alerta + '<div>En este archivo: ' + C.sinSalida.length + ' sin pesaje de salida, ' + C.abiertas.length + ' entradas abiertas y ' + C.manuales.length + ' cargas manuales de tierra. El detalle queda en Revisión → Balanza cruda y en el informe de balanza.</div></div>' : '') +
         '<div class="row"><a class="btn pri" href="#/revision">' + ICON.alerta + 'Revisar viajes ↔ balanza</a><a class="btn" href="#/revision/cruda">Balanza cruda</a>' + botonInforme('balanza', { desde: fs[0], hasta: fs[fs.length - 1] }, 'Informe de balanza') + '</div>';
@@ -1488,6 +1512,83 @@ function edVistoBueno(volver, nodoIni) {
     };
   };
   pintar();
+}
+
+async function edCorregir(tipo, volver) {
+  const mem = lsGet('tierra_corr', {});
+  const st = { tipo: tipo, desde: mem.desde && difDias(mem.desde, hoy()) < 120 ? mem.desde : addDias(hoy(), -14), hasta: hoy(), q: '' };
+  app().innerHTML = '<div class="vista"><div class="hero"><div class="row">' + volver + '<div><div class="eyebrow">Carga de datos · Abastecimiento</div><h1>Corregir registros</h1><p class="sub">Buscá el viaje o la jornada con error y editala. Cada corrección queda en el historial de cambios.</p></div></div><div id="crSeg"></div></div>' +
+    '<div class="card"><div class="form"><label class="f">Desde<input type="date" id="crD" value="' + st.desde + '"></label><label class="f">Hasta<input type="date" id="crH" value="' + st.hasta + '" max="' + hoy() + '"></label>' +
+    '<label class="f" style="flex:2">Buscar<input id="crQ" placeholder="N° de talonario, chofer, dominio, máquina u operador"></label></div><div id="crRes" class="mt"></div></div><div id="crHist"></div></div>';
+  segmento($('#crSeg'), [['viajes', '🚛 Viajes de camiones'], ['cantera', '⛏️ Trabajos en cantera']], st.tipo, k => { st.tipo = k; history.replaceState(null, '', '#/cargar/corregir/' + k); pintar(); }, true);
+  let datos = null;
+  let editables = null;
+  const cargar = async () => {
+    $('#crRes').innerHTML = '<div class="skel" style="height:160px"></div>';
+    lsSet('tierra_corr', { desde: st.desde });
+    try {
+      const [r, ed] = await Promise.all([api('rango', { desde: st.desde, hasta: st.hasta }), editables ? Promise.resolve(editables) : api('viajesEditables').catch(() => null)]);
+      datos = r;
+      editables = ed;
+      pintar();
+    } catch (e) {
+      $('#crRes').innerHTML = '<div class="alert bad">' + ICON.alerta + '<div>' + esc(e.message) + '</div></div>';
+    }
+  };
+  const coincide = (txt) => !st.q || txt.toLowerCase().indexOf(st.q.toLowerCase()) >= 0;
+  const pintar = () => {
+    if (!datos) return;
+    const el = $('#crRes');
+    if (st.tipo === 'viajes') {
+      const ti = tipoInterno();
+      const g = agrupar(datos.viajes || [], v => v.comprobante);
+      const setEd = editables ? new Set(editables.map(String)) : null;
+      const filas = Object.keys(g).map(k => {
+        const vs = g[k];
+        const hs = vs.filter(v => String(v.tipo).toUpperCase() !== ti);
+        const cs = hs.map(v => v.horaCarga).filter(Boolean).sort();
+        const ds = hs.map(v => v.horaDescarga).filter(Boolean).sort();
+        return { comp: k, fecha: vs[0].fecha, chofer: vs[0].chofer, dominio: vs[0].dominio, n: hs.length, ni: vs.length - hs.length, horario: cs.length ? cs[0] + ' – ' + (ds[ds.length - 1] || '') : '', tickets: hs.map(v => v.ticketSalida).filter(Boolean).length, origenes: [...new Set(vs.map(v => v.origen))].join(', '), editable: !setEd || setEd.has(String(k)) };
+      }).filter(f => coincide([f.comp, f.chofer, f.dominio, f.origenes].join(' '))).sort((a, b) => (b.fecha + b.comp) < (a.fecha + a.comp) ? -1 : 1);
+      el.innerHTML = '<div class="sub" style="margin-bottom:6px">' + filas.length + ' talonarios</div>' + tabla([
+        [f => fCorta(f.fecha), 'Fecha'], [f => '<b>N° ' + esc(f.comp) + '</b>', 'Talonario'], [f => esc(f.chofer), 'Chofer'], [f => esc(f.dominio), 'Dominio'], [f => esc(f.origenes), 'Origen'],
+        [f => f.n + (f.ni ? ' + ' + f.ni + ' int.' : ''), 'Viajes', 'n'], [f => esc(f.horario), 'Horario'], [f => f.tickets + '/' + f.n, 'Tickets', 'n'],
+        [f => f.editable ? '<a class="btn sm" href="#/cargar/viajes/' + f.fecha + '/' + encodeURIComponent(f.comp) + '">' + ICON.editar + 'Editar</a>' : '<span class="tag t-info" title="Está en una hoja histórica de la planilla de viajes: se corrige allí">histórico · planilla</span>', '']
+      ], filas, { vacio: 'No hay talonarios en el período.' });
+    } else {
+      const g = agrupar(datos.tramos || [], t => t.fecha + '|' + t.maquina);
+      const filas = Object.keys(g).map(k => {
+        const ts = g[k].slice().sort((a, b) => linMin(a.horaInicio) - linMin(b.horaInicio));
+        const pr = ts.filter(t => t.tipo === 'Producción');
+        const hi = pr.map(t => t.horometroIni).filter(x => x !== null && x !== undefined);
+        const hf = pr.map(t => t.horometroFin).filter(x => x !== null && x !== undefined);
+        return { fecha: ts[0].fecha, maquina: ts[0].maquina, prod: pr.length, par: ts.length - pr.length, ops: [...new Set(pr.map(t => t.operador).filter(Boolean))].join(', '), horario: ts[0].horaInicio + ' – ' + ts[ts.length - 1].horaFin, hor: hi.length ? nf(Math.min.apply(null, hi), 1) + ' → ' + nf(Math.max.apply(null, hf.length ? hf : hi), 1) : '–', cam: sum(pr, t => t.unidadesCargadas || 0), int: sum(pr, t => t.viajesInternos || 0), motivos: [...new Set(ts.filter(t => t.tipo === 'Parada').map(t => t.motivoParada))].join(', ') };
+      }).filter(f => coincide([f.maquina, f.ops, f.motivos].join(' '))).sort((a, b) => (b.fecha + a.maquina) < (a.fecha + b.maquina) ? -1 : 1);
+      el.innerHTML = '<div class="sub" style="margin-bottom:6px">' + filas.length + ' jornadas por máquina</div>' + tabla([
+        [f => fCorta(f.fecha), 'Fecha'], [f => '<b>' + esc(f.maquina) + '</b>', 'Máquina'], [f => esc(f.horario), 'Horario'], [f => f.prod + (f.par ? ' + ' + f.par + ' parada' + (f.par > 1 ? 's' : '') : ''), 'Tramos'],
+        [f => esc(f.ops || '–'), 'Operadores'], [f => f.hor, 'Horómetro'], [f => nf(f.cam) + (f.int ? ' + ' + nf(f.int) + ' int.' : ''), 'Camiones', 'n'], [f => esc(f.motivos || ''), 'Paradas'],
+        [f => '<a class="btn sm" href="#/cargar/jornada/' + f.fecha + '">' + ICON.editar + 'Editar</a>', '']
+      ], filas, { vacio: 'No hay jornadas en el período.' });
+    }
+  };
+  const hist = async () => {
+    try {
+      const h = await api('historialCorrecciones');
+      if (!$('#crHist')) return;
+      const ACC = { editarTalonario: '✏️ Talonario editado', eliminarTalonario: '🗑 Talonario eliminado', editarJornada: '✏️ Jornada editada' };
+      $('#crHist').innerHTML = '<div class="card"><div class="card-h"><div class="t"><h3>Historial de correcciones</h3><div class="sub">Qué se cambió, quién y cuándo</div></div></div>' +
+        (h.length ? '<div class="cr-hist">' + h.map(x => '<details class="cr-it"><summary><b>' + (ACC[x.accion] || esc(x.accion)) + '</b><span class="sub">' + esc(x.motivo || '') + '</span><span class="sub">' + esc(tsTxt(x.ts)) + ' · ' + esc(x.usuario || '') + '</span></summary>' +
+          '<div class="cr-cmp"><div><span class="eyebrow">Antes</span><pre>' + esc(x.antes || '—') + '</pre></div><div><span class="eyebrow">Después</span><pre>' + esc(x.despues || '—') + '</pre></div></div></details>').join('') + '</div>' : vacio('Todavía no hay correcciones registradas.')) + '</div>';
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+  let tq = null;
+  $('#crQ').oninput = e => { clearTimeout(tq); tq = setTimeout(() => { st.q = e.target.value.trim(); pintar(); }, 200); };
+  $('#crD').onchange = e => { if (e.target.value) { st.desde = e.target.value; cargar(); } };
+  $('#crH').onchange = e => { if (e.target.value) { st.hasta = e.target.value; cargar(); } };
+  await cargar();
+  hist();
 }
 
 async function edGasoil(f, volver) {

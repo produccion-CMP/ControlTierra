@@ -1406,3 +1406,17 @@ svg.tri .guia { stroke: #111; stroke-width: 1.2; stroke-dasharray: 3 3; }
 @media (max-width: 640px) { .vb-stock { grid-template-columns: minmax(0, 1fr); } .vb-desde { border-left: 0; padding-left: 0; border-top: 1px dashed var(--line); padding-top: 10px; } .vb-kpis { gap: 6px; } .vb-kpis > div { padding: 8px; } .vb-kpis b { font-size: .95rem; } .vb-ops { grid-template-columns: minmax(0, 1fr); } .vb-op { flex-direction: row; justify-content: flex-start; gap: 10px; text-align: left; } }
 .nl.vb-ok { color: var(--ok); font-weight: 700; font-size: .78rem; }
 .nl.vb-obs { color: var(--warn); font-weight: 700; font-size: .78rem; }
+.imp-ult { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)); gap: 14px; align-items: center; padding: 14px 16px; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line); margin-bottom: 10px; }
+.imp-ult > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.imp-ult b { font-size: 1.05rem; }
+.imp-ic { display: inline-flex; width: 40px; height: 40px; border-radius: 12px; align-items: center; justify-content: center; background: var(--accent); color: #fff; }
+.imp-ic svg { width: 20px; height: 20px; }
+@media (max-width: 640px) { .imp-ult { grid-template-columns: minmax(0, 1fr); } .imp-ic { display: none; } }
+.cr-hist { display: flex; flex-direction: column; gap: 8px; }
+.cr-it { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.cr-it > summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 10px 12px; list-style: none; }
+.cr-it > summary::-webkit-details-marker { display: none; }
+.cr-it > summary .sub:last-child { margin-left: auto; }
+.cr-cmp { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; padding: 0 12px 12px; }
+.cr-cmp pre { margin: 4px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); font-size: .75rem; white-space: pre-wrap; word-break: break-word; max-height: 240px; overflow: auto; }
+@media (max-width: 640px) { .cr-cmp { grid-template-columns: minmax(0, 1fr); } }

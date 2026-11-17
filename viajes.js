@@ -53,7 +53,7 @@ function guardarMemQV() {
   lsSet('tierra_qv', { fecha: QV.fecha, tipo: QV.tipo, jornada: QV.jornada, serie: QV.serie, responsable: QV.c ? QV.c.responsable : '', ruta: f0 && f0.origen ? [f0.origen, f0.destino] : null });
 }
 
-async function edViajes(arg, volver) {
+async function edViajes(arg, volver, comp) {
   const mem = lsGet('tierra_qv', {});
   QV.fecha = /^\d{4}-\d{2}-\d{2}$/.test(arg || '') ? arg : (mem.fecha || hoy());
   QV.jornada = mem.jornada !== false;
@@ -69,6 +69,29 @@ async function edViajes(arg, volver) {
   QV.tipo = mem.tipo || nombres('TiposViaje').find(t => t !== tipoInterno()) || 'TIERRA';
   QV.c = nuevoComprobante(numeroSugerido());
   pintarQV(volver);
+  if (comp) {
+    if ((QV.dia || []).some(v => String(v.comprobante) === String(comp))) editarTalonarioQV(String(comp));
+    else toast('No se encontró el talonario N° ' + comp + ' en el ' + fCorta(QV.fecha), 'warn');
+  }
+}
+
+function editarTalonarioQV(k) {
+  const ti = tipoInterno();
+  const vs = (QV.dia || []).filter(v => String(v.comprobante) === String(k)).sort((a, c) => (a.nroViaje || 0) - (c.nroViaje || 0));
+  if (!vs.length) return;
+  const ints = vs.filter(v => String(v.tipo).toUpperCase() === ti);
+  const hs = vs.filter(v => String(v.tipo).toUpperCase() !== ti);
+  QV.editando = true;
+  QV.jornada = vs[0].jornadaCompleta;
+  if (hs.length) QV.tipo = hs[0].tipo;
+  QV.c = {
+    numero: String(k), chofer: vs[0].chofer, dominio: vs[0].dominio, domAuto: false, responsable: vs[0].responsable, respAuto: false, ia: {},
+    filas: hs.map(v => ({ origen: v.origen, destino: v.destino, c: v.horaCarga, d: v.horaDescarga, h: horTxt(v.horometro), tk: v.ticketSalida || '', autoD: false, pagar: v.pagar, resp: '' })),
+    internos: { on: ints.length > 0, cantidad: ints.length || '', lugar: ints.length ? ints[0].origen : '', paladas: ints.length && ints[0].paladas !== null ? ints[0].paladas : '', pagar: ints.length ? ints[0].pagar : true }
+  };
+  if (!QV.c.filas.length) QV.c.filas.push(filaVacia({ origen: QV.c.internos.lugar, destino: destinosPlanta()[0] || '' }));
+  pintarQV();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function cargarDiaQV(silencioso) {
@@ -118,6 +141,7 @@ function pintarQV(volver) {
     '<label class="f">Lugar<input id="qvIntL" value="' + esc(c.internos.lugar) + '" placeholder="Cantera / acopio"></label>' +
     '<label class="f">Paladas por viaje <span class="muted">(opcional)</span><input id="qvIntP" type="number" min="0" inputmode="numeric" value="' + esc(c.internos.paladas) + '"></label>' +
     '<label class="chk" style="align-self:end;padding-bottom:10px"><input type="checkbox" id="qvIntPag"' + (c.internos.pagar ? ' checked' : '') + '>Pagar</label></div><div class="sub mt" id="qvIntRes"></div></div></div></div>' +
+    (QV.editando ? '<div class="alert info mt">' + ICON.editar + '<div style="flex:1"><b>Editando el talonario N° ' + esc(c.numero) + '.</b> Corregí lo que haga falta (si quedó en otro día, cambiá la fecha arriba). Al guardar se reemplaza completo y queda en el historial de correcciones.<label class="f mt">Motivo de la corrección (opcional)<input id="qvMot" placeholder="Ej.: dominio mal cargado, hora de descarga equivocada"></label></div></div>' : '') +
     '<div id="qvErr" class="mt"></div>' +
     '<div class="row mt"><button class="btn pri" id="qvGuardar">' + ICON.guardar + (QV.editando ? 'Guardar cambios' : 'Guardar y seguir') + '</button>' + (QV.editando ? '<button class="btn" id="qvCancelar">Cancelar edición</button>' : '') +
     '<div class="atajos right"><span><kbd>Enter</kbd> avanza</span><span><kbd>Enter</kbd> en carga vacía = guardar</span><span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> guardar</span><span><kbd>435</kbd> = 04:35</span></div></div></div></div>' +
@@ -144,7 +168,7 @@ function htmlFilaQV(x, i) {
     '<input data-i="' + i + '" data-k="destino" value="' + esc(x.destino) + '" placeholder="Destino" tabindex="-1" class="' + (QV.c.ia['o' + i] ? 'ia' : '') + '">' +
     '<input data-i="' + i + '" data-k="c" value="' + esc(x.c) + '" placeholder="Carga" inputmode="numeric" maxlength="5" class="hr ' + (QV.c.ia['c' + i] ? 'ia' : '') + '">' +
     '<input data-i="' + i + '" data-k="d" value="' + esc(x.d) + '" placeholder="' + estDescargaQV(x) + '" title="Hora de descarga del talonario. El ≈ es solo una referencia: no se guarda." inputmode="numeric" maxlength="5" class="hr ' + (QV.c.ia['d' + i] ? 'ia' : '') + '">' +
-    '<input data-i="' + i + '" data-k="h" value="' + esc(x.h) + '" placeholder="16154.2" inputmode="decimal" class="hrm ' + (QV.c.ia['h' + i] ? 'ia' : '') + '" title="Horómetro de la pala cargadora al cargar (opcional). Formato 16154.2: hasta 1 decimal">' +
+    '<input data-i="' + i + '" data-k="h" value="' + esc(x.h) + '" placeholder="Horóm." inputmode="decimal" class="hrm ' + (QV.c.ia['h' + i] ? 'ia' : '') + '" title="Horómetro de la pala cargadora al cargar (opcional). Formato 16154.2: hasta 1 decimal">' +
     '<input data-i="' + i + '" data-k="tk" value="' + esc(x.tk) + '" placeholder="Ticket" inputmode="numeric" class="hrm ' + (QV.c.ia['t' + i] ? 'ia' : '') + '" title="N° de ticket de salida de la balanza (opcional)">' +
     '<span class="bal" data-bal="' + i + '"></span>' +
     '<label class="chk"><input type="checkbox" data-i="' + i + '" data-k="pagar" tabindex="-1"' + (x.pagar ? ' checked' : '') + '></label>' +
@@ -622,7 +646,7 @@ async function guardarQV() {
   const nInt = c.internos.on ? Number(c.internos.cantidad) || 0 : 0;
   const internos = [];
   for (let k = 0; k < nInt; k++) internos.push({ interno: true, origen: c.internos.lugar, destino: c.internos.lugar, paladas: c.internos.paladas, responsable: c.responsable, pagar: c.internos.pagar });
-  const datos = { fecha: QV.fecha, comprobante: c.numero, chofer: c.chofer, dominio: c.dominio, responsable: c.responsable, tipo: QV.tipo, jornadaCompleta: QV.jornada, reemplazar: QV.editando, viajes: comunes.concat(internos) };
+  const datos = { fecha: QV.fecha, comprobante: c.numero, chofer: c.chofer, dominio: c.dominio, responsable: c.responsable, tipo: QV.tipo, jornadaCompleta: QV.jornada, reemplazar: QV.editando, motivo: QV.editando && $('#qvMot') ? $('#qvMot').value.trim() : '', viajes: comunes.concat(internos) };
   const item = { id: uid(), numero: c.numero, chofer: c.chofer, dominio: c.dominio, n: comunes.length, ni: nInt, fecha: QV.fecha, estado: 'enviando', comp: JSON.parse(JSON.stringify(c)) };
   QV.sesion.unshift(item);
   guardarMemQV();
@@ -692,22 +716,7 @@ function pintarDiaQV() {
   el.onclick = async e => {
     const b = e.target.closest('button');
     if (!b) return;
-    if (b.dataset.ed) {
-      const vs = g[b.dataset.ed].slice().sort((a, c) => (a.nroViaje || 0) - (c.nroViaje || 0));
-      const ints = vs.filter(v => String(v.tipo).toUpperCase() === ti);
-      const hs = vs.filter(v => String(v.tipo).toUpperCase() !== ti);
-      QV.editando = true;
-      QV.jornada = vs[0].jornadaCompleta;
-      if (hs.length) QV.tipo = hs[0].tipo;
-      QV.c = {
-        numero: b.dataset.ed, chofer: vs[0].chofer, dominio: vs[0].dominio, domAuto: false, responsable: vs[0].responsable, respAuto: false, ia: {},
-        filas: hs.map(v => ({ origen: v.origen, destino: v.destino, c: v.horaCarga, d: v.horaDescarga, h: horTxt(v.horometro), tk: v.ticketSalida || '', autoD: false, pagar: v.pagar, resp: '' })),
-        internos: { on: ints.length > 0, cantidad: ints.length || '', lugar: ints.length ? ints[0].origen : '', paladas: ints.length && ints[0].paladas !== null ? ints[0].paladas : '', pagar: ints.length ? ints[0].pagar : true }
-      };
-      if (!QV.c.filas.length) QV.c.filas.push(filaVacia({ origen: QV.c.internos.lugar, destino: destinosPlanta()[0] || '' }));
-      pintarQV();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    if (b.dataset.ed) editarTalonarioQV(b.dataset.ed);
     if (b.dataset.el) {
       if (!(await confirmar('Eliminar talonario', 'Se eliminarán de la planilla original los ' + g[b.dataset.el].length + ' viajes del talonario N° ' + esc(b.dataset.el) + '.', 'Eliminar', true))) return;
       try {

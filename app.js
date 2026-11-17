@@ -167,7 +167,7 @@ async function render() {
       if (!S.ses) {
         app().innerHTML = '<div class="vista card empty" style="padding:50px">' + ICON.usuario + '<b>Ingresá con tu usuario para cargar datos.</b><button class="btn pri mt" id="bLg">Ingresar</button></div>';
         $('#bLg').onclick = () => login(location.hash);
-      } else await vCargar(p[1], p[2]);
+      } else await vCargar(p[1], p[2], p[3]);
     } else if (v === 'liquidacion') {
       if (!puede('liquidacion')) app().innerHTML = '<div class="vista card empty">' + ICON.alerta + 'Disponible para el responsable de abastecimiento y administradores.</div>';
       else await vLiquidacion();

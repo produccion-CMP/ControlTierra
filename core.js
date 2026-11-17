@@ -22,6 +22,7 @@ const PERMISOS = {
   gasoil: ['abastecimiento'],
   viajes: ['abastecimiento'],
   pesaje: ['abastecimiento', 'molienda'],
+  corregir: ['abastecimiento'],
   calidad: ['abastecimiento', 'molienda'],
   liquidacion: ['abastecimiento'],
   molienda: ['molienda'],
